@@ -425,10 +425,18 @@ export function normalizeDate(input: string): string | undefined {
 }
 
 export function formatDisplayDate(iso: string): string {
-  const [year, month, day] = iso.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
+  return formatDateInTimeZone(iso, "short");
+}
+
+export function formatFullDate(iso: string): string {
+  return formatDateInTimeZone(iso, "long");
+}
+
+function formatDateInTimeZone(iso: string, month: "short" | "long"): string {
+  const [year, monthNumber, day] = iso.split("-").map(Number);
+  const date = new Date(Date.UTC(year, monthNumber - 1, day));
   return new Intl.DateTimeFormat("en-US", {
-    month: "short",
+    month,
     day: "numeric",
     year: "numeric",
     timeZone: "UTC",

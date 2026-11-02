@@ -1,5 +1,6 @@
-import { expectedRoutingBucket, formatDisplayDate, FORM_URL, propertyNames, secondContact } from "./catalog.js";
-import type { MissingItem } from "./missing.js";
+import { formatRequestTypeChoices, formatTaskTypeChoices } from "./choices.js";
+import { expectedRoutingBucket, formatDisplayDate, formatFullDate, FORM_URL, normalizeDate, propertyNames, secondContact } from "./catalog.js";
+import { PRICE_PENDING_LINE, type MissingItem } from "./missing.js";
 import { followUpsFor, SUPPORT_QUESTION } from "./question-tree.js";
 import type { TemplateMatchResult } from "./templates.js";
 import type { BriefDraft } from "./types.js";
@@ -23,32 +24,9 @@ export function buildDescription(input: {
   const properties = (draft.properties ?? []).join(", ");
   const date = draft.requestedCompletionDate ? formatDisplayDate(draft.requestedCompletionDate) : "";
   const followUps = draft.requestType && draft.taskType ? followUpsFor(draft.requestType, draft.taskType) : [];
-  const briefLines: string[] = [];
-  for (const field of followUps) {
-    const value = draft.followUps?.[field.label];
-    if (!value) continue;
-    briefLines.push(`${field.label}: ${value}`);
-  }
-  if (draft.finalCopy) briefLines.push(`Final copy: ${draft.finalCopy}`);
-  if (draft.copyOwner) {
-    briefLines.push(`Copy owner: ${draft.copyOwner}${draft.copyDueDate ? ` (due ${draft.copyDueDate})` : ""}`);
-  }
-  if (draft.notes) briefLines.push(draft.notes);
-
-  const templateLines: string[] = [];
-  const offer = input.templateOffer;
-  if (offer && offer.matches.length > 0) {
-    templateLines.push("Canva template offered:");
-    for (const match of offer.matches) {
-      templateLines.push(`- ${match.name}: ${match.url}`);
-    }
-    if (offer.duplicateName) {
-      templateLines.push("Two templates share this name. Both links were sent.");
-    }
-    if (draft.templateUnusedReason) {
-      templateLines.push(`Not used because: ${draft.templateUnusedReason}`);
-    }
-  }
+  const briefLines = briefAnswerLines(draft);
+  const templateLine = canvaTemplateLine(draft, input.templateOffer);
+  const pending = draft.pricePending ? [PRICE_PENDING_LINE] : [];
 
   const assetLines = [
     ...(draft.assets ?? []),
@@ -88,7 +66,11 @@ export function buildDescription(input: {
     draft.taskType ?? "",
     "",
     "## Brief",
-    [...briefLines, ...templateLines].join("\n") || "(none)",
+    briefLines.join("\n") || "(none)",
+    "",
+    ...(templateLine ? [templateLine, ""] : []),
+    "## Pending from requester",
+    pending.join("\n") || "(none)",
     "",
     "## Assets",
     unique(assetLines).join("\n") || "(none)",
@@ -114,6 +96,12 @@ export function formatQuestions(input: {
     "",
   ];
   input.items.forEach((item, index) => {
+    const choices = choiceList(item.id, input.draft.requestType);
+    if (choices) {
+      lines.push(`${index + 1}. *${item.label}*`);
+      lines.push(choices);
+      return;
+    }
     const hint = item.hint ? ` — ${item.hint}` : "";
     lines.push(`${index + 1}. *${item.label}*${hint}`);
   });
@@ -193,13 +181,16 @@ export function formatSummary(input: {
   }
   if ((draft.assets ?? []).length > 0) lines.push(`Assets: ${(draft.assets ?? []).join(", ")}`);
   if (draft.finalCopy) lines.push(`Copy: ${truncate(draft.finalCopy, 500)}`);
-  if (draft.notes) lines.push(`Notes: ${truncate(draft.notes, 500)}`);
   const offer = input.templateOffer;
   if (offer && offer.matches.length > 0) {
     lines.push(
       `Template offered: ${offer.matches.map((match) => match.name).join(", ")}`,
     );
-    if (draft.templateUnusedReason) lines.push(`Not used because: ${draft.templateUnusedReason}`);
+    if (draft.templateUnusedReason) lines.push(`Not used: ${draft.templateUnusedReason}`);
+  }
+  if (draft.pricePending) {
+    lines.push(PRICE_PENDING_LINE);
+    lines.push("Price is still pending. Reply in the Asana task or in this thread with the price when you have it.");
   }
   if (input.warnings.length > 0) {
     lines.push("", ...input.warnings.map((warning) => `• ${warning}`));
@@ -220,6 +211,12 @@ export function formatTemplateAccepted(result: TemplateMatchResult): string {
   return `Use the template and you don't need a task.\n${links}\nIf you later want the team to design it, say so and I'll collect the brief. Form, if you'd rather fill it yourself: ${FORM_URL}`;
 }
 
+function choiceList(itemId: string, requestType: BriefDraft["requestType"]): string | undefined {
+  if (itemId === "requestType") return formatRequestTypeChoices();
+  if (itemId === "taskType" && requestType) return formatTaskTypeChoices(requestType);
+  return undefined;
+}
+
 function nextStepLine(draft: BriefDraft): string {
   if (draft.requestType && draft.taskType) {
     return `Once these are answered, this goes into Asana as ${draft.requestType} → ${draft.taskType} and you'll get the link here.`;
@@ -235,6 +232,38 @@ function followUpDestination(draft: BriefDraft): string | undefined {
     }
   }
   return undefined;
+}
+
+function briefAnswerLines(draft: BriefDraft): string[] {
+  if (!draft.requestType || !draft.taskType) return [];
+  const lines: string[] = [];
+  for (const field of followUpsFor(draft.requestType, draft.taskType)) {
+    const value = draft.followUps?.[field.label];
+    if (!value?.trim()) continue;
+    lines.push(`${field.label}: ${renderRequesterAnswer(field.kind, value)}`);
+  }
+  if (draft.finalCopy?.trim()) lines.push(`Final copy: ${draft.finalCopy.trim()}`);
+  if (draft.copyOwner?.trim()) {
+    const due = draft.copyDueDate ? normalizeDate(draft.copyDueDate) : undefined;
+    lines.push(`Copy owner: ${draft.copyOwner.trim()}${due ? ` (due ${formatFullDate(due)})` : ""}`);
+  }
+  return lines;
+}
+
+function canvaTemplateLine(draft: BriefDraft, offer: TemplateMatchResult | null): string | undefined {
+  if (!offer || offer.matches.length === 0) return undefined;
+  const offered = offer.matches.map((match) => `${match.name} ${match.url}`).join("; ");
+  const reason = draft.templateUnusedReason?.trim();
+  return reason ? `Canva template offered: ${offered}. Not used: ${reason}.` : `Canva template offered: ${offered}.`;
+}
+
+function renderRequesterAnswer(kind: string, value: string): string {
+  const trimmed = value.trim();
+  if (kind === "date" || /^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const iso = normalizeDate(trimmed);
+    if (iso) return formatFullDate(iso);
+  }
+  return trimmed;
 }
 
 function truncate(value: string, max: number): string {

@@ -108,6 +108,7 @@ describe("intake field order", () => {
         approver: "DeeDee Brown",
         followUps: { "Recommended Copy / Details": "This weekend at SMP." },
         templateUnusedReason: "Wants the team to design it.",
+        notes: "Requester wants a holiday flyer. The handle is missing a year.",
       },
       templateOffer: {
         matches: [{ id: "EAHJyAsHwPs", name: "SMP-Happenings", useFor: "Weekly happenings, SMP", url: "https://www.canva.com/brand/brand-templates/EAHJyAsHwPs", score: 1 }],
@@ -118,8 +119,11 @@ describe("intake field order", () => {
     });
     expect(notes).toContain("Name:\nElena Ruiz");
     expect(notes).toContain("What can we help you with?:\nSocial");
-    expect(notes).toContain("## Brief");
-    expect(notes).toContain("Not used because: Wants the team to design it.");
+    const brief = notes.split("## Brief\n")[1]?.split("\n\n")[0];
+    expect(brief).toBe("Recommended Copy / Details: This weekend at SMP.");
+    expect(notes).toContain("Canva template offered: SMP-Happenings https://www.canva.com/brand/brand-templates/EAHJyAsHwPs. Not used: Wants the team to design it.");
+    expect(notes).not.toContain("Requester wants");
+    expect(notes).not.toContain("missing a year");
     expect(notes).toContain("Drafted from Slack: https://slack.com/archives/C1/p1");
   });
 

@@ -16,6 +16,51 @@ export interface MissingReport {
 
 const PLACEHOLDER = /^(tbd|n\/a|na|asap|pending|coming soon|idk|unsure|unknown|\?|none yet|not sure)$/i;
 
+export const PRICE_PENDING_LINE = "Price: TBD (requester will provide)";
+
+const PRICE_WORD = /\b(prices?|pricing|costs?)\b/i;
+
+/** The requester said the price, pricing, or cost is not ready. Other topics do not match. */
+export function isPricePendingStatement(value: string | undefined): boolean {
+  const text = value?.trim() ?? "";
+  if (!text || !PRICE_WORD.test(text)) return false;
+  return /(?:don'?t|do not|dont)\s+have|no\s+(?:price|pricing|cost)|tbd|pending|not ready|not yet|not final|waiting|later|will send|send later|coming soon/i.test(text);
+}
+
+export function mentionsActualPrice(value: string | undefined): boolean {
+  const text = value?.trim() ?? "";
+  if (!text || isPricePendingStatement(text)) return false;
+  return /\$\s?\d|\b\d+(?:\.\d{2})?\s*(?:dollars|usd)\b/i.test(text);
+}
+
+export function isPriceOnlyField(label: string): boolean {
+  if (!PRICE_WORD.test(label)) return false;
+  const rest = label
+    .replace(PRICE_WORD, " ")
+    .replace(/\b(and|with|the|a|an|item|of|for|&)\b/gi, " ")
+    .replace(/[^a-z]+/gi, " ")
+    .trim();
+  return rest.length === 0;
+}
+
+export function isOnlyPricePending(value: string | undefined): boolean {
+  const text = value?.trim() ?? "";
+  if (!text) return false;
+  const parts = text.split(/[\n.;]+/).map((part) => part.trim()).filter(Boolean);
+  if (parts.length === 0) return false;
+  return parts.every((part) => PLACEHOLDER.test(part) || isPricePendingStatement(part)) && parts.some((part) => isPricePendingStatement(part));
+}
+
+export function followUpAnswerCounts(field: FollowUp, value: string | undefined, pricePending: boolean): boolean {
+  if (isPriceOnlyField(field.label)) {
+    if (pricePending || isPricePendingStatement(value) || (value && PLACEHOLDER.test(value.trim()))) return true;
+    return isFilled(value);
+  }
+  if (!isFilled(value)) return false;
+  if (isOnlyPricePending(value)) return false;
+  return true;
+}
+
 export function isFilled(value: string | undefined): boolean {
   if (!value) return false;
   const trimmed = value.trim();
@@ -74,8 +119,8 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
   const followUps = followUpsFor(draft.requestType, draft.taskType);
   for (const field of followUps) {
     if (!field.required) continue;
-    if (isFilled(draft.followUps?.[field.label])) continue;
-    items.push(missingFollowUp(field));
+    if (followUpAnswerCounts(field, draft.followUps?.[field.label], Boolean(draft.pricePending))) continue;
+    items.push(missingFollowUp(field, Boolean(draft.pricePending)));
   }
 
   if (!draft.requestedCompletionDate) {
@@ -145,8 +190,13 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
   return { items, warnings };
 }
 
-function missingFollowUp(field: FollowUp): MissingItem {
+function missingFollowUp(field: FollowUp, pricePending: boolean): MissingItem {
   const hints: string[] = [];
+  if (PRICE_WORD.test(field.label) && !isPriceOnlyField(field.label)) {
+    hints.push("Price can stay pending. Send the rest of this answer in your own words.");
+  } else if (pricePending && isPriceOnlyField(field.label)) {
+    hints.push(PRICE_PENDING_LINE);
+  }
   if (field.verbatim) hints.push("Use the exact text. Don't paraphrase, and don't invent codes or links.");
   if (field.kind === "number") hints.push("A number.");
   if (field.kind === "date") hints.push("A real date.");

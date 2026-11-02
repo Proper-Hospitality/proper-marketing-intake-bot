@@ -68,6 +68,9 @@ export async function submitConfirmedBrief(input: {
     if (!result.automation.ok) {
       lines.push("The task link is above. The team can still open it, but the automatic routing may not have finished.");
     }
+    if (state.draft.pricePending) {
+      lines.push("Price is still pending. Reply in the Asana task or in this thread with the price when you have it.");
+    }
     return { text: lines.join("\n") };
   } catch (error) {
     console.error(JSON.stringify({ msg: "asana_submit_failed", error: userFacingAsanaError(error) }));

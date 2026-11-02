@@ -1,4 +1,4 @@
-import { searchExistingTasks, userFacingAsanaError } from "../intake/asana.js";
+import { addTaskComment, searchExistingTasks, userFacingAsanaError } from "../intake/asana.js";
 import {
   formatPropertyQuestion,
   formatQuestions,
@@ -7,7 +7,7 @@ import {
   formatTemplateOffer,
 } from "../intake/brief.js";
 import { acceptTemplate, applyAnswers, declineTemplate, type FlowOutcome, type RecordInput } from "../intake/flow.js";
-import { listMissing } from "../intake/missing.js";
+import { listMissing, mentionsActualPrice } from "../intake/missing.js";
 import type { ConversationState } from "../store/types.js";
 import {
   chooseAssignee,
@@ -73,6 +73,10 @@ export async function runIntakeTurn(input: {
     state.messages.push({ role: "assistant", content: reply.text });
     state.updatedAt = new Date().toISOString();
     return reply;
+  }
+
+  if (state.phase === "submitted" && state.taskGid && mentionsActualPrice(input.userText)) {
+    return recordPriceOnTask(state, input);
   }
 
   state.messages = sanitizeStoredHistory(state.messages);
@@ -311,6 +315,41 @@ function renderReply(
   };
 }
 
+async function recordPriceOnTask(
+  state: ConversationState,
+  input: {
+    userText: string;
+    slackUser: { name?: string; email?: string };
+    asanaToken?: string;
+    fetchImpl?: typeof fetch;
+  },
+): Promise<AgentReply> {
+  state.messages = sanitizeStoredHistory(state.messages);
+  state.messages.push({ role: "user", content: input.userText });
+  const who = [input.slackUser.name?.trim(), input.slackUser.email?.trim()].filter(Boolean).join(", ");
+  const comment = who ? `Price from Slack (${who}): ${input.userText.trim()}` : `Price from Slack: ${input.userText.trim()}`;
+  let text: string;
+  if (!input.asanaToken) {
+    text = "I couldn't add that price to the Asana task because ASANA_ACCESS_TOKEN is not set.";
+  } else {
+    try {
+      await addTaskComment({
+        token: input.asanaToken,
+        taskGid: state.taskGid as string,
+        text: comment,
+        fetchImpl: input.fetchImpl,
+      });
+      state.draft.pricePending = false;
+      text = `I added that price to the Asana task${state.taskUrl ? `: ${state.taskUrl}` : ""}.`;
+    } catch (error) {
+      text = `I couldn't add that price to the Asana task. ${userFacingAsanaError(error)}`;
+    }
+  }
+  state.messages.push({ role: "assistant", content: text });
+  state.updatedAt = new Date().toISOString();
+  return { text };
+}
+
 function looksLikeAccept(text: string): boolean {
   const trimmed = text.trim();
   return /^(yes|yep|yeah|sure|ok|okay|sounds good|perfect|that works)[.!]?\s*$/i.test(trimmed)
@@ -347,6 +386,7 @@ function toRecord(payload: Record<string, unknown>): RecordInput {
     assetsDue: asString(payload.assetsDue),
     notes: asString(payload.notes),
     filingOnBehalf: typeof payload.filingOnBehalf === "boolean" ? payload.filingOnBehalf : undefined,
+    pricePending: typeof payload.pricePending === "boolean" ? payload.pricePending : undefined,
   };
 }
 
