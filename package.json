@@ -1,0 +1,32 @@
+{
+  "name": "proper-marketing-intake-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Slack bot that turns a Proper Hospitality marketing request into a confirmed Asana intake task.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx src/local.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Proper-Hospitality/proper-marketing-intake-bot.git"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
+    "@slack/bolt": "^5.1.0",
+    "@upstash/redis": "^1.41.0",
+    "@vercel/functions": "^3.10.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}
