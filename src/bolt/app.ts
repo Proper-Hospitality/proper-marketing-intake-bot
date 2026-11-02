@@ -4,7 +4,7 @@ import type { WebClient } from "@slack/web-api";
 import { createAnthropicLlm } from "../agent/anthropic.js";
 import { slackFromWebClient } from "../slack/api.js";
 import { withDelivery, type DeliveryContext } from "../slack/dedupe.js";
-import { handleConfirmAction, handleIncomingMessage, handleReviseAction } from "../slack/handle.js";
+import { handleCancelTaskCompletion, handleConfirmAction, handleConfirmTaskCompletion, handleIncomingMessage, handleReviseAction } from "../slack/handle.js";
 import { getStore } from "../store/index.js";
 
 /** Slack Events and Interactivity both post here. */
@@ -137,6 +137,30 @@ function registerListeners(bolt: App): void {
       store: getStore(),
       context: deliveryContext(context),
       work: () => safeHandle(client, action.channel, action.threadTs, () => handleConfirmAction(runtime(client), action)),
+    });
+  });
+
+  bolt.action("confirm_task_completion", async ({ ack, body, client, context }) => {
+    await ack();
+    const action = readAction(body);
+    if (!action) return;
+    await withDelivery({
+      body,
+      store: getStore(),
+      context: deliveryContext(context),
+      work: () => safeHandle(client, action.channel, action.threadTs, () => handleConfirmTaskCompletion(runtime(client), action)),
+    });
+  });
+
+  bolt.action("cancel_task_completion", async ({ ack, body, client, context }) => {
+    await ack();
+    const action = readAction(body);
+    if (!action) return;
+    await withDelivery({
+      body,
+      store: getStore(),
+      context: deliveryContext(context),
+      work: () => safeHandle(client, action.channel, action.threadTs, () => handleCancelTaskCompletion(runtime(client), action)),
     });
   });
 

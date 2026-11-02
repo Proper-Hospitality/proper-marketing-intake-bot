@@ -53,6 +53,35 @@ export const INTAKE_TOOLS = [
     description: "The requester will make the piece from the offered Canva template. Do not file a task.",
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
+  {
+    name: "search_open_tasks",
+    description:
+      "Find incomplete Asana tasks for anyone in the workspace. Use when someone asks to find, list, or complete tasks, including tasks assigned to another person. Pass assigneeName only when they name someone. Pass text, projectName, dueOn, dueBefore, or dueAfter to narrow. This does not mark anything complete.",
+    input_schema: {
+      type: "object",
+      properties: {
+        assigneeName: { type: "string", description: "Person the user named. Omit to search every assignee." },
+        text: { type: "string", description: "Words that should appear in the task name." },
+        projectName: { type: "string" },
+        dueOn: { type: "string", description: "Exact due date YYYY-MM-DD." },
+        dueBefore: { type: "string", description: "YYYY-MM-DD, due strictly before this date." },
+        dueAfter: { type: "string", description: "YYYY-MM-DD, due strictly after this date." },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "complete_tasks",
+    description:
+      "Stage the tasks from the latest search_open_tasks result so the app can show a Confirm button. Does not mark them complete. Call this only when the person asked to mark tasks complete and the search returned 25 or fewer. Pass gids to complete a subset; omit gids to stage every task from that search.",
+    input_schema: {
+      type: "object",
+      properties: {
+        gids: { type: "array", items: { type: "string" }, description: "Task GIDs from the latest search. Omit for all of them." },
+      },
+      additionalProperties: false,
+    },
+  },
 ] as const;
 
 export type ToolName = (typeof INTAKE_TOOLS)[number]["name"];
