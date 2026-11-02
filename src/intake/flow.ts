@@ -5,7 +5,7 @@ import {
   normalizeDate,
   taskTypeNames,
 } from "./catalog.js";
-import { listMissing, type MissingReport } from "./missing.js";
+import { isPricePendingStatement, listMissing, mentionsActualPrice, type MissingReport } from "./missing.js";
 import { matchTemplates, type TemplateMatchResult } from "./templates.js";
 import type { BriefDraft, RequestType } from "./types.js";
 
@@ -29,6 +29,7 @@ export interface RecordInput {
   assetsDue?: string;
   notes?: string;
   filingOnBehalf?: boolean;
+  pricePending?: boolean;
 }
 
 export type FlowOutcome =
@@ -128,6 +129,8 @@ function mergeDraft(draft: BriefDraft, input: RecordInput): string[] {
   assignText(draft, "assetsDue", input.assetsDue);
   assignText(draft, "notes", input.notes);
   if (input.filingOnBehalf !== undefined) draft.filingOnBehalf = input.filingOnBehalf;
+  if (input.pricePending === true) draft.pricePending = true;
+  if (input.pricePending === false) draft.pricePending = false;
 
   if (input.requestedCompletionDate) {
     const date = normalizeDate(input.requestedCompletionDate);
@@ -184,12 +187,15 @@ function mergeDraft(draft: BriefDraft, input: RecordInput): string[] {
     for (const [label, value] of Object.entries(input.followUps)) {
       if (!value || !value.trim()) continue;
       const dateLike = /date/i.test(label);
+      const trimmed = value.trim();
       if (dateLike) {
-        const parsed = normalizeDate(value);
-        draft.followUps[label] = parsed ?? value.trim();
+        const parsed = normalizeDate(trimmed);
+        draft.followUps[label] = parsed ?? trimmed;
       } else {
-        draft.followUps[label] = value.trim();
+        draft.followUps[label] = trimmed;
       }
+      if (isPricePendingStatement(draft.followUps[label])) draft.pricePending = true;
+      if (mentionsActualPrice(draft.followUps[label])) draft.pricePending = false;
     }
   } else if (input.followUps && Object.keys(input.followUps).length > 0 && !draft.taskType) {
     errors.push("Follow-up answers need a request type and task type first.");

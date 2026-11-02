@@ -31,8 +31,12 @@ export const INTAKE_TOOLS = [
         assets: { type: "array", items: { type: "string" } },
         assetsOwner: { type: "string" },
         assetsDue: { type: "string" },
-        notes: { type: "string" },
+        notes: { type: "string", description: "Do not use. The brief is question/answer lines from followUps only." },
         filingOnBehalf: { type: "boolean" },
+        pricePending: {
+          type: "boolean",
+          description: "True when they don't have the price, pricing, or cost yet. Does not waive any other required answer.",
+        },
       },
       additionalProperties: false,
     },

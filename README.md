@@ -4,6 +4,8 @@ This is a Slack bot for Proper Hospitality. Someone messages it (or @mentions it
 
 It also answers questions about how intake works, and it shares the form link when someone would rather fill that in themselves.
 
+If the price, pricing, or cost is not ready yet, the bot still files the task. The Asana description lists that as `Price: TBD (requester will provide)` under Pending from requester, and the confirmation asks them to reply with the price in the Asana task or the Slack thread. The Brief section is only the requester's answers, one question per line, not a written summary. A price sent later in that thread is added as a comment on the task. Other required answers are still required.
+
 Anyone in Slack can ask it to find incomplete Asana tasks and mark them complete, including tasks assigned to someone else. It lists each match with the assignee, the project, the due date, and the link. Nothing is marked complete until they click **Confirm**. It will not complete more than 25 tasks at one time. If a name matches more than one person, it asks which one. After Confirm, each task gets a comment naming who marked it complete from Slack, and that is written to the service log.
 
 They can also ask for overdue counts for several people at once, for example "how many overdue tasks do Savannah, Kat, and DeeDee have?" Overdue means the task is still open and the due date is before today in Pacific Time. The reply is a count per person. If they ask to see the tasks, it adds links to the oldest ones. That question does not change any tasks, so there is no Confirm button. A name that matches nobody is called out, and a name that matches more than one person is asked about.

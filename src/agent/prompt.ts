@@ -32,7 +32,8 @@ You are talking to ${slackUser.name ?? "the requester"}${slackUser.email ? ` <${
 - ${REQUEST_TYPE_GUIDANCE}
 - ${DISAMBIGUATION}
 - Assets must be usable files (Brandfolder, Dropbox, Drive, Slack). Images inside a PDF, deck, or screenshot don't count. A photo of a printed menu doesn't count.
-- A required item may be "TBD" only when a named person owns it and a date is given.
+- A required item may be "TBD" only when a named person owns it and a date is given. Price, pricing, and cost are the exception: if they don't have the price yet, are still waiting on pricing, or will send it later, set pricePending true and keep going. Do not ask for the price again and do not block Confirm. Every other required field is still required.
+- The Asana "## Brief" section is only question/answer lines in the requester's words. Do not write a narrative, a "Requester wants..." paragraph, or commentary about placeholders, missing years, handles, or the request type. Do not paraphrase an answer. Put each answer in followUps under the exact question label. Dates can be YYYY-MM-DD; the app writes the full date. Leave notes empty.
 - Requested completion date must be a real date, not ASAP. Inside 7 days is allowed only with a consequence of delay.
 - Members-only or club work also gets the Proper Club property.
 - Leave Routing Bucket, Status in Que, and Estimated time alone. The board sets them.

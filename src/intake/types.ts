@@ -23,6 +23,8 @@ export interface BriefDraft {
   templateUnusedReason?: string;
   notes?: string;
   filingOnBehalf?: boolean;
+  /** Price, pricing, or cost is not ready. Other required answers are still required. */
+  pricePending?: boolean;
 }
 
 export interface FollowUp {
