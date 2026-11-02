@@ -1,3 +1,4 @@
+import { formatRequestTypeChoices, formatTaskTypeChoices } from "./choices.js";
 import { expectedRoutingBucket, formatDisplayDate, formatFullDate, FORM_URL, normalizeDate, propertyNames, secondContact } from "./catalog.js";
 import { PRICE_PENDING_LINE, type MissingItem } from "./missing.js";
 import { followUpsFor, SUPPORT_QUESTION } from "./question-tree.js";
@@ -95,6 +96,12 @@ export function formatQuestions(input: {
     "",
   ];
   input.items.forEach((item, index) => {
+    const choices = choiceList(item.id, input.draft.requestType);
+    if (choices) {
+      lines.push(`${index + 1}. *${item.label}*`);
+      lines.push(choices);
+      return;
+    }
     const hint = item.hint ? ` — ${item.hint}` : "";
     lines.push(`${index + 1}. *${item.label}*${hint}`);
   });
@@ -202,6 +209,12 @@ export function formatSummary(input: {
 export function formatTemplateAccepted(result: TemplateMatchResult): string {
   const links = result.matches.map((match) => `${match.name}: ${match.url}`).join("\n");
   return `Use the template and you don't need a task.\n${links}\nIf you later want the team to design it, say so and I'll collect the brief. Form, if you'd rather fill it yourself: ${FORM_URL}`;
+}
+
+function choiceList(itemId: string, requestType: BriefDraft["requestType"]): string | undefined {
+  if (itemId === "requestType") return formatRequestTypeChoices();
+  if (itemId === "taskType" && requestType) return formatTaskTypeChoices(requestType);
+  return undefined;
 }
 
 function nextStepLine(draft: BriefDraft): string {
