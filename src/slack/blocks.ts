@@ -7,6 +7,36 @@ export function messageBlocks(text: string): KnownBlock[] {
   }));
 }
 
+export function confirmTaskCompletionBlocks(summary: string, version: number): KnownBlock[] {
+  return [
+    {
+      type: "header",
+      text: { type: "plain_text", text: "Mark these tasks complete", emoji: true },
+    },
+    ...messageBlocks(summary),
+    { type: "divider" },
+    {
+      type: "actions",
+      block_id: `task_complete_${version}`,
+      elements: [
+        {
+          type: "button",
+          style: "primary",
+          text: { type: "plain_text", text: "Confirm", emoji: true },
+          action_id: "confirm_task_completion",
+          value: String(version),
+        },
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Cancel", emoji: true },
+          action_id: "cancel_task_completion",
+          value: String(version),
+        },
+      ],
+    },
+  ];
+}
+
 export function confirmBlocks(summary: string, version: number): KnownBlock[] {
   const blocks: KnownBlock[] = [
     {

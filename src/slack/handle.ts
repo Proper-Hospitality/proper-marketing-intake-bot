@@ -1,8 +1,9 @@
 import { FORM_URL } from "../intake/catalog.js";
 import { runIntakeTurn, type Llm } from "../agent/run.js";
-import { confirmBlocks, messageBlocks } from "./blocks.js";
+import { confirmBlocks, confirmTaskCompletionBlocks, messageBlocks } from "./blocks.js";
 import { slackThreadUrl } from "../intake/brief.js";
 import { submitConfirmedBrief } from "./submit.js";
+import { finishConfirmedCompletion } from "../tasks/complete.js";
 import type { SlackApi } from "./api.js";
 import { conversationKey, conversationKeyFromAction, emptyConversation, type Store } from "../store/types.js";
 
@@ -80,7 +81,11 @@ async function handleFreshMessage(deps: {
     channel: message.channel,
     threadTs: threadAnchor,
     text: reply.text,
-    blocks: reply.confirm ? confirmBlocks(reply.text, reply.confirm.version) : messageBlocks(reply.text),
+    blocks: reply.confirm
+      ? reply.confirm.kind === "complete"
+        ? confirmTaskCompletionBlocks(reply.text, reply.confirm.version)
+        : confirmBlocks(reply.text, reply.confirm.version)
+      : messageBlocks(reply.text),
   });
 }
 
@@ -170,6 +175,124 @@ export async function handleConfirmAction(deps: {
   } finally {
     await deps.store.releaseEvent(lockId);
   }
+}
+
+export async function handleConfirmTaskCompletion(deps: {
+  store: Store;
+  slack: SlackApi;
+  asanaToken?: string;
+  fetchImpl?: typeof fetch;
+}, action: {
+  version: number;
+  channel: string;
+  messageTs: string;
+  threadTs?: string;
+}): Promise<void> {
+  const key = conversationKeyFromAction(action.channel, action.threadTs);
+  const lockId = `complete:${key}:${action.version}`;
+  const claimed = await deps.store.claimEvent(lockId, 120);
+  if (!claimed) {
+    await deps.slack.postMessage({
+      channel: action.channel,
+      threadTs: action.threadTs,
+      text: "I'm already marking those tasks complete.",
+      blocks: messageBlocks("I'm already marking those tasks complete."),
+    });
+    return;
+  }
+  try {
+    const state = await deps.store.getConversation(key);
+    if (!state) {
+      await deps.slack.postMessage({
+        channel: action.channel,
+        threadTs: action.threadTs,
+        text: "I lost that task list. Ask me to search again.",
+        blocks: messageBlocks("I lost that task list. Ask me to search again."),
+      });
+      return;
+    }
+    if (!deps.asanaToken) {
+      await deps.slack.postMessage({
+        channel: action.channel,
+        threadTs: action.threadTs,
+        text: "I can't reach Asana because ASANA_ACCESS_TOKEN is not set. Nothing was marked complete.",
+        blocks: messageBlocks("I can't reach Asana because ASANA_ACCESS_TOKEN is not set. Nothing was marked complete."),
+      });
+      return;
+    }
+    if (state.phase === "tasks_completed" && state.completionReport) {
+      await deps.slack.postMessage({
+        channel: action.channel,
+        threadTs: action.threadTs,
+        text: state.completionReport,
+        blocks: messageBlocks(state.completionReport),
+      });
+      return;
+    }
+    if (state.confirmVersion !== action.version || state.phase !== "awaiting_task_completion") {
+      await deps.slack.postMessage({
+        channel: action.channel,
+        threadTs: action.threadTs,
+        text: "That confirm button is out of date. Search again and use the new Confirm button.",
+        blocks: messageBlocks("That confirm button is out of date. Search again and use the new Confirm button."),
+      });
+      return;
+    }
+    await deps.slack.updateMessage({
+      channel: action.channel,
+      ts: action.messageTs,
+      text: "Marking those tasks complete.",
+      blocks: messageBlocks("Marking those tasks complete."),
+    });
+    const result = await finishConfirmedCompletion({
+      confirmed: true,
+      version: action.version,
+      state,
+      token: deps.asanaToken,
+      fetchImpl: deps.fetchImpl,
+    });
+    await deps.store.saveConversation(state);
+    await deps.slack.postMessage({
+      channel: action.channel,
+      threadTs: action.threadTs,
+      text: result.text,
+      blocks: messageBlocks(result.text),
+    });
+  } finally {
+    await deps.store.releaseEvent(lockId);
+  }
+}
+
+export async function handleCancelTaskCompletion(deps: { store: Store; slack: SlackApi }, action: {
+  version: number;
+  channel: string;
+  messageTs: string;
+  threadTs?: string;
+}): Promise<void> {
+  const key = conversationKeyFromAction(action.channel, action.threadTs);
+  const state = await deps.store.getConversation(key);
+  if (!state) return;
+  if (state.confirmVersion !== action.version || state.phase !== "awaiting_task_completion") {
+    await deps.slack.postMessage({
+      channel: action.channel,
+      threadTs: action.threadTs,
+      text: "That list is already out of date.",
+      blocks: messageBlocks("That list is already out of date."),
+    });
+    return;
+  }
+  state.phase = "collecting";
+  state.pendingCompletion = undefined;
+  state.confirmVersion += 1;
+  state.updatedAt = new Date().toISOString();
+  await deps.store.saveConversation(state);
+  const text = "I won't mark those tasks complete.";
+  await deps.slack.updateMessage({
+    channel: action.channel,
+    ts: action.messageTs,
+    text,
+    blocks: messageBlocks(text),
+  });
 }
 
 export async function handleReviseAction(deps: { store: Store; slack: SlackApi }, action: {

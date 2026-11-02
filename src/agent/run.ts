@@ -1,4 +1,4 @@
-import { searchExistingTasks } from "../intake/asana.js";
+import { searchExistingTasks, userFacingAsanaError } from "../intake/asana.js";
 import {
   formatPropertyQuestion,
   formatQuestions,
@@ -9,6 +9,16 @@ import {
 import { acceptTemplate, applyAnswers, declineTemplate, type FlowOutcome, type RecordInput } from "../intake/flow.js";
 import { listMissing } from "../intake/missing.js";
 import type { ConversationState } from "../store/types.js";
+import {
+  chooseAssignee,
+  formatAmbiguousAssignees,
+  formatSearchMessage,
+  partitionForBulk,
+  searchOpenTasks,
+  searchWorkspaceUsers,
+  stageTaskCompletion,
+  type TaskSearchFilters,
+} from "../tasks/complete.js";
 import { buildSystemPrompt } from "./prompt.js";
 import { INTAKE_TOOLS } from "./tools.js";
 
@@ -27,8 +37,10 @@ export interface Llm {
 
 export interface AgentReply {
   text: string;
-  confirm?: { version: number };
+  confirm?: { version: number; kind?: "intake" | "complete" };
 }
+
+type CompletionView = { kind: "confirm" | "listed" | "too_many" | "ambiguous" | "refused"; text: string };
 
 export async function runIntakeTurn(input: {
   state: ConversationState;
@@ -62,6 +74,7 @@ export async function runIntakeTurn(input: {
   const messages: unknown[] = state.messages.map((turn) => ({ role: turn.role, content: turn.content }));
   let assistantText = "";
   let outcome: FlowOutcome | undefined = preset;
+  let completion: CompletionView | undefined;
 
   for (let step = 0; step < 6; step += 1) {
     const response = await input.llm.complete({
@@ -83,15 +96,18 @@ export async function runIntakeTurn(input: {
         today,
         asanaToken: input.asanaToken,
         fetchImpl: input.fetchImpl,
+        slackUser: input.slackUser,
       });
       if (executed.outcome) outcome = executed.outcome;
+      if (executed.completion) completion = executed.completion;
       results.push({ type: "tool_result", tool_use_id: tool.id, content: JSON.stringify(executed.payload) });
     }
     messages.push({ role: "user", content: results });
     if (outcome && outcome.kind !== "invalid") break;
+    if (completion && completion.kind !== "listed") break;
   }
 
-  const reply = renderReply(state, input.slackUser.id, assistantText, outcome, today);
+  const reply = renderReply(state, input.slackUser.id, assistantText, outcome, today, completion);
   state.messages.push({ role: "assistant", content: reply.text });
   if (state.messages.length > 40) state.messages.splice(0, state.messages.length - 40);
   state.updatedAt = new Date().toISOString();
@@ -102,8 +118,8 @@ async function executeTool(
   state: ConversationState,
   name: string,
   rawInput: unknown,
-  deps: { today: Date; asanaToken?: string; fetchImpl?: typeof fetch },
-): Promise<{ payload: unknown; outcome?: FlowOutcome }> {
+  deps: { today: Date; asanaToken?: string; fetchImpl?: typeof fetch; slackUser: { name?: string; email?: string } },
+): Promise<{ payload: unknown; outcome?: FlowOutcome; completion?: CompletionView }> {
   const payload = isRecord(rawInput) ? rawInput : {};
   if (name === "accept_template") {
     const outcome = acceptTemplate(state);
@@ -132,7 +148,61 @@ async function executeTool(
     }
     return { payload: outcome, outcome };
   }
+  if (name === "search_open_tasks") {
+    const completion = await runTaskSearch(state, payload, deps);
+    return { payload: completion, completion };
+  }
+  if (name === "complete_tasks") {
+    const gids = asStringArray(payload.gids);
+    const staged = stageTaskCompletion(state, gids);
+    if (!staged.ok) {
+      const completion = { kind: "refused" as const, text: staged.message };
+      return { payload: staged, completion };
+    }
+    state.completionRequesterName = deps.slackUser.name;
+    state.completionRequesterEmail = deps.slackUser.email;
+    const completion = { kind: "confirm" as const, text: formatSearchMessage(state.pendingCompletion ?? [], true) };
+    return { payload: { ok: true, count: state.pendingCompletion?.length ?? 0 }, completion };
+  }
   return { payload: { ok: false, error: `Unknown tool ${name}` } };
+}
+
+async function runTaskSearch(
+  state: ConversationState,
+  payload: Record<string, unknown>,
+  deps: { asanaToken?: string; fetchImpl?: typeof fetch },
+): Promise<CompletionView> {
+  if (!deps.asanaToken) {
+    return { kind: "refused", text: "I can't reach Asana because ASANA_ACCESS_TOKEN is not set. Nothing was changed." };
+  }
+  const filters: TaskSearchFilters = {
+    assigneeName: asString(payload.assigneeName),
+    text: asString(payload.text),
+    projectName: asString(payload.projectName),
+    dueOn: asString(payload.dueOn),
+    dueBefore: asString(payload.dueBefore),
+    dueAfter: asString(payload.dueAfter),
+  };
+  try {
+    let assigneeGid: string | undefined;
+    if (filters.assigneeName) {
+      const people = await searchWorkspaceUsers({ token: deps.asanaToken, query: filters.assigneeName, fetchImpl: deps.fetchImpl });
+      const choice = chooseAssignee(filters.assigneeName, people);
+      if (choice.status === "none" || choice.status === "skipped") {
+        return { kind: "refused", text: `I didn't find an Asana user named "${filters.assigneeName}".` };
+      }
+      if (choice.status === "ambiguous") {
+        return { kind: "ambiguous", text: formatAmbiguousAssignees(filters.assigneeName, choice.users) };
+      }
+      assigneeGid = choice.user.gid;
+    }
+    const tasks = await searchOpenTasks({ token: deps.asanaToken, assigneeGid, filters, fetchImpl: deps.fetchImpl });
+    state.lastTaskSearch = tasks;
+    const text = formatSearchMessage(tasks, false);
+    return partitionForBulk(tasks).status === "too_many" ? { kind: "too_many", text } : { kind: "listed", text };
+  } catch (error) {
+    return { kind: "refused", text: `I couldn't search Asana. Nothing was changed. ${userFacingAsanaError(error)}` };
+  }
 }
 
 function renderReply(
@@ -141,7 +211,12 @@ function renderReply(
   assistantText: string,
   outcome: FlowOutcome | undefined,
   today: Date,
+  completion?: CompletionView,
 ): AgentReply {
+  if (completion?.kind === "confirm") {
+    return { text: completion.text, confirm: { version: state.confirmVersion, kind: "complete" } };
+  }
+  if (completion) return { text: completion.text };
   if (outcome?.kind === "accepted_template") {
     return { text: formatTemplateAccepted(outcome.match) };
   }

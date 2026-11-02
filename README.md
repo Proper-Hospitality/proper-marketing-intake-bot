@@ -4,6 +4,8 @@ This is a Slack bot for Proper Hospitality. Someone messages it (or @mentions it
 
 It also answers questions about how intake works, and it shares the form link when someone would rather fill that in themselves.
 
+Anyone in Slack can ask it to find incomplete Asana tasks and mark them complete, including tasks assigned to someone else. It lists each match with the assignee, the project, the due date, and the link. Nothing is marked complete until they click **Confirm**. It will not complete more than 25 tasks at one time. If a name matches more than one person, it asks which one. After Confirm, each task gets a comment naming who marked it complete from Slack, and that is written to the service log.
+
 Owner: Elena Ruiz.
 
 The bot is a normal web service on [Render](https://render.com) (the always-on plan in the blueprint, which stays on). Slack sends each message to one address on that service. The service answers Slack immediately — Slack gives up after 3 seconds — and then keeps working in the same process: talking to Claude, and creating the Asana task.
@@ -16,7 +18,7 @@ Memory between messages is stored in Render Key Value, which speaks Redis. Rende
 - A GitHub account that can see this repository.
 - A Render account. Use a **Web Service** on the always-on plan in the blueprint (`0.5c-512mb`, 0.5 CPU and 512 MB). Render used to call this Starter. Do not pick **Free**. Free sleeps when nobody is using it, and Slack cannot wait for it to wake up.
 - An [Anthropic](https://console.anthropic.com) API key (this is the Claude account).
-- An Asana personal access token, or a service account token, for a user who can create tasks in **New Intake Board**.
+- An Asana personal access token, or a service account token, for a user who can create tasks in **New Intake Board**, search the workspace, mark tasks complete, and comment on them. No extra setting is required for finding and completing tasks.
 
 You do not need Canva API access. Template names and links are saved in the code. You do not need a separate Redis host. Render Key Value is part of the blueprint.
 
@@ -138,6 +140,7 @@ Do this in a private channel, not in a channel the whole company is watching.
    - Status in Que becomes **New Request** and Estimated time is filled in. The board's own rules do that. The bot does not type those by hand. If they stay empty, the bot says so in the thread. Tell Elena; don't try to set them in the task to "fix" it.
 9. Also send the bot a direct message. It should answer there without an @mention.
 10. Ask `where is the intake form?` It should reply with [the Marketing Intake Form](https://form.asana.com/?k=JYO_VqiFFnSlwJs_3XoMIg&d=361605662576941) and not create a task.
+11. In the same channel, ask `@Marketing Intake Find any task that has Elena Ruiz as assignee and mark them complete`. It should list matches with the assignee, project, due date, and link, then wait for **Confirm**. After you click Confirm, open one of those tasks. It should be complete, with a comment that says it was marked complete from Slack by you.
 
 A direct message keeps one ongoing brief. A channel mention starts a thread, and that thread is its own brief.
 

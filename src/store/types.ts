@@ -7,7 +7,19 @@ export type Phase =
   | "awaiting_confirm"
   | "submitting"
   | "submitted"
-  | "template_accepted";
+  | "template_accepted"
+  | "awaiting_task_completion"
+  | "tasks_completed";
+
+export interface ListedTask {
+  gid: string;
+  name: string;
+  assigneeName: string;
+  assigneeGid?: string;
+  projectNames: string[];
+  dueOn?: string;
+  url: string;
+}
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -36,6 +48,11 @@ export interface ConversationState {
   channel?: string;
   threadTs?: string;
   duplicates: DuplicateTask[];
+  lastTaskSearch?: ListedTask[];
+  pendingCompletion?: ListedTask[];
+  completionRequesterName?: string;
+  completionRequesterEmail?: string;
+  completionReport?: string;
   updatedAt: string;
 }
 
