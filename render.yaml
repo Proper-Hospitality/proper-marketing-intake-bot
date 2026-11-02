@@ -1,0 +1,36 @@
+services:
+  - type: keyvalue
+    name: proper-marketing-intake-kv
+    region: oregon
+    plan: free
+    # Empty allow list: only other Render services in this private network can connect.
+    ipAllowList: []
+
+  - type: web
+    name: proper-marketing-intake
+    runtime: node
+    region: oregon
+    # Smallest always-on web service. Render used to call this Starter.
+    # Do not use `free`: that plan sleeps, and Slack cannot wait for it to wake.
+    plan: 0.5c-512mb
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: SLACK_BOT_TOKEN
+        sync: false
+      - key: SLACK_SIGNING_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-5-5
+      - key: ASANA_ACCESS_TOKEN
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: proper-marketing-intake-kv
+          property: connectionString

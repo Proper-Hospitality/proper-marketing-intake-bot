@@ -1,0 +1,204 @@
+import { FORM_URL } from "../intake/catalog.js";
+import { runIntakeTurn, type Llm } from "../agent/run.js";
+import { confirmBlocks, messageBlocks } from "./blocks.js";
+import { slackThreadUrl } from "../intake/brief.js";
+import { submitConfirmedBrief } from "./submit.js";
+import type { SlackApi } from "./api.js";
+import { conversationKey, conversationKeyFromAction, emptyConversation, type Store } from "../store/types.js";
+
+export interface IncomingMessage {
+  channel: string;
+  userId: string;
+  text: string;
+  ts: string;
+  threadTs?: string;
+  isDm: boolean;
+  files?: string[];
+}
+
+export async function handleIncomingMessage(deps: {
+  store: Store;
+  slack: SlackApi;
+  llm: Llm;
+  asanaToken?: string;
+  fetchImpl?: typeof fetch;
+  today?: Date;
+},   message: IncomingMessage): Promise<void> {
+  const messageClaim = `msg:${message.channel}:${message.ts}`;
+  const fresh = await deps.store.claimEvent(messageClaim, 600);
+  if (!fresh) return;
+  try {
+    await handleFreshMessage(deps, message);
+  } catch (error) {
+    await deps.store.releaseEvent(messageClaim);
+    throw error;
+  }
+}
+
+async function handleFreshMessage(deps: {
+  store: Store;
+  slack: SlackApi;
+  llm: Llm;
+  asanaToken?: string;
+  fetchImpl?: typeof fetch;
+  today?: Date;
+}, message: IncomingMessage): Promise<void> {
+  const key = conversationKey(message.channel, message.threadTs, message.ts, message.isDm);
+  const state = (await deps.store.getConversation(key)) ?? emptyConversation(key);
+  state.channel = message.channel;
+  state.slackUserId = message.userId;
+  state.threadTs = message.threadTs ?? (message.isDm ? undefined : message.ts);
+  const threadAnchor = state.threadTs;
+
+  if (state.messages.length === 0 && message.threadTs) {
+    const replies = await deps.slack.threadReplies(message.channel, message.threadTs);
+    const prior = replies
+      .filter((reply) => !reply.botId && reply.text && reply.user)
+      .map((reply) => `${reply.user === message.userId ? "Requester" : reply.user}: ${reply.text}`)
+      .join("\n");
+    if (prior) {
+      state.messages.push({
+        role: "user",
+        content: `Earlier messages in this thread:\n${prior}`,
+      });
+    }
+  }
+
+  const profile = await deps.slack.userProfile(message.userId);
+  const fileNote = message.files && message.files.length > 0 ? `\nFiles: ${message.files.join(" ")}` : "";
+  const reply = await runIntakeTurn({
+    state,
+    userText: `${message.text}${fileNote}`.trim(),
+    slackUser: { id: message.userId, name: profile.name, email: profile.email },
+    llm: deps.llm,
+    asanaToken: deps.asanaToken,
+    fetchImpl: deps.fetchImpl,
+    today: deps.today,
+  });
+  await deps.store.saveConversation(state);
+  await deps.slack.postMessage({
+    channel: message.channel,
+    threadTs: threadAnchor,
+    text: reply.text,
+    blocks: reply.confirm ? confirmBlocks(reply.text, reply.confirm.version) : messageBlocks(reply.text),
+  });
+}
+
+export async function handleConfirmAction(deps: {
+  store: Store;
+  slack: SlackApi;
+  asanaToken?: string;
+  fetchImpl?: typeof fetch;
+}, action: {
+  version: number;
+  channel: string;
+  messageTs: string;
+  threadTs?: string;
+}): Promise<void> {
+  const key = conversationKeyFromAction(action.channel, action.threadTs);
+  const lockId = `confirm:${key}:${action.version}`;
+  const claimed = await deps.store.claimEvent(lockId, 120);
+  if (!claimed) {
+    await deps.slack.postMessage({
+      channel: action.channel,
+      threadTs: action.threadTs,
+      text: "I'm already filing that brief.",
+      blocks: messageBlocks("I'm already filing that brief."),
+    });
+    return;
+  }
+  try {
+    const state = await deps.store.getConversation(key);
+    if (!state) {
+      await deps.slack.postMessage({
+        channel: action.channel,
+        threadTs: action.threadTs,
+        text: "I lost the brief for this thread. Send the request once more and I'll start again.",
+        blocks: messageBlocks("I lost the brief for this thread. Send the request once more and I'll start again."),
+      });
+      return;
+    }
+    if (!deps.asanaToken) {
+      await deps.slack.postMessage({
+        channel: action.channel,
+        threadTs: action.threadTs,
+        text: `I can't reach Asana because ASANA_ACCESS_TOKEN is not set. Nothing was created. Form: ${FORM_URL}`,
+        blocks: messageBlocks(`I can't reach Asana because ASANA_ACCESS_TOKEN is not set. Nothing was created. Form: ${FORM_URL}`),
+      });
+      return;
+    }
+    if (state.phase === "submitted" && state.taskUrl) {
+      await deps.slack.postMessage({
+        channel: action.channel,
+        threadTs: action.threadTs,
+        text: `This was already filed: ${state.taskUrl}`,
+        blocks: messageBlocks(`This was already filed: ${state.taskUrl}`),
+      });
+      return;
+    }
+    if (state.confirmVersion !== action.version) {
+      await deps.slack.postMessage({
+        channel: action.channel,
+        threadTs: action.threadTs,
+        text: "That confirm button is out of date. Ask for a fresh summary and use the new Confirm button.",
+        blocks: messageBlocks("That confirm button is out of date. Ask for a fresh summary and use the new Confirm button."),
+      });
+      return;
+    }
+    await deps.slack.updateMessage({
+      channel: action.channel,
+      ts: action.messageTs,
+      text: "Filing this on the New Intake Board.",
+      blocks: messageBlocks("Filing this on the New Intake Board."),
+    });
+    const thread = action.threadTs ?? action.messageTs;
+    const result = await submitConfirmedBrief({
+      confirmed: true,
+      version: action.version,
+      state,
+      store: deps.store,
+      token: deps.asanaToken,
+      fetchImpl: deps.fetchImpl,
+      slackThread: slackThreadUrl(action.channel, thread),
+    });
+    await deps.slack.postMessage({
+      channel: action.channel,
+      threadTs: action.threadTs,
+      text: result.text,
+      blocks: messageBlocks(result.text),
+    });
+  } finally {
+    await deps.store.releaseEvent(lockId);
+  }
+}
+
+export async function handleReviseAction(deps: { store: Store; slack: SlackApi }, action: {
+  version: number;
+  channel: string;
+  messageTs: string;
+  threadTs?: string;
+}): Promise<void> {
+  const key = conversationKeyFromAction(action.channel, action.threadTs);
+  const state = await deps.store.getConversation(key);
+  if (!state) return;
+  if (state.confirmVersion !== action.version) {
+    await deps.slack.postMessage({
+      channel: action.channel,
+      threadTs: action.threadTs,
+      text: "That summary is already out of date.",
+      blocks: messageBlocks("That summary is already out of date."),
+    });
+    return;
+  }
+  state.phase = "collecting";
+  state.confirmVersion += 1;
+  state.updatedAt = new Date().toISOString();
+  await deps.store.saveConversation(state);
+  const text = "What should we change? I'll show a new summary before anything is filed.";
+  await deps.slack.updateMessage({
+    channel: action.channel,
+    ts: action.messageTs,
+    text,
+    blocks: messageBlocks(text),
+  });
+}
