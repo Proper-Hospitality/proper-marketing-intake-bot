@@ -6,24 +6,24 @@ It also answers questions about how intake works, and it shares the form link wh
 
 Owner: Elena Ruiz.
 
-The bot runs on [Vercel](https://vercel.com). Slack sends each message to a web address on Vercel. Vercel replies to Slack immediately (Slack gives up after 3 seconds), then finishes the slower work — talking to Claude, and creating the Asana task — in the background.
+The bot is a normal web service on [Render](https://render.com) (the Starter plan, which stays on). Slack sends each message to one address on that service. The service answers Slack immediately — Slack gives up after 3 seconds — and then keeps working in the same process: talking to Claude, and creating the Asana task.
 
-Memory between messages is stored in [Upstash Redis](https://upstash.com). A serverless function forgets everything when it finishes, so the Redis database is what lets a thread pick up where it left off. Slack sometimes sends the same event twice; the bot remembers the event id for 15 minutes and ignores the copy, so a retry does not file a second task.
+Memory between messages is stored in [Upstash Redis](https://upstash.com). Render restarts the service every time you deploy or change a setting, and a restart forgets anything kept only in memory. Redis is what lets a Slack thread pick up where it left off, and what lets the bot ignore a second copy of the same Slack delivery so a retry does not file a second task.
 
 ## What you need before you start
 
 - Admin access to the Proper Hospitality Slack workspace.
 - A GitHub account that can see this repository.
-- A Vercel account. `vercel.json` asks for a 60 second function limit because Claude and Asana together can take longer than a few seconds. If the deploy is rejected for that limit, raise it in the project settings or use a plan that allows 60 seconds.
+- A Render account. Use a **Web Service** on the always-on plan in the blueprint (`0.5c-512mb`, 0.5 CPU and 512 MB). Render used to call this Starter. Do not pick **Free**. Free sleeps when nobody is using it, and Slack cannot wait for it to wake up.
 - An [Anthropic](https://console.anthropic.com) API key (this is the Claude account).
 - An Asana personal access token, or a service account token, for a user who can create tasks in **New Intake Board**.
-- An Upstash account (free is enough to start).
+- An Upstash account (free is enough to start). You will create the database in the middle of the Render setup, when Render asks for those two values.
 
 You do not need Canva API access. Template names and links are saved in the code.
 
 ## 1. Create the Slack app from the manifest
 
-Do this before Vercel. You need the tokens from Slack before the site can answer Slack's check.
+Do this before Render. You need the tokens from Slack before the service can answer Slack.
 
 1. Open [https://api.slack.com/apps](https://api.slack.com/apps).
 2. Click **Create New App**.
@@ -32,13 +32,15 @@ Do this before Vercel. You need the tokens from Slack before the site can answer
 5. Choose the **JSON** tab and paste the entire contents of `manifest.json` from this repository. Replace whatever is already in the box.
 6. Click **Next**, then **Create**.
 
+Leave the Request URL blank for now. Slack checks that address the moment you save it, and the Render site does not exist yet. You will paste it in step 6.
+
 The manifest turns on:
 
 - Events: `app_mention` (someone @mentions the bot) and `message.im` (a direct message to the bot).
 - Interactivity, so the **Confirm** and **Make changes** buttons work.
 - The bot scopes the app needs to read those messages, look up a person's name and email, and reply.
 
-Socket mode is off. This app uses a normal web address, which is what Vercel provides.
+Socket mode is off. This app uses a normal web address.
 
 ## 2. Install the app to the workspace
 
@@ -51,68 +53,91 @@ Keep both of these private. Do not paste them into Slack, GitHub, or this README
 
 If you change the manifest later and Slack says the permissions changed, open **Install App** and click **Reinstall to Workspace**.
 
-## 3. Create the Redis database
+## 3. Deploy on Render from the blueprint
 
-1. Go to [https://console.upstash.com](https://console.upstash.com) and sign in.
-2. Click **Create database**. A regional database is fine. The name can be `proper-marketing-intake`.
-3. Open the database. Find the **REST API** section (not the Redis URL that starts with `rediss://`).
-4. Copy **UPSTASH_REDIS_REST_URL** and **UPSTASH_REDIS_REST_TOKEN**.
+The blueprint is the file `render.yaml` in this repository. Render reads it and creates the web service for you.
 
-Vercel used to offer a product called Vercel KV. It was replaced by Upstash. This app uses Upstash's REST connection because a Vercel function cannot keep a normal database socket open.
+1. Open [https://dashboard.render.com/blueprint/new](https://dashboard.render.com/blueprint/new) and sign in.
+2. Connect GitHub if Render asks. Grant access to **proper-marketing-intake-bot**.
+3. Choose this repository. Use the **main** branch after this update is merged. If you are trying the pull request first, choose that branch instead of main.
+4. Render shows the service `proper-marketing-intake`, the always-on plan (`0.5c-512mb`), the build command, and the start command. Leave those as they are.
+5. Render then shows empty boxes for the secret settings. Fill them in using the table in the next step. The two Upstash boxes are filled in step 5, which you do on that same screen.
+6. Click **Apply** (or **Deploy**). The first build can take a few minutes. Wait until the service says **Live**.
 
-## 4. Connect this repository to Vercel
+The service listens on the port Render assigns. You do not set that port yourself. Slack's address on the service is `/slack/events`. Render's own health check is `/health`.
 
-1. Go to [https://vercel.com/new](https://vercel.com/new).
-2. Import **proper-marketing-intake-bot** from GitHub. If Vercel cannot see it, click **Adjust GitHub App Permissions** and grant access to this repository.
-3. Leave the framework preset as **Other**. The project is not a website with pages; it is one Slack endpoint.
-4. Do not click Deploy yet. Open **Environment Variables** and add every row below. Use the **Production** environment (add Preview too if other people will test branches).
+## 4. Set the environment variables
+
+On the blueprint screen, Render lists these because `render.yaml` marks the secrets with `sync: false`. That means the values stay in Render and are not written into the repository.
 
 | Name | Where the value comes from |
 |---|---|
 | `SLACK_BOT_TOKEN` | Slack, Install App. Starts with `xoxb-`. |
 | `SLACK_SIGNING_SECRET` | Slack, Basic Information, Signing Secret. |
 | `ANTHROPIC_API_KEY` | Anthropic console, API keys. |
-| `ANTHROPIC_MODEL` | Optional. Leave as `claude-sonnet-5-5` unless you have been told to use a different Claude model. |
+| `ANTHROPIC_MODEL` | Already filled in as `claude-sonnet-5-5`. Leave it unless you have been told to use a different Claude model. |
 | `ASANA_ACCESS_TOKEN` | Asana. My Settings → Apps → Developer apps → Personal access tokens. Or a service account token. |
-| `UPSTASH_REDIS_REST_URL` | Upstash database, REST section. |
-| `UPSTASH_REDIS_REST_TOKEN` | Upstash database, REST section. |
+| `UPSTASH_REDIS_REST_URL` | Step 5. |
+| `UPSTASH_REDIS_REST_TOKEN` | Step 5. |
 
 The same names are listed in `.env.example`. That file has no secrets in it. Do not fill it in and commit it.
 
-5. Click **Deploy**. Wait until the deployment says Ready.
-6. Copy the production domain. It looks like `proper-marketing-intake-bot.vercel.app`. Your Slack address will be:
+If the service fails immediately and the log says `Missing environment variables`, one of these boxes was empty. Open the service in Render, go to **Environment**, paste the missing value, and save. Render restarts on its own.
+
+## 5. Create the Upstash database
+
+Do this when Render is waiting for `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`.
+
+1. Go to [https://console.upstash.com](https://console.upstash.com) and sign in.
+2. Click **Create database**. A regional database is fine. The name can be `proper-marketing-intake`.
+3. Open the database. Find the **REST API** section. Use the REST URL and token, not the address that starts with `rediss://`.
+4. Copy **UPSTASH_REDIS_REST_URL** and **UPSTASH_REDIS_REST_TOKEN** into the Render form.
+
+Redis holds two things: the brief for each Slack thread or DM, and the id of each Slack delivery for 15 minutes. The second one is how a retry is ignored.
+
+## 6. Paste the Request URL into Slack
+
+1. On the Render service page, copy the public URL. It looks like `https://proper-marketing-intake.onrender.com`.
+2. Add `/slack/events` on the end. The full address is:
 
 ```text
-https://YOUR-DOMAIN.vercel.app/api/slack
+https://YOUR-RENDER-URL.onrender.com/slack/events
 ```
 
-There is no extra path. `/api/slack` is the only address Slack should call.
-
-## 5. Tell Slack the Request URL
-
-Slack will send a check to that address. The check succeeds only after step 4 is deployed with `SLACK_SIGNING_SECRET` set.
-
-1. In the Slack app, open **Event Subscriptions**.
-2. Turn events **On** if they are off.
-3. Set **Request URL** to `https://YOUR-DOMAIN.vercel.app/api/slack`.
-4. Wait for the green **Verified** check.
-5. Under **Subscribe to bot events**, confirm both of these are listed:
+3. In the Slack app, open **Event Subscriptions**.
+4. Turn events **On** if they are off.
+5. Set **Request URL** to that address. Wait for the green **Verified** check.
+6. Under **Subscribe to bot events**, confirm both of these are listed:
    - `app_mention`
    - `message.im`
-6. Click **Save Changes**.
-7. Open **Interactivity & Shortcuts**.
-8. Turn interactivity **On**.
-9. Set **Request URL** to the same address: `https://YOUR-DOMAIN.vercel.app/api/slack`.
-10. Click **Save Changes**.
+7. Click **Save Changes**.
+8. Open **Interactivity & Shortcuts**.
+9. Turn interactivity **On**.
+10. Set **Request URL** to the same address, including `/slack/events`.
+11. Click **Save Changes**.
+
+You can also put that address into the manifest and save it again. Both places must match. In the manifest JSON it looks like this, with your real Render URL:
+
+```json
+"event_subscriptions": {
+  "request_url": "https://YOUR-RENDER-URL.onrender.com/slack/events",
+  "bot_events": ["app_mention", "message.im"]
+},
+"interactivity": {
+  "is_enabled": true,
+  "request_url": "https://YOUR-RENDER-URL.onrender.com/slack/events"
+}
+```
 
 If verification fails:
 
-- The domain must be `https://`, not `http://`.
-- The path must end in `/api/slack`.
-- `SLACK_SIGNING_SECRET` on Vercel must be the signing secret of this app, then redeploy (Vercel → Deployments → the latest one → Redeploy) so the function sees the new value.
-- Open the deployment's **Logs** in Vercel while you click Retry in Slack. A line that says `missing_signing_secret` or `Invalid signature` tells you which of those two it is.
+- The address must be `https://`, not `http://`.
+- It must end in `/slack/events`.
+- `SLACK_SIGNING_SECRET` on Render must be the signing secret of this app. Save it, wait for the restart, then click Retry in Slack.
+- Open the Render **Logs** while you click Retry. A line that says the signing secret is missing, or `Invalid signature`, tells you which of those two it is.
+- A browser visit to `https://YOUR-RENDER-URL.onrender.com/health` should show the word `ok`. That only checks that the service is up. It does not check Slack.
 
-## 6. Test in a private channel
+## 7. Test in a private channel
 
 Do this in a private channel, not in a channel the whole company is watching.
 
@@ -152,12 +177,13 @@ Request types are Creative, Web, CRM & Paid, Social, and Marketing. Designing an
 
 ## If something goes wrong
 
-- **Slack says the bot didn't respond.** Open the Vercel deployment logs. `slack_retry` means Slack sent the message again. `slack_retry_skipped` means the bot ignored that copy on purpose.
+- **Slack says the bot didn't respond.** Open the Render logs. `slack_retry` means Slack sent the message again. `slack_retry_skipped` means the bot ignored that copy on purpose.
 - **The thread says Asana failed.** No task was created, or a task was created but the later fields did not save. The message includes Asana's reason and the form link. Click Confirm again only if the message says a task already exists and the remaining fields can be retried. Otherwise fix the token or the field and start again. The bot will not invent a second task for a brief it already created.
-- **`ASANA_ACCESS_TOKEN is not set`.** Add it on Vercel and redeploy.
-- **The bot forgets the thread.** Upstash URL or token is missing or wrong. Fix the two `UPSTASH_REDIS_REST_*` variables and redeploy.
+- **`ASANA_ACCESS_TOKEN is not set` or the log lists missing variables.** Add them under **Environment** on the Render service and save.
+- **The bot forgets the thread.** Upstash URL or token is missing or wrong. Fix the two `UPSTASH_REDIS_REST_*` variables and save so Render restarts.
 - **Claude errors.** Check `ANTHROPIC_API_KEY` and that the Anthropic account has credit.
-- **Buttons do nothing.** Interactivity Request URL is empty or different from the Events Request URL. Both must be `https://YOUR-DOMAIN.vercel.app/api/slack`.
+- **Buttons do nothing.** Interactivity Request URL is empty or different from the Events Request URL. Both must be `https://YOUR-RENDER-URL.onrender.com/slack/events`.
+- **`/health` does not say ok.** The build or start command failed. Read the latest Render deploy log. The build command is `npm install --include=dev && npm run build`. The start command is `npm start`.
 
 ## For a developer helping Elena
 
@@ -165,17 +191,13 @@ Request types are Creative, Web, CRM & Paid, Social, and Marketing. Designing an
 npm install
 npm test
 npm run typecheck
-```
-
-Tests cover field order (Request Type, then Task Type, then Property), the Canva matcher, and the rule that nothing is created until Confirm. Asana and Claude are mocked.
-
-To run it on your own computer you need a public https address (Cloudflare Tunnel or ngrok) pointed at port 3000, the same environment variables in a `.env` file that is not committed, and:
-
-```bash
+npm run build
 npm run dev
 ```
 
-The local server answers `POST /api/slack`, acknowledges Slack immediately, and then does the work. Production does not use this command. Production is the Vercel deployment.
+`npm run dev` listens on port 3000 (or `PORT`) and serves `POST /slack/events` plus `GET /health`. Slack still has to reach a public https address, so a tunnel has to point at that port. Put the variables from `.env.example` in a `.env` file that is not committed. Without the Upstash variables, the process keeps briefs in memory and forgets them when it stops. That is only for a local experiment.
+
+Tests cover field order, the Canva matcher, the confirm gate, Slack retry dedupe, and the health route. Asana and Claude are mocked.
 
 ## Known open questions
 

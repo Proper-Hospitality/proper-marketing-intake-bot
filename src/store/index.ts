@@ -11,9 +11,9 @@ export function getStore(): Store {
     singleton = createRedisStore();
     return singleton;
   }
-  if (process.env.VERCEL) {
+  if (process.env.RENDER) {
     throw new Error(
-      "This deployment has no Upstash Redis credentials. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.",
+      "This Render service has no Upstash Redis credentials. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.",
     );
   }
   console.warn("UPSTASH_REDIS_REST_URL is not set. Using in-memory state that disappears when the process stops.");
