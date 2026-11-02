@@ -71,6 +71,24 @@ export const INTAKE_TOOLS = [
     },
   },
   {
+    name: "count_overdue_tasks",
+    description:
+      "Count incomplete Asana tasks that are overdue for each named person. Overdue means the due date is before today in America/Los_Angeles. Read-only: do not mark anything complete. Pass every name, including a list of first names. Set includeTasks only when they want the task links, not for a count.",
+    input_schema: {
+      type: "object",
+      properties: {
+        names: {
+          type: "array",
+          items: { type: "string" },
+          description: "Each person to count, in the order asked. First names are fine.",
+        },
+        includeTasks: { type: "boolean", description: "True only when they asked to see the overdue tasks or links." },
+      },
+      required: ["names"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "complete_tasks",
     description:
       "Stage the tasks from the latest search_open_tasks result so the app can show a Confirm button. Does not mark them complete. Call this only when the person asked to mark tasks complete and the search returned 25 or fewer. Pass gids to complete a subset; omit gids to stage every task from that search.",
