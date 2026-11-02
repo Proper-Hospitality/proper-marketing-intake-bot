@@ -6,6 +6,8 @@ It also answers questions about how intake works, and it shares the form link wh
 
 Anyone in Slack can ask it to find incomplete Asana tasks and mark them complete, including tasks assigned to someone else. It lists each match with the assignee, the project, the due date, and the link. Nothing is marked complete until they click **Confirm**. It will not complete more than 25 tasks at one time. If a name matches more than one person, it asks which one. After Confirm, each task gets a comment naming who marked it complete from Slack, and that is written to the service log.
 
+They can also ask for overdue counts for several people at once, for example "how many overdue tasks do Savannah, Kat, and DeeDee have?" Overdue means the task is still open and the due date is before today in Pacific Time. The reply is a count per person. If they ask to see the tasks, it adds links to the oldest ones. That question does not change any tasks, so there is no Confirm button. A name that matches nobody is called out, and a name that matches more than one person is asked about.
+
 Owner: Elena Ruiz.
 
 The bot is a normal web service on [Render](https://render.com) (the always-on plan in the blueprint, which stays on). Slack sends each message to one address on that service. The service answers Slack immediately — Slack gives up after 3 seconds — and then keeps working in the same process: talking to Claude, and creating the Asana task.

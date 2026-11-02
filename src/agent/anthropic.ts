@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { assistantBlocksForReplay } from "./history.js";
 import type { Llm, LlmContentBlock } from "./run.js";
 
 export function createAnthropicLlm(): Llm {
@@ -16,13 +17,7 @@ export function createAnthropicLlm(): Llm {
         tools: tools as Anthropic.Tool[],
         messages: messages as Anthropic.MessageParam[],
       });
-      const content: LlmContentBlock[] = response.content.map((block) => {
-        if (block.type === "text") return { type: "text", text: block.text };
-        if (block.type === "tool_use") {
-          return { type: "tool_use", id: block.id, name: block.name, input: block.input };
-        }
-        return { type: block.type };
-      });
+      const content: LlmContentBlock[] = assistantBlocksForReplay(response.content);
       return { content };
     },
   };

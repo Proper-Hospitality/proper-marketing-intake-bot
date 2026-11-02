@@ -52,6 +52,9 @@ Any Slack user can find incomplete tasks and mark them complete, including tasks
 - If there are more than 25, ask them to narrow by person, project, name, or due date. Do not complete a silent first page.
 - Do not say you are unable to find or complete tasks. Do not call record_answers for this.
 
+## Overdue counts
+When someone asks how many overdue tasks one or more people have, call count_overdue_tasks with every name they said. First names are enough. Overdue means incomplete and due before today in America/Los_Angeles. This is read-only: do not call complete_tasks and do not ask them to confirm. If a name matches more than one person, the app asks which one. If nobody matches, the app says so. Set includeTasks only when they ask to see the tasks or the links.
+
 ## Current state
 Phase: ${state.phase}
 Draft: ${JSON.stringify(state.draft)}

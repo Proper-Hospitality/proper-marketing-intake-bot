@@ -19,8 +19,10 @@ import {
   stageTaskCompletion,
   type TaskSearchFilters,
 } from "../tasks/complete.js";
+import { assistantBlocksForReplay, isHistoryRejection, sanitizeStoredHistory } from "./history.js";
 import { buildSystemPrompt } from "./prompt.js";
 import { INTAKE_TOOLS } from "./tools.js";
+import { formatOverdueReport, overdueCountsForNames, parseNameList } from "../tasks/overdue.js";
 
 export interface LlmContentBlock {
   type: string;
@@ -28,6 +30,9 @@ export interface LlmContentBlock {
   id?: string;
   name?: string;
   input?: unknown;
+  thinking?: string;
+  signature?: string;
+  data?: string;
 }
 
 export interface Llm {
@@ -40,7 +45,7 @@ export interface AgentReply {
   confirm?: { version: number; kind?: "intake" | "complete" };
 }
 
-type CompletionView = { kind: "confirm" | "listed" | "too_many" | "ambiguous" | "refused"; text: string };
+type CompletionView = { kind: "confirm" | "listed" | "too_many" | "ambiguous" | "refused" | "report"; text: string };
 
 export async function runIntakeTurn(input: {
   state: ConversationState;
@@ -70,18 +75,40 @@ export async function runIntakeTurn(input: {
     return reply;
   }
 
-  state.messages.push({ role: "user", content: input.userText });
-  const messages: unknown[] = state.messages.map((turn) => ({ role: turn.role, content: turn.content }));
+  state.messages = sanitizeStoredHistory(state.messages);
+  const previous = state.messages[state.messages.length - 1];
+  if (previous?.role === "user") previous.content = `${previous.content}\n${input.userText}`;
+  else state.messages.push({ role: "user", content: input.userText });
+  let messages: unknown[] = state.messages.map((turn) => ({ role: turn.role, content: turn.content }));
   let assistantText = "";
   let outcome: FlowOutcome | undefined = preset;
   let completion: CompletionView | undefined;
+  let healedHistory = false;
 
   for (let step = 0; step < 6; step += 1) {
-    const response = await input.llm.complete({
-      system: buildSystemPrompt(state, input.slackUser),
-      messages,
-      tools: INTAKE_TOOLS,
-    });
+    let response: { content: LlmContentBlock[] };
+    try {
+      response = await input.llm.complete({
+        system: buildSystemPrompt(state, input.slackUser),
+        messages,
+        tools: INTAKE_TOOLS,
+      });
+    } catch (error) {
+      if (!healedHistory && isHistoryRejection(error)) {
+        healedHistory = true;
+        console.log(JSON.stringify({
+          msg: "history_reset",
+          key: state.key,
+          error: error instanceof Error ? error.message : "unknown",
+        }));
+        state.messages = [{ role: "user", content: input.userText }];
+        messages = [{ role: "user", content: input.userText }];
+        outcome = undefined;
+        completion = undefined;
+        continue;
+      }
+      throw error;
+    }
     const toolUses = response.content.filter((block) => block.type === "tool_use");
     assistantText = response.content
       .filter((block) => block.type === "text" && block.text)
@@ -89,7 +116,7 @@ export async function runIntakeTurn(input: {
       .join("\n")
       .trim();
     if (toolUses.length === 0) break;
-    messages.push({ role: "assistant", content: response.content });
+    messages.push({ role: "assistant", content: assistantBlocksForReplay(response.content) });
     const results = [];
     for (const tool of toolUses) {
       const executed = await executeTool(state, tool.name ?? "", tool.input, {
@@ -164,7 +191,36 @@ async function executeTool(
     const completion = { kind: "confirm" as const, text: formatSearchMessage(state.pendingCompletion ?? [], true) };
     return { payload: { ok: true, count: state.pendingCompletion?.length ?? 0 }, completion };
   }
+  if (name === "count_overdue_tasks") {
+    const completion = await runOverdueCount(payload, deps);
+    return { payload: completion, completion };
+  }
   return { payload: { ok: false, error: `Unknown tool ${name}` } };
+}
+
+async function runOverdueCount(
+  payload: Record<string, unknown>,
+  deps: { today: Date; asanaToken?: string; fetchImpl?: typeof fetch },
+): Promise<CompletionView> {
+  const names = parseNameList(payload.names);
+  if (names.length === 0) {
+    return { kind: "refused", text: "Tell me which people to count. First names are enough." };
+  }
+  if (!deps.asanaToken) {
+    return { kind: "refused", text: "I can't reach Asana because ASANA_ACCESS_TOKEN is not set. Nothing was changed." };
+  }
+  try {
+    const report = await overdueCountsForNames({
+      names,
+      includeTasks: payload.includeTasks === true,
+      token: deps.asanaToken,
+      now: deps.today,
+      fetchImpl: deps.fetchImpl,
+    });
+    return { kind: "report", text: formatOverdueReport(report.today, report.results, payload.includeTasks === true) };
+  } catch (error) {
+    return { kind: "refused", text: `I couldn't count overdue tasks. Nothing was changed. ${userFacingAsanaError(error)}` };
+  }
 }
 
 async function runTaskSearch(
