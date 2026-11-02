@@ -6,17 +6,16 @@ let singleton: Store | undefined;
 
 export function getStore(): Store {
   if (singleton) return singleton;
-  const hasRedis = Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
-  if (hasRedis) {
+  if (process.env.REDIS_URL) {
     singleton = createRedisStore();
     return singleton;
   }
   if (process.env.RENDER) {
     throw new Error(
-      "This Render service has no Upstash Redis credentials. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.",
+      "REDIS_URL is missing. The blueprint should set it from the Key Value service. You do not type this value yourself. Re-apply render.yaml if the web service has no REDIS_URL.",
     );
   }
-  console.warn("UPSTASH_REDIS_REST_URL is not set. Using in-memory state that disappears when the process stops.");
+  console.warn("REDIS_URL is not set. Using in-memory state that disappears when the process stops.");
   singleton = new MemoryStore();
   return singleton;
 }

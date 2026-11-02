@@ -9,6 +9,10 @@
     "background_color": "#1F1F1F"
   },
   "features": {
+    "app_home": {
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_enabled": false
+    },
     "bot_user": {
       "display_name": "Marketing Intake",
       "always_online": true
@@ -32,12 +36,6 @@
     }
   },
   "settings": {
-    "event_subscriptions": {
-      "bot_events": ["app_mention", "message.im"]
-    },
-    "interactivity": {
-      "is_enabled": true
-    },
     "org_deploy_enabled": false,
     "socket_mode_enabled": false,
     "token_rotation_enabled": false

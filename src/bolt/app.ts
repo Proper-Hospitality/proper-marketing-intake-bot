@@ -71,13 +71,12 @@ function assertProductionEnv(): void {
     "SLACK_SIGNING_SECRET",
     "ANTHROPIC_API_KEY",
     "ASANA_ACCESS_TOKEN",
-    "UPSTASH_REDIS_REST_URL",
-    "UPSTASH_REDIS_REST_TOKEN",
+    "REDIS_URL",
   ];
   const missing = required.filter((name) => !process.env[name]);
   if (missing.length > 0) {
     throw new Error(
-      `Missing environment variables: ${missing.join(", ")}. Add them on the Render service and save. Render restarts the service after you save.`,
+      `Missing environment variables: ${missing.join(", ")}. Add the Slack, Anthropic, and Asana values on the Render service and save. REDIS_URL comes from the Key Value service in the blueprint; do not type it yourself.`,
     );
   }
   getStore();

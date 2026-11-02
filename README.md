@@ -6,9 +6,9 @@ It also answers questions about how intake works, and it shares the form link wh
 
 Owner: Elena Ruiz.
 
-The bot is a normal web service on [Render](https://render.com) (the Starter plan, which stays on). Slack sends each message to one address on that service. The service answers Slack immediately — Slack gives up after 3 seconds — and then keeps working in the same process: talking to Claude, and creating the Asana task.
+The bot is a normal web service on [Render](https://render.com) (the always-on plan in the blueprint, which stays on). Slack sends each message to one address on that service. The service answers Slack immediately — Slack gives up after 3 seconds — and then keeps working in the same process: talking to Claude, and creating the Asana task.
 
-Memory between messages is stored in [Upstash Redis](https://upstash.com). Render restarts the service every time you deploy or change a setting, and a restart forgets anything kept only in memory. Redis is what lets a Slack thread pick up where it left off, and what lets the bot ignore a second copy of the same Slack delivery so a retry does not file a second task.
+Memory between messages is stored in Render Key Value, which speaks Redis. Render restarts the service every time you deploy or change a setting, and a restart forgets anything kept only in memory. Key Value is what lets a Slack thread pick up where it left off, and what lets the bot ignore a second copy of the same Slack delivery so a retry does not file a second task. The blueprint creates that database and fills in `REDIS_URL` for you. You do not create an account anywhere else, and you do not paste a database address.
 
 ## What you need before you start
 
@@ -17,9 +17,8 @@ Memory between messages is stored in [Upstash Redis](https://upstash.com). Rende
 - A Render account. Use a **Web Service** on the always-on plan in the blueprint (`0.5c-512mb`, 0.5 CPU and 512 MB). Render used to call this Starter. Do not pick **Free**. Free sleeps when nobody is using it, and Slack cannot wait for it to wake up.
 - An [Anthropic](https://console.anthropic.com) API key (this is the Claude account).
 - An Asana personal access token, or a service account token, for a user who can create tasks in **New Intake Board**.
-- An Upstash account (free is enough to start). You will create the database in the middle of the Render setup, when Render asks for those two values.
 
-You do not need Canva API access. Template names and links are saved in the code.
+You do not need Canva API access. Template names and links are saved in the code. You do not need a separate Redis host. Render Key Value is part of the blueprint.
 
 ## 1. Create the Slack app from the manifest
 
@@ -32,15 +31,16 @@ Do this before Render. You need the tokens from Slack before the service can ans
 5. Choose the **JSON** tab and paste the entire contents of `manifest.json` from this repository. Replace whatever is already in the box.
 6. Click **Next**, then **Create**.
 
-Leave the Request URL blank for now. Slack checks that address the moment you save it, and the Render site does not exist yet. You will paste it in step 6.
+The manifest does **not** include Event Subscriptions or Interactivity. Slack will not save those sections unless the manifest already contains a Request URL, and the Render site does not exist yet. You turn both on in step 5, after the service is live.
 
-The manifest turns on:
+The manifest does turn on:
 
-- Events: `app_mention` (someone @mentions the bot) and `message.im` (a direct message to the bot).
-- Interactivity, so the **Confirm** and **Make changes** buttons work.
+- The **Messages** tab, and it lets people send a direct message to the bot (the tab is not read-only).
 - The bot scopes the app needs to read those messages, look up a person's name and email, and reply.
 
 Socket mode is off. This app uses a normal web address.
+
+If you already created the app from an earlier manifest, open **App Home** in the app settings and turn on the **Messages Tab**. Allow people to send messages. Do not leave that tab read-only. Save, and reinstall the app if Slack asks.
 
 ## 2. Install the app to the workspace
 
@@ -55,16 +55,16 @@ If you change the manifest later and Slack says the permissions changed, open **
 
 ## 3. Deploy on Render from the blueprint
 
-The blueprint is the file `render.yaml` in this repository. Render reads it and creates the web service for you.
+The blueprint is the file `render.yaml` in this repository. Render reads it and creates two things: the web service, and a free Key Value database named `proper-marketing-intake-kv`. That database only accepts connections from inside Render (`ipAllowList` is empty). The web service gets `REDIS_URL` from it automatically.
 
 1. Open [https://dashboard.render.com/blueprint/new](https://dashboard.render.com/blueprint/new) and sign in.
 2. Connect GitHub if Render asks. Grant access to **proper-marketing-intake-bot**.
 3. Choose this repository. Use the **main** branch after this update is merged. If you are trying the pull request first, choose that branch instead of main.
-4. Render shows the service `proper-marketing-intake`, the always-on plan (`0.5c-512mb`), the build command, and the start command. Leave those as they are.
-5. Render then shows empty boxes for the secret settings. Fill them in using the table in the next step. The two Upstash boxes are filled in step 5, which you do on that same screen.
-6. Click **Apply** (or **Deploy**). The first build can take a few minutes. Wait until the service says **Live**.
+4. Render shows the web service `proper-marketing-intake`, the always-on plan (`0.5c-512mb`), the build command, and the start command. It also shows the Key Value database. Leave those as they are. Do not add a `REDIS_URL` value yourself.
+5. Render then shows empty boxes for the secret settings. Fill them in using the table in the next step. There is no Redis box.
+6. Click **Apply** (or **Deploy**). The first build can take a few minutes. Wait until the web service says **Live**.
 
-The service listens on the port Render assigns. You do not set that port yourself. Slack's address on the service is `/slack/events`. Render's own health check is `/health`.
+The service listens on the port Render assigns. You do not set that port yourself. Slack's address on the service is `/slack/events`. Render's own health check is `/health`. After deploy, open the web service **Environment** page and confirm `REDIS_URL` is present and points at the Key Value service. If it is missing, apply the blueprint again. Do not paste a URL into that row.
 
 ## 4. Set the environment variables
 
@@ -77,25 +77,17 @@ On the blueprint screen, Render lists these because `render.yaml` marks the secr
 | `ANTHROPIC_API_KEY` | Anthropic console, API keys. |
 | `ANTHROPIC_MODEL` | Already filled in as `claude-sonnet-5-5`. Leave it unless you have been told to use a different Claude model. |
 | `ASANA_ACCESS_TOKEN` | Asana. My Settings → Apps → Developer apps → Personal access tokens. Or a service account token. |
-| `UPSTASH_REDIS_REST_URL` | Step 5. |
-| `UPSTASH_REDIS_REST_TOKEN` | Step 5. |
+| `REDIS_URL` | Filled in by the blueprint from the Key Value service. Leave it alone. |
 
-The same names are listed in `.env.example`. That file has no secrets in it. Do not fill it in and commit it.
+The same secret names are listed in `.env.example`. That file has no secrets in it. Do not fill it in and commit it.
 
-If the service fails immediately and the log says `Missing environment variables`, one of these boxes was empty. Open the service in Render, go to **Environment**, paste the missing value, and save. Render restarts on its own.
+If the service fails immediately and the log says `Missing environment variables`, one of the Slack, Anthropic, or Asana boxes was empty, or `REDIS_URL` was not wired. Open the service in Render, go to **Environment**, paste any missing secret, and save. Render restarts on its own. If `REDIS_URL` is the one missing, apply the blueprint again instead of typing a value.
 
-## 5. Create the Upstash database
+Key Value holds two things: the brief for each Slack thread or DM, and the id of each Slack delivery for 15 minutes. The second one is how a retry is ignored.
 
-Do this when Render is waiting for `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`.
+## 5. Turn on events and buttons in Slack
 
-1. Go to [https://console.upstash.com](https://console.upstash.com) and sign in.
-2. Click **Create database**. A regional database is fine. The name can be `proper-marketing-intake`.
-3. Open the database. Find the **REST API** section. Use the REST URL and token, not the address that starts with `rediss://`.
-4. Copy **UPSTASH_REDIS_REST_URL** and **UPSTASH_REDIS_REST_TOKEN** into the Render form.
-
-Redis holds two things: the brief for each Slack thread or DM, and the id of each Slack delivery for 15 minutes. The second one is how a retry is ignored.
-
-## 6. Paste the Request URL into Slack
+The Slack app was created without Event Subscriptions and without Interactivity. Slack requires a Request URL inside the manifest before it will save those sections, and there was no public address yet. Now that Render is live, turn them on in the app settings. Do not put them back into the manifest until you are ready to paste the live URL there too.
 
 1. On the Render service page, copy the public URL. It looks like `https://proper-marketing-intake.onrender.com`.
 2. Add `/slack/events` on the end. The full address is:
@@ -105,9 +97,9 @@ https://YOUR-RENDER-URL.onrender.com/slack/events
 ```
 
 3. In the Slack app, open **Event Subscriptions**.
-4. Turn events **On** if they are off.
+4. Turn events **On**.
 5. Set **Request URL** to that address. Wait for the green **Verified** check.
-6. Under **Subscribe to bot events**, confirm both of these are listed:
+6. Under **Subscribe to bot events**, add both of these if they are not already listed:
    - `app_mention`
    - `message.im`
 7. Click **Save Changes**.
@@ -115,19 +107,6 @@ https://YOUR-RENDER-URL.onrender.com/slack/events
 9. Turn interactivity **On**.
 10. Set **Request URL** to the same address, including `/slack/events`.
 11. Click **Save Changes**.
-
-You can also put that address into the manifest and save it again. Both places must match. In the manifest JSON it looks like this, with your real Render URL:
-
-```json
-"event_subscriptions": {
-  "request_url": "https://YOUR-RENDER-URL.onrender.com/slack/events",
-  "bot_events": ["app_mention", "message.im"]
-},
-"interactivity": {
-  "is_enabled": true,
-  "request_url": "https://YOUR-RENDER-URL.onrender.com/slack/events"
-}
-```
 
 If verification fails:
 
@@ -137,7 +116,7 @@ If verification fails:
 - Open the Render **Logs** while you click Retry. A line that says the signing secret is missing, or `Invalid signature`, tells you which of those two it is.
 - A browser visit to `https://YOUR-RENDER-URL.onrender.com/health` should show the word `ok`. That only checks that the service is up. It does not check Slack.
 
-## 7. Test in a private channel
+## 6. Test in a private channel
 
 Do this in a private channel, not in a channel the whole company is watching.
 
@@ -180,7 +159,7 @@ Request types are Creative, Web, CRM & Paid, Social, and Marketing. Designing an
 - **Slack says the bot didn't respond.** Open the Render logs. `slack_retry` means Slack sent the message again. `slack_retry_skipped` means the bot ignored that copy on purpose.
 - **The thread says Asana failed.** No task was created, or a task was created but the later fields did not save. The message includes Asana's reason and the form link. Click Confirm again only if the message says a task already exists and the remaining fields can be retried. Otherwise fix the token or the field and start again. The bot will not invent a second task for a brief it already created.
 - **`ASANA_ACCESS_TOKEN is not set` or the log lists missing variables.** Add them under **Environment** on the Render service and save.
-- **The bot forgets the thread.** Upstash URL or token is missing or wrong. Fix the two `UPSTASH_REDIS_REST_*` variables and save so Render restarts.
+- **The bot forgets the thread.** `REDIS_URL` is missing or the Key Value service is in a different region from the web service. Both are set to Oregon in the blueprint. Apply the blueprint again. Do not paste a Redis address by hand.
 - **Claude errors.** Check `ANTHROPIC_API_KEY` and that the Anthropic account has credit.
 - **Buttons do nothing.** Interactivity Request URL is empty or different from the Events Request URL. Both must be `https://YOUR-RENDER-URL.onrender.com/slack/events`.
 - **`/health` does not say ok.** The build or start command failed. Read the latest Render deploy log. The build command is `npm install --include=dev && npm run build`. The start command is `npm start`.
@@ -195,7 +174,7 @@ npm run build
 npm run dev
 ```
 
-`npm run dev` listens on port 3000 (or `PORT`) and serves `POST /slack/events` plus `GET /health`. Slack still has to reach a public https address, so a tunnel has to point at that port. Put the variables from `.env.example` in a `.env` file that is not committed. Without the Upstash variables, the process keeps briefs in memory and forgets them when it stops. That is only for a local experiment.
+`npm run dev` listens on port 3000 (or `PORT`) and serves `POST /slack/events` plus `GET /health`. Slack still has to reach a public https address, so a tunnel has to point at that port. Put the variables from `.env.example` in a `.env` file that is not committed. Without `REDIS_URL`, the process keeps briefs in memory and forgets them when it stops. That is only for a local experiment. On Render, `REDIS_URL` is the private Key Value connection string.
 
 Tests cover field order, the Canva matcher, the confirm gate, Slack retry dedupe, and the health route. Asana and Claude are mocked.
 
