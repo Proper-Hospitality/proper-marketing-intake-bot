@@ -187,7 +187,7 @@ Tests cover field order, the Canva matcher, the confirm gate, Slack retry dedupe
 
 ## Known open questions
 
-- Two live templates are both named **Proper-Social-Press-2026**: `EAHVrNTlM1M` and `EAHHycjf7Ug`. The bot keeps both, sends both links, and says they share a name. Someone who knows Canva needs to say which one should win, or rename one of them.
+- The older **Proper-Social-Press-2026** brand template was archived. The bot offers only the remaining live file, `EAHVrNTlM1M`. Archived templates are never suggested.
 - The intake notes name self-serve resources (stats, brand assets, logos, photo libraries, access requests) but do not include the URLs. The bot will not invent those links. Send Elena the URLs if they should be added.
 - DeeDee Brown (Proper & By Proper) and Koral Captain (Collective) are named when a question needs a second contact. Their Slack member ids are not in the source notes, so the bot cannot @mention them until those ids are added.
 - Disabled Asana property options are not offered: All By Proper, Residences, and the old New Projects option. The bot offers **New Projects/Development** and **MIN** instead, matching the current board.
