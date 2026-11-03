@@ -1,4 +1,4 @@
-import type { TemplateMatchResult } from "../intake/templates.js";
+import { ARCHIVED_TEMPLATES, type TemplateMatchResult } from "../intake/templates.js";
 import { declineTemplate } from "../intake/flow.js";
 import type { ConversationState, DesignBuild, DesignPhoto, Store } from "../store/types.js";
 import { buildAutofillDesign, type BuildResult } from "./build.js";
@@ -13,6 +13,12 @@ import {
   formatMaterialsHold,
 } from "./messages.js";
 import { canvaEnvConfigured, getCanvaAccessToken } from "./oauth.js";
+
+const ARCHIVED_IDS = new Set(ARCHIVED_TEMPLATES.map((template) => template.id));
+
+function liveOnly<T extends { id: string }>(items: T[]): T[] {
+  return items.filter((item) => !ARCHIVED_IDS.has(item.id));
+}
 
 export interface CanvaDesignClient {
   connected(): Promise<boolean>;
@@ -82,15 +88,16 @@ export function createCanvaDesignClient(args: {
 }
 
 export async function offerDesignBuild(state: ConversationState, match: TemplateMatchResult, canva: CanvaDesignClient): Promise<string | null> {
-  if (match.matches.length === 0 || !(await canva.connected())) return null;
+  const matches = liveOnly(match.matches);
+  if (matches.length === 0 || !(await canva.connected())) return null;
   state.design = {
-    candidates: match.matches.map((item) => ({
+    candidates: matches.map((item) => ({
       id: item.id,
       name: item.name,
       url: item.url,
       useFor: item.useFor,
     })),
-    templateId: match.matches.length === 1 ? match.matches[0].id : undefined,
+    templateId: matches.length === 1 ? matches[0].id : undefined,
     copy: state.draft.finalCopy,
     photos: [],
     version: 0,
@@ -109,7 +116,19 @@ export async function continueDesign(input: DesignTurnInput): Promise<DesignTurn
   if (intent === "decline") return { action: "decline", reason: text };
 
   const merged = mergeMaterials(design, text, input.uploads);
+  merged.candidates = liveOnly(merged.candidates);
+  if (merged.templateId && ARCHIVED_IDS.has(merged.templateId)) merged.templateId = undefined;
+  if (!merged.templateId && merged.candidates.length === 1) merged.templateId = merged.candidates[0].id;
   input.state.design = merged;
+  if (merged.candidates.length === 0) {
+    input.state.phase = "collecting";
+    input.state.templateOffer = null;
+    input.state.design = undefined;
+    return {
+      action: "reply",
+      text: "That Canva template is archived, so I won't build from it. Tell me what you need and I'll collect the full brief.",
+    };
+  }
   if (intent === "not_ready") return { action: "reply", text: formatMaterialsHold(merged) };
   if (input.state.phase === "design_ready" && intent !== "edit") return { action: "pass" };
 
@@ -131,7 +150,17 @@ async function runBuild(
   download?: (photo: DesignPhoto) => Promise<{ name: string; bytes: Uint8Array }>,
 ): Promise<string> {
   const design = state.design as DesignBuild;
-  const template = design.candidates.find((candidate) => candidate.id === design.templateId) ?? design.candidates[0];
+  design.candidates = liveOnly(design.candidates);
+  if (design.templateId && !design.candidates.some((candidate) => candidate.id === design.templateId)) {
+    design.templateId = undefined;
+  }
+  const template = design.candidates.find((candidate) => candidate.id === design.templateId) ?? (design.candidates.length === 1 ? design.candidates[0] : undefined);
+  if (!template) {
+    state.phase = "collecting";
+    state.templateOffer = null;
+    state.design = undefined;
+    return "That Canva template is archived, so I won't build from it. Tell me what you need and I'll collect the full brief.";
+  }
   let photos: Array<{ name: string; bytes: Uint8Array }> = [];
   try {
     if (!download) throw new Error("I can't download photos from this conversation.");

@@ -194,9 +194,75 @@ describe("building a Canva design in the thread", () => {
 
   it("tells Claude to wait for copy and photos on this thread", () => {
     const prompt = buildSystemPrompt(emptyConversation("C1:1"), { name: "Elena Ruiz" });
+    expect(prompt).toContain("live Canva template map");
+    expect(prompt).toContain("Archived and one-off templates are excluded");
     expect(prompt).toContain("final copy");
     expect(prompt).toContain("photos");
     expect(prompt).toContain("same thread");
+    expect(prompt).toContain("accept_template");
+    expect(prompt).toContain("decline_template");
+    expect(prompt).not.toContain("EAHHycjf7Ug");
+  });
+
+  it("builds only the live press template and refuses an archived id", async () => {
+    const state = emptyConversation("C1:press");
+    const build = vi.fn(async (input: { templateId: string }) => {
+      expect(input.templateId).toBe("EAHVrNTlM1M");
+      return {
+        kind: "design" as const,
+        editUrl: "https://www.canva.com/design/PRESS/edit",
+        viewUrl: "https://www.canva.com/design/PRESS/view",
+        photosPlaced: true,
+      };
+    });
+    const asked = await runIntakeTurn({
+      state,
+      userText: "press feature for the new restaurant",
+      slackUser: { id: "U1", name: "Elena Ruiz" },
+      llm: scripted([{
+        type: "tool_use",
+        id: "toolu_press",
+        name: "record_answers",
+        input: {
+          requestType: "Social",
+          taskType: "Feed Post Request",
+          properties: ["All Proper"],
+          requestName: "Press feature",
+        },
+      }]),
+      design: fakeDesign(build),
+    });
+    expect(asked.text).toContain("EAHVrNTlM1M");
+    expect(asked.text).not.toContain("EAHHycjf7Ug");
+    expect(state.design?.templateId).toBe("EAHVrNTlM1M");
+    expect(state.design?.candidates.map((candidate) => candidate.id)).toEqual(["EAHVrNTlM1M"]);
+
+    const archived = emptyConversation("C1:old");
+    archived.phase = "awaiting_design_materials";
+    archived.design = {
+      candidates: [{
+        id: "EAHHycjf7Ug",
+        name: "Proper-Social-Press-2026",
+        url: "https://www.canva.com/brand/brand-templates/EAHHycjf7Ug",
+        useFor: "Press feature",
+      }],
+      templateId: "EAHHycjf7Ug",
+      copy: "Join us Friday for the press preview.",
+      photos: [{ source: "url", url: "https://cdn.example.com/press.jpg", name: "press.jpg" }],
+      version: 0,
+    };
+    const refused = await runIntakeTurn({
+      state: archived,
+      userText: "yes",
+      slackUser: { id: "U1", name: "Elena Ruiz" },
+      llm: scripted([{ type: "text", text: "unused" }]),
+      design: fakeDesign(async () => {
+        throw new Error("archived template must not be built");
+      }),
+    });
+    expect(refused.text).toMatch(/archived/);
+    expect(archived.design).toBeUndefined();
+    expect(archived.phase).toBe("collecting");
   });
 });
 

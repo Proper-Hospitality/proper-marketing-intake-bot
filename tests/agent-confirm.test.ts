@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildSystemPrompt } from "../src/agent/prompt.js";
+import { ARCHIVED_TEMPLATES } from "../src/intake/templates.js";
 import { runIntakeTurn, type Llm, type LlmContentBlock } from "../src/agent/run.js";
 import { FORM_URL } from "../src/intake/catalog.js";
 import { ConfirmationRequiredError, submitConfirmedBrief } from "../src/slack/submit.js";
@@ -8,14 +9,16 @@ import { emptyConversation } from "../src/store/types.js";
 import { confirmBlocks } from "../src/slack/blocks.js";
 
 describe("confirmation gate", () => {
-  it("encodes the field order, form, and duplicate press templates in the system prompt", () => {
+  it("encodes the field order and form, and does not name archived templates", () => {
     const prompt = buildSystemPrompt(emptyConversation("C1:1"), { name: "Elena Ruiz", email: "elena@example.com" });
     expect(prompt).toContain("1217171671548482");
     expect(prompt).toContain("requestType, taskType, property");
     expect(prompt).toContain(FORM_URL);
-    expect(prompt).toContain("EAHVrNTlM1M");
-    expect(prompt).toContain("EAHHycjf7Ug");
+    expect(prompt).toContain("Archived and one-off templates are excluded");
     expect(prompt).toContain("Never say you created");
+    for (const template of ARCHIVED_TEMPLATES) {
+      expect(prompt).not.toContain(template.id);
+    }
   });
 
   it("offers a template and does not call Asana or Anthropic beyond the scripted tool", async () => {
