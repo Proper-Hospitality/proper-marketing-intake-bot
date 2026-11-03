@@ -3,6 +3,7 @@ import type { ConversationState, Store } from "./types.js";
 export class MemoryStore implements Store {
   readonly conversations = new Map<string, ConversationState>();
   readonly events = new Map<string, number>();
+  readonly values = new Map<string, { value: string; expires: number }>();
 
   async getConversation(key: string): Promise<ConversationState | null> {
     const found = this.conversations.get(key);
@@ -23,5 +24,19 @@ export class MemoryStore implements Store {
 
   async releaseEvent(id: string): Promise<void> {
     this.events.delete(id);
+  }
+
+  async getValue(key: string): Promise<string | null> {
+    const found = this.values.get(key);
+    if (!found) return null;
+    if (found.expires <= Date.now()) {
+      this.values.delete(key);
+      return null;
+    }
+    return found.value;
+  }
+
+  async setValue(key: string, value: string, ttlSeconds: number): Promise<void> {
+    this.values.set(key, { value, expires: Date.now() + ttlSeconds * 1000 });
   }
 }

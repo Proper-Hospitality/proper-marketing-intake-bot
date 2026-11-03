@@ -4,12 +4,39 @@ import type { TemplateMatchResult } from "../intake/templates.js";
 export type Phase =
   | "collecting"
   | "template_offered"
+  | "awaiting_design_materials"
+  | "design_ready"
   | "awaiting_confirm"
   | "submitting"
   | "submitted"
   | "template_accepted"
   | "awaiting_task_completion"
   | "tasks_completed";
+
+export interface DesignCandidate {
+  id: string;
+  name: string;
+  url: string;
+  useFor: string;
+}
+
+export interface DesignPhoto {
+  source: "slack" | "url";
+  slackFileId?: string;
+  url?: string;
+  name?: string;
+}
+
+/** Pending or finished Canva build for this Slack thread. */
+export interface DesignBuild {
+  candidates: DesignCandidate[];
+  templateId?: string;
+  copy?: string;
+  photos: DesignPhoto[];
+  version: number;
+  lastEditUrl?: string;
+  lastViewUrl?: string;
+}
 
 export interface ListedTask {
   gid: string;
@@ -53,6 +80,7 @@ export interface ConversationState {
   completionRequesterName?: string;
   completionRequesterEmail?: string;
   completionReport?: string;
+  design?: DesignBuild;
   updatedAt: string;
 }
 
@@ -61,6 +89,8 @@ export interface Store {
   saveConversation(state: ConversationState): Promise<void>;
   claimEvent(id: string, ttlSeconds: number): Promise<boolean>;
   releaseEvent(id: string): Promise<void>;
+  getValue(key: string): Promise<string | null>;
+  setValue(key: string, value: string, ttlSeconds: number): Promise<void>;
 }
 
 export function emptyConversation(key: string): ConversationState {

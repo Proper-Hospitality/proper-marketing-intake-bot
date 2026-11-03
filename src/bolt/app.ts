@@ -2,7 +2,10 @@ import { App, ExpressReceiver, LogLevel } from "@slack/bolt";
 import type { Application } from "express";
 import type { WebClient } from "@slack/web-api";
 import { createAnthropicLlm } from "../agent/anthropic.js";
+import { createCanvaDesignClient } from "../canva/turn.js";
+import { registerCanvaRoutes } from "../canva/routes.js";
 import { slackFromWebClient } from "../slack/api.js";
+import { downloadRemoteFile, downloadSlackFile } from "../slack/files.js";
 import { withDelivery, type DeliveryContext } from "../slack/dedupe.js";
 import { handleCancelTaskCompletion, handleConfirmAction, handleConfirmTaskCompletion, handleIncomingMessage, handleReviseAction } from "../slack/handle.js";
 import { getStore } from "../store/index.js";
@@ -37,6 +40,7 @@ export function createBoltApp(): { bolt: App; expressApp: Application } {
   receiver.app.get(HEALTH_PATH, (_req, res) => {
     res.status(200).type("text/plain").send("ok");
   });
+  registerCanvaRoutes(receiver.app, getStore());
 
   const bolt = new App({
     token,
@@ -99,7 +103,8 @@ function registerListeners(bolt: App): void {
           ts: event.ts,
           threadTs: event.thread_ts,
           isDm: "channel_type" in event && event.channel_type === "im",
-          files: linksFrom(event),
+          files: fileNames(event),
+          uploads: uploadsFrom(event),
         })),
     });
   });
@@ -123,7 +128,8 @@ function registerListeners(bolt: App): void {
           ts: message.ts,
           threadTs,
           isDm: true,
-          files: linksFrom(message),
+          files: fileNames(message),
+          uploads: uploadsFrom(message),
         })),
     });
   });
@@ -182,11 +188,21 @@ function deliveryContext(context: { retryNum?: number; retryReason?: string }): 
 }
 
 function runtime(client: WebClient) {
+  const llm = createAnthropicLlm();
+  const token = process.env.SLACK_BOT_TOKEN ?? "";
   return {
     store: getStore(),
     slack: slackFromWebClient(client),
-    llm: createAnthropicLlm(),
+    llm,
     asanaToken: process.env.ASANA_ACCESS_TOKEN,
+    design: {
+      canva: createCanvaDesignClient({ store: getStore(), llm }),
+      download: (photo: { source: "slack" | "url"; slackFileId?: string; url?: string; name?: string }) => {
+        if (photo.source === "slack" && photo.slackFileId) return downloadSlackFile({ token, fileId: photo.slackFileId });
+        if (photo.url) return downloadRemoteFile({ url: photo.url, name: photo.name, token });
+        return Promise.reject(new Error("That photo is missing a file or a link."));
+      },
+    },
   };
 }
 
@@ -211,8 +227,12 @@ async function safeHandle(client: WebClient, channel: string, threadTs: string |
   }
 }
 
-function linksFrom(source: { files?: Array<{ permalink?: string; url_private?: string }> }): string[] {
-  return (source.files ?? []).map((file) => file.permalink || file.url_private || "").filter(Boolean);
+function fileNames(source: { files?: Array<{ id?: string; name?: string | null; permalink?: string }> }): string[] {
+  return (source.files ?? []).map((file) => file.name || file.id || file.permalink || "").filter(Boolean);
+}
+
+function uploadsFrom(source: { files?: Array<{ id?: string; name?: string | null }> }): Array<{ source: "slack"; slackFileId: string; name?: string }> {
+  return (source.files ?? []).flatMap((file) => file.id ? [{ source: "slack" as const, slackFileId: file.id, name: file.name ?? undefined }] : []);
 }
 
 function readAction(body: unknown): { version: number; channel: string; messageTs: string; threadTs?: string } | undefined {
