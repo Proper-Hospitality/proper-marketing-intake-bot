@@ -40,7 +40,27 @@ export function templateUrl(id: string): string {
  */
 export const ARCHIVED_TEMPLATES: ArchivedTemplate[] = [
   { id: "EAHFpg0J5Y0", name: "xArchive SMP Palma Proper Sounds", reason: "archived" },
-  { id: "EAHUpJlPwUs", name: "Title", reason: "one-off" },
+  { id: "EAHJx45W9QA", name: "SMP_Palma_DJSets", reason: "archived" },
+  { id: "EAHFjMjHCm8", name: "ProperPresents-Lineup", reason: "archived" },
+  { id: "EAGteKYmqpY", name: "ProperPresents_Template", reason: "archived" },
+  { id: "EAG5oWwaryo", name: "PP_Lineup_template", reason: "archived" },
+  { id: "EAHHycjf7Ug", name: "Proper-Social-Press-2026", reason: "archived" },
+  { id: "EAG5oZW2opw", name: "Press_Template", reason: "archived" },
+  { id: "EAHFjA_koEo", name: "Proper_EventRecap_IGStory", reason: "archived" },
+  { id: "EAGteKsBuUs", name: "PP_RecapStory_Template", reason: "archived" },
+  { id: "EAGldCymBM0", name: "Proper-IGStoryTemplate", reason: "archived" },
+  { id: "EAG5YaWIOc0", name: "PP - Artist Flyer Template", reason: "archived" },
+  { id: "EAHFpvxlDTw", name: "SMP Arc De Soleil Artist Feature", reason: "archived" },
+  { id: "EAGi23395pU", name: "VinylNights-Template", reason: "archived" },
+  { id: "EAHFpgBeE48", name: "SMP Camp Fitness", reason: "archived" },
+  { id: "EAHFpfYf20U", name: "SMP-summerperks", reason: "archived" },
+  { id: "EAHFpspzuv4", name: "Proper-TL", reason: "archived" },
+  { id: "EAHLp1xACjE", name: "Proper-LinkedIn-GeneralPost-2026", reason: "archived" },
+  { id: "EAHLpizwGLs", name: "Proper-LinkedIn-JobPostings-2026", reason: "archived" },
+  { id: "EAHFi2CczNM", name: "Hiring_SMPLinkedIn_4:5", reason: "archived" },
+  { id: "EAHFi1cMfXE", name: "Proper-BusinessCard-Template", reason: "archived" },
+  { id: "EAHJyJDmlrg", name: "SMP_POOLRULES_7x10", reason: "archived" },
+  { id: "EAHUpJlPwUs", name: "APS-ING-HolidayEventsFlyer", reason: "one-off" },
   { id: "EAHMB7c-Jas", name: "Copy of Proper-FirstAgencyIncentive", reason: "one-off" },
   { id: "EAHFpt_7ROE", name: "June Tennis Clinic", reason: "one-off" },
   { id: "EAHFpOUCusM", name: "2025-Q3-Summer-Offers", reason: "one-off" },
@@ -150,16 +170,6 @@ export const CANVA_TEMPLATES: CanvaTemplate[] = [
     family: "dj",
   }),
   tpl({
-    id: "EAHJx45W9QA",
-    name: "SMP_Palma_DJSets",
-    useFor: "DJ sets, SMP Palma",
-    appliesTo: SOCIAL,
-    any: ["dj"],
-    all: ["palma"],
-    properties: ["SMP"],
-    family: "dj",
-  }),
-  tpl({
     id: "EAHLjCRgyak",
     name: "Proper-Social-ProperSoundsLineup-2026",
     useFor: "Music lineup (Proper Sounds)",
@@ -168,79 +178,12 @@ export const CANVA_TEMPLATES: CanvaTemplate[] = [
     family: "sounds-lineup",
   }),
   tpl({
-    id: "EAHFjMjHCm8",
-    name: "ProperPresents-Lineup",
-    useFor: "Proper Presents lineup",
-    appliesTo: SOCIAL,
-    any: ["proper presents lineup", "presents lineup"],
-    family: "presents-lineup",
-  }),
-  tpl({
-    id: "EAGteKYmqpY",
-    name: "ProperPresents_Template",
-    useFor: "Proper Presents, other",
-    appliesTo: SOCIAL,
-    any: ["proper presents"],
-    family: "presents",
-  }),
-  tpl({
-    id: "EAG5oWwaryo",
-    name: "PP_Lineup_template",
-    useFor: "Lineup, general",
-    appliesTo: SOCIAL,
-    any: ["lineup"],
-    family: "lineup",
-  }),
-  tpl({
     id: "EAHVrNTlM1M",
     name: "Proper-Social-Press-2026",
     useFor: "Press feature",
     appliesTo: SOCIAL,
     any: ["press"],
     family: "press",
-    duplicateName: true,
-  }),
-  tpl({
-    id: "EAHHycjf7Ug",
-    name: "Proper-Social-Press-2026",
-    useFor: "Press feature",
-    appliesTo: SOCIAL,
-    any: ["press"],
-    family: "press",
-    duplicateName: true,
-  }),
-  tpl({
-    id: "EAG5oZW2opw",
-    name: "Press_Template",
-    useFor: "Press, older",
-    appliesTo: SOCIAL,
-    any: ["press"],
-    family: "press",
-    older: true,
-  }),
-  tpl({
-    id: "EAHFjA_koEo",
-    name: "Proper_EventRecap_IGStory",
-    useFor: "Event recap story",
-    appliesTo: SOCIAL,
-    any: ["event recap", "recap story"],
-    family: "recap",
-  }),
-  tpl({
-    id: "EAGteKsBuUs",
-    name: "PP_RecapStory_Template",
-    useFor: "Recap story",
-    appliesTo: SOCIAL,
-    any: ["recap"],
-    family: "recap",
-  }),
-  tpl({
-    id: "EAGldCymBM0",
-    name: "Proper-IGStoryTemplate",
-    useFor: "General IG story",
-    appliesTo: SOCIAL,
-    any: ["ig story", "instagram story", "story template"],
-    family: "ig-story",
   }),
   tpl({
     id: "EAHFjLMtTp4",
@@ -259,37 +202,12 @@ export const CANVA_TEMPLATES: CanvaTemplate[] = [
     family: "artist-carousel",
   }),
   tpl({
-    id: "EAG5YaWIOc0",
-    name: "PP - Artist Flyer Template",
-    useFor: "Artist flyer",
-    appliesTo: SOCIAL,
-    any: ["artist flyer", "artist feature"],
-    family: "artist-flyer",
-  }),
-  tpl({
-    id: "EAHFpvxlDTw",
-    name: "SMP Arc De Soleil Artist Feature",
-    useFor: "Artist feature, SMP",
-    appliesTo: SOCIAL,
-    any: ["arc de soleil", "artist feature"],
-    properties: ["SMP"],
-    family: "artist-flyer",
-  }),
-  tpl({
     id: "EAHFjM7HJog",
     name: "Proper-EventFlyer",
     useFor: "Event flyer",
     appliesTo: SOCIAL,
     any: ["event flyer", "flyer"],
     family: "event-flyer",
-  }),
-  tpl({
-    id: "EAGi23395pU",
-    name: "VinylNights-Template",
-    useFor: "Vinyl nights",
-    appliesTo: SOCIAL,
-    any: ["vinyl"],
-    family: "vinyl",
   }),
   tpl({
     id: "EAHFpgsHpQ8",
@@ -301,47 +219,12 @@ export const CANVA_TEMPLATES: CanvaTemplate[] = [
     family: "run-club",
   }),
   tpl({
-    id: "EAHFpgBeE48",
-    name: "SMP Camp Fitness",
-    useFor: "Fitness, SMP",
-    appliesTo: SOCIAL,
-    any: ["fitness", "camp fitness"],
-    properties: ["SMP"],
-    family: "fitness",
-  }),
-  tpl({
     id: "EAHFpn_80v8",
     name: "Sunset Tennis Club",
     useFor: "Tennis",
     appliesTo: SOCIAL,
     any: ["tennis"],
     family: "tennis",
-  }),
-  tpl({
-    id: "EAHFpfYf20U",
-    name: "SMP-summerperks",
-    useFor: "Summer perks, SMP",
-    appliesTo: SOCIAL,
-    any: ["summer perk"],
-    properties: ["SMP"],
-    family: "summer-perks",
-  }),
-  tpl({
-    id: "EAHFpspzuv4",
-    name: "Proper-TL",
-    useFor: "Proper-TL story",
-    appliesTo: SOCIAL,
-    any: ["proper tl"],
-    family: "proper-tl",
-  }),
-  tpl({
-    id: "EAHLp1xACjE",
-    name: "Proper-LinkedIn-GeneralPost-2026",
-    useFor: "LinkedIn general post",
-    appliesTo: SOCIAL,
-    any: ["linkedin"],
-    unless: ["job", "hiring", "tradeshow", "trade show"],
-    family: "linkedin",
   }),
   tpl({
     id: "EAHJxxtUsXA",
@@ -352,29 +235,12 @@ export const CANVA_TEMPLATES: CanvaTemplate[] = [
     family: "linkedin-tradeshow",
   }),
   tpl({
-    id: "EAHLpizwGLs",
-    name: "Proper-LinkedIn-JobPostings-2026",
-    useFor: "LinkedIn job posting",
-    appliesTo: SOCIAL,
-    any: ["job posting", "job post", "hiring", "linkedin hiring", "linkedin job"],
-    family: "linkedin-job",
-  }),
-  tpl({
     id: "EAHFpinmz4g",
     name: "Proper_LinkedIn_JobPostings_Tahoe",
     useFor: "LinkedIn job posting, Tahoe",
     appliesTo: SOCIAL,
     any: ["tahoe", "job tahoe"],
     all: ["job"],
-    family: "linkedin-job",
-  }),
-  tpl({
-    id: "EAHFi2CczNM",
-    name: "Hiring_SMPLinkedIn_4:5",
-    useFor: "LinkedIn hiring, SMP",
-    appliesTo: SOCIAL,
-    any: ["hiring", "job posting", "job post", "linkedin hiring"],
-    properties: ["SMP"],
     family: "linkedin-job",
   }),
   tpl({
@@ -540,29 +406,12 @@ export const CANVA_TEMPLATES: CanvaTemplate[] = [
   }),
 
   tpl({
-    id: "EAHFi1cMfXE",
-    name: "Proper-BusinessCard-Template",
-    useFor: "Business card (3.5x2 in)",
-    appliesTo: PRINT,
-    any: ["business card"],
-    family: "business-card",
-  }),
-  tpl({
     id: "EAHFpPr31Ok",
     name: "Amenity Postcard",
     useFor: "Amenity postcard",
     appliesTo: PRINT,
     any: ["postcard", "amenity card"],
     family: "postcard",
-  }),
-  tpl({
-    id: "EAHJyJDmlrg",
-    name: "SMP_POOLRULES_7x10",
-    useFor: "Pool rules sign, SMP (7x10)",
-    appliesTo: PRINT,
-    any: ["pool rule", "pool sign"],
-    properties: ["SMP"],
-    family: "pool-rules",
   }),
   tpl({
     id: "EAHNgYLv80s",
@@ -669,12 +518,15 @@ export interface TemplateQuery {
   text: string;
 }
 
-const PRESS_DUPLICATE_NOTE =
-  "Two templates are both named Proper-Social-Press-2026 (EAHVrNTlM1M and EAHHycjf7Ug). Both are included. Ask which one to use.";
+const ARCHIVED_IDS = new Set(ARCHIVED_TEMPLATES.map((template) => template.id));
+
+function suggestableTemplates(): CanvaTemplate[] {
+  return CANVA_TEMPLATES.filter((template) => !ARCHIVED_IDS.has(template.id));
+}
 
 export function matchTemplates(query: TemplateQuery): TemplateMatchResult {
   const haystack = normalize(query.text);
-  const keywordHits = CANVA_TEMPLATES.filter(
+  const keywordHits = suggestableTemplates().filter(
     (template) => applies(template, query) && keywordsMatch(template, haystack),
   );
 
@@ -702,8 +554,11 @@ export function matchTemplates(query: TemplateQuery): TemplateMatchResult {
   const winners = scored.filter((row) => row.score === top);
   const duplicateName = winners.length > 1 && winners.every((row) => row.template.name === winners[0].template.name);
   let note: string | undefined;
-  if (duplicateName) note = PRESS_DUPLICATE_NOTE;
-  else if (winners.length > 1) note = "More than one template fits equally. Share each name and link.";
+  if (duplicateName) {
+    note = `More than one live template is named ${winners[0].template.name}. Share each link and ask which file to use.`;
+  } else if (winners.length > 1) {
+    note = "More than one template fits equally. Share each name and link.";
+  }
 
   return {
     matches: winners.map((row) => ({
@@ -770,7 +625,7 @@ function normalize(value: string): string {
 
 export function duplicateNameGroups(): Array<{ name: string; ids: string[] }> {
   const byName = new Map<string, string[]>();
-  for (const template of CANVA_TEMPLATES) {
+  for (const template of suggestableTemplates()) {
     const ids = byName.get(template.name) ?? [];
     ids.push(template.id);
     byName.set(template.name, ids);
