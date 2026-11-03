@@ -107,14 +107,19 @@ https://YOUR-RENDER-URL.onrender.com/slack/events
 3. In the Slack app, open **Event Subscriptions**.
 4. Turn events **On**.
 5. Set **Request URL** to that address. Wait for the green **Verified** check.
-6. Under **Subscribe to bot events**, add both of these if they are not already listed:
+6. Under **Subscribe to bot events**, add all of these if they are not already listed:
    - `app_mention`
    - `message.im`
-7. Click **Save Changes**.
+   - `message.channels`
+   - `message.groups`
+   - `message.mpim`
+7. Click **Save Changes**. Slack may ask you to reinstall the app. Do that.
 8. Open **Interactivity & Shortcuts**.
 9. Turn interactivity **On**.
 10. Set **Request URL** to the same address, including `/slack/events`.
 11. Click **Save Changes**.
+
+`message.im` is direct messages. `message.channels` is a public channel, and `message.groups` is a private channel. A reply in the thread, including a photo upload, is one of those message events. It is not an `app_mention` unless the text @mentions the bot. Without `message.channels` and `message.groups`, Slack never sends the reply, and the bot cannot answer or post an error.
 
 If verification fails:
 
@@ -167,7 +172,7 @@ Request types are Creative, Web, CRM & Paid, Social, and Marketing. Designing an
 
 Skip this until you want the bot to create the Canva file. Until these steps are done, a matching template still gets a link only, and the rest of intake works as before.
 
-The Slack app already asks for the `files:read` scope in `manifest.json`. That scope lets the bot download a photo someone uploads in the thread. If the app was installed before that scope was on the manifest, open **Install App** and click **Reinstall to Workspace** after you paste the current manifest.
+The Slack app already asks for the `files:read` scope in `manifest.json`. That scope lets the bot call `files.info` and download the file's private URL (`url_private`) with the bot token. If the app was installed before that scope was on the manifest, open **Install App** and click **Reinstall to Workspace** after you paste the current manifest. A photo uploaded in a channel thread also requires the `message.channels` or `message.groups` event from step 5.
 
 1. Open [https://www.canva.com/developers](https://www.canva.com/developers) and create an integration (a Canva app that uses the Connect API). Use a Canva account that can see the Proper brand templates. Autofill requires a Canva plan that includes it. Canva documents that as Pro, Teams, or Enterprise. If the account cannot autofill, the bot sends the template link and the copy instead of a finished design.
 2. In the integration settings, set the redirect URL to exactly:
@@ -209,6 +214,7 @@ After that, a request that matches one live template asks for the final copy and
 - **Buttons do nothing.** Interactivity Request URL is empty or different from the Events Request URL. Both must be `https://YOUR-RENDER-URL.onrender.com/slack/events`.
 - **`/health` does not say ok.** The build or start command failed. Read the latest Render deploy log. The build command is `npm install --include=dev && npm run build`. The start command is `npm start`.
 - **The bot sends a template link instead of building a design.** Canva is not connected, or the template has no autofill fields, or the Canva account cannot use autofill. Connect it with the steps above, or reply that the team should design it.
+- **The bot stays silent on a thread reply or a photo.** In Event Subscriptions, `message.channels` and `message.groups` have to be listed next to `message.im` and `app_mention`. Save, and reinstall if Slack asks. A photo is a `file_share` message. If the bot receives the message and then fails, it replies in the thread that something went wrong. Silence means Slack did not deliver the event.
 
 ## For a developer helping Elena
 

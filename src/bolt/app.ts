@@ -8,6 +8,8 @@ import { slackFromWebClient } from "../slack/api.js";
 import { downloadRemoteFile, downloadSlackFile } from "../slack/files.js";
 import { withDelivery, type DeliveryContext } from "../slack/dedupe.js";
 import { handleCancelTaskCompletion, handleConfirmAction, handleConfirmTaskCompletion, handleIncomingMessage, handleReviseAction } from "../slack/handle.js";
+import { dispatchUserMessage } from "../slack/dispatch.js";
+import { HANDLER_FAILURE_TEXT } from "../slack/failure.js";
 import { getStore } from "../store/index.js";
 
 /** Slack Events and Interactivity both post here. */
@@ -88,49 +90,34 @@ function assertProductionEnv(): void {
 
 function registerListeners(bolt: App): void {
   bolt.event("app_mention", async ({ event, client, body, context }) => {
-    if (event.bot_id || !event.user) return;
-    const text = (event.text ?? "").replace(/<@[A-Z0-9]+>/g, "").trim();
-    const userId = event.user;
     await withDelivery({
       body,
       store: getStore(),
       context: deliveryContext(context),
-      work: () => safeHandle(client, event.channel, event.thread_ts, () =>
-        handleIncomingMessage(runtime(client), {
-          channel: event.channel,
-          userId,
-          text,
-          ts: event.ts,
-          threadTs: event.thread_ts,
-          isDm: "channel_type" in event && event.channel_type === "im",
-          files: fileNames(event),
-          uploads: uploadsFrom(event),
-        })),
+      work: async () => {
+        await dispatchUserMessage({
+          event: { ...event, type: "app_mention" },
+          store: getStore(),
+          onMessage: (message) => handleIncomingMessage(runtime(client), message),
+          postError: (channel, threadTs, text) => postFailure(client, channel, threadTs, text),
+        });
+      },
     });
   });
 
-  bolt.message(async ({ message, client, body, context }) => {
-    if (message.channel_type !== "im") return;
-    if (message.subtype && message.subtype !== "file_share") return;
-    if (!("user" in message) || !message.user) return;
-    const text = "text" in message ? (message.text ?? "") : "";
-    const threadTs = "thread_ts" in message ? message.thread_ts : undefined;
-    const userId = message.user;
+  bolt.event("message", async ({ event, client, body, context }) => {
     await withDelivery({
       body,
       store: getStore(),
       context: deliveryContext(context),
-      work: () => safeHandle(client, message.channel, threadTs, () =>
-        handleIncomingMessage(runtime(client), {
-          channel: message.channel,
-          userId,
-          text,
-          ts: message.ts,
-          threadTs,
-          isDm: true,
-          files: fileNames(message),
-          uploads: uploadsFrom(message),
-        })),
+      work: async () => {
+        await dispatchUserMessage({
+          event,
+          store: getStore(),
+          onMessage: (message) => handleIncomingMessage(runtime(client), message),
+          postError: (channel, threadTs, text) => postFailure(client, channel, threadTs, text),
+        });
+      },
     });
   });
 
@@ -210,13 +197,14 @@ async function safeHandle(client: WebClient, channel: string, threadTs: string |
   try {
     await work();
   } catch (error) {
-    console.error(JSON.stringify({ msg: "intake_handler_failed", error: error instanceof Error ? error.message : "unknown" }));
+    console.error(JSON.stringify({
+      msg: "intake_handler_failed",
+      channel,
+      threadTs,
+      error: error instanceof Error ? error.message : "unknown",
+    }));
     try {
-      await client.chat.postMessage({
-        channel,
-        thread_ts: threadTs,
-        text: "Something went wrong on my side, and I didn't file anything. Please try once more. If it keeps failing, use the intake form.",
-      });
+      await postFailure(client, channel, threadTs, HANDLER_FAILURE_TEXT);
     } catch (postError) {
       console.error(JSON.stringify({
         msg: "slack_error_reply_failed",
@@ -227,12 +215,8 @@ async function safeHandle(client: WebClient, channel: string, threadTs: string |
   }
 }
 
-function fileNames(source: { files?: Array<{ id?: string; name?: string | null; permalink?: string }> }): string[] {
-  return (source.files ?? []).map((file) => file.name || file.id || file.permalink || "").filter(Boolean);
-}
-
-function uploadsFrom(source: { files?: Array<{ id?: string; name?: string | null }> }): Array<{ source: "slack"; slackFileId: string; name?: string }> {
-  return (source.files ?? []).flatMap((file) => file.id ? [{ source: "slack" as const, slackFileId: file.id, name: file.name ?? undefined }] : []);
+async function postFailure(client: WebClient, channel: string, threadTs: string | undefined, text: string): Promise<void> {
+  await client.chat.postMessage({ channel, thread_ts: threadTs, text });
 }
 
 function readAction(body: unknown): { version: number; channel: string; messageTs: string; threadTs?: string } | undefined {
