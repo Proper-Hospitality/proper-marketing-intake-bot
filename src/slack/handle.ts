@@ -1,5 +1,5 @@
 import { FORM_URL } from "../intake/catalog.js";
-import { runIntakeTurn, type Llm } from "../agent/run.js";
+import { runIntakeTurn, type DesignDeps, type Llm } from "../agent/run.js";
 import { confirmBlocks, confirmTaskCompletionBlocks, messageBlocks } from "./blocks.js";
 import { slackThreadUrl } from "../intake/brief.js";
 import { submitConfirmedBrief } from "./submit.js";
@@ -15,6 +15,7 @@ export interface IncomingMessage {
   threadTs?: string;
   isDm: boolean;
   files?: string[];
+  uploads?: DesignDeps["uploads"];
 }
 
 export async function handleIncomingMessage(deps: {
@@ -24,7 +25,8 @@ export async function handleIncomingMessage(deps: {
   asanaToken?: string;
   fetchImpl?: typeof fetch;
   today?: Date;
-},   message: IncomingMessage): Promise<void> {
+  design?: Omit<DesignDeps, "uploads">;
+}, message: IncomingMessage): Promise<void> {
   const messageClaim = `msg:${message.channel}:${message.ts}`;
   const fresh = await deps.store.claimEvent(messageClaim, 600);
   if (!fresh) return;
@@ -43,6 +45,7 @@ async function handleFreshMessage(deps: {
   asanaToken?: string;
   fetchImpl?: typeof fetch;
   today?: Date;
+  design?: Omit<DesignDeps, "uploads">;
 }, message: IncomingMessage): Promise<void> {
   const key = conversationKey(message.channel, message.threadTs, message.ts, message.isDm);
   const state = (await deps.store.getConversation(key)) ?? emptyConversation(key);
@@ -66,7 +69,7 @@ async function handleFreshMessage(deps: {
   }
 
   const profile = await deps.slack.userProfile(message.userId);
-  const fileNote = message.files && message.files.length > 0 ? `\nFiles: ${message.files.join(" ")}` : "";
+  const fileNote = message.files && message.files.length > 0 ? `\nFiles: ${message.files.join(", ")}` : "";
   const reply = await runIntakeTurn({
     state,
     userText: `${message.text}${fileNote}`.trim(),
@@ -75,6 +78,7 @@ async function handleFreshMessage(deps: {
     asanaToken: deps.asanaToken,
     fetchImpl: deps.fetchImpl,
     today: deps.today,
+    design: deps.design ? { ...deps.design, uploads: message.uploads ?? [] } : undefined,
   });
   await deps.store.saveConversation(state);
   await deps.slack.postMessage({

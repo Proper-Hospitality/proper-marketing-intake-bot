@@ -6,9 +6,10 @@ import {
   formatTemplateAccepted,
   formatTemplateOffer,
 } from "../intake/brief.js";
+import { continueDesign, declineDesign, offerDesignBuild, type CanvaDesignClient } from "../canva/turn.js";
 import { acceptTemplate, applyAnswers, declineTemplate, type FlowOutcome, type RecordInput } from "../intake/flow.js";
 import { listMissing, mentionsActualPrice } from "../intake/missing.js";
-import type { ConversationState } from "../store/types.js";
+import type { ConversationState, DesignPhoto } from "../store/types.js";
 import {
   chooseAssignee,
   formatAmbiguousAssignees,
@@ -45,6 +46,12 @@ export interface AgentReply {
   confirm?: { version: number; kind?: "intake" | "complete" };
 }
 
+export interface DesignDeps {
+  canva: CanvaDesignClient;
+  uploads: DesignPhoto[];
+  download: (photo: DesignPhoto) => Promise<{ name: string; bytes: Uint8Array }>;
+}
+
 type CompletionView = { kind: "confirm" | "listed" | "too_many" | "ambiguous" | "refused" | "report"; text: string };
 
 export async function runIntakeTurn(input: {
@@ -55,6 +62,7 @@ export async function runIntakeTurn(input: {
   asanaToken?: string;
   fetchImpl?: typeof fetch;
   today?: Date;
+  design?: DesignDeps;
 }): Promise<AgentReply> {
   const today = input.today ?? new Date();
   const state = input.state;
@@ -62,6 +70,21 @@ export async function runIntakeTurn(input: {
   if (input.slackUser.email && !state.draft.requesterEmail) state.draft.requesterEmail = input.slackUser.email;
 
   let preset: FlowOutcome | undefined;
+  if (input.design && (state.phase === "awaiting_design_materials" || state.phase === "design_ready")) {
+    const designTurn = await continueDesign({
+      state,
+      userText: input.userText,
+      uploads: input.design.uploads,
+      canva: input.design.canva,
+      download: input.design.download,
+      today,
+    });
+    if (designTurn.action === "reply") return remember(state, input.userText, { text: designTurn.text });
+    if (designTurn.action === "decline") {
+      const outcome = declineDesign(state, designTurn.reason, today);
+      return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
+    }
+  }
   if (state.phase === "template_offered" && looksLikeAccept(input.userText)) {
     preset = acceptTemplate(state);
   } else if (state.phase === "template_offered" && looksLikeDecline(input.userText)) {
@@ -138,6 +161,11 @@ export async function runIntakeTurn(input: {
     if (completion && completion.kind !== "listed") break;
   }
 
+  if (outcome?.kind === "offer_template" && input.design) {
+    const offered = await offerDesignBuild(state, outcome.match, input.design.canva);
+    if (offered) return remember(state, "", { text: offered }, true);
+  }
+
   const reply = renderReply(state, input.slackUser.id, assistantText, outcome, today, completion);
   state.messages.push({ role: "assistant", content: reply.text });
   if (state.messages.length > 40) state.messages.splice(0, state.messages.length - 40);
@@ -161,7 +189,7 @@ async function executeTool(
     return { payload: outcome, outcome };
   }
   if (name === "record_answers") {
-    if (state.phase === "template_offered") {
+    if (state.phase === "template_offered" || state.phase === "awaiting_design_materials" || state.phase === "design_ready") {
       return {
         payload: {
           ok: false,
@@ -348,6 +376,14 @@ async function recordPriceOnTask(
   state.messages.push({ role: "assistant", content: text });
   state.updatedAt = new Date().toISOString();
   return { text };
+}
+
+function remember(state: ConversationState, userText: string, reply: AgentReply, userAlreadyStored = false): AgentReply {
+  if (!userAlreadyStored) state.messages.push({ role: "user", content: userText });
+  state.messages.push({ role: "assistant", content: reply.text });
+  if (state.messages.length > 40) state.messages.splice(0, state.messages.length - 40);
+  state.updatedAt = new Date().toISOString();
+  return reply;
 }
 
 function looksLikeAccept(text: string): boolean {

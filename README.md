@@ -24,7 +24,7 @@ Memory between messages is stored in Render Key Value, which speaks Redis. Rende
 - An [Anthropic](https://console.anthropic.com) API key (this is the Claude account).
 - An Asana personal access token, or a service account token, for a user who can create tasks in **New Intake Board**, search the workspace, mark tasks complete, and comment on them. No extra setting is required for finding and completing tasks.
 
-You do not need Canva API access. Template names and links are saved in the code. You do not need a separate Redis host. Render Key Value is part of the blueprint.
+Template names and links are saved in the code, so the bot can still send a Canva link before Canva is connected. Building the design inside Slack needs a one-time Canva connection, described below. You do not need a separate Redis host. Render Key Value is part of the blueprint.
 
 ## 1. Create the Slack app from the manifest
 
@@ -83,13 +83,15 @@ On the blueprint screen, Render lists these because `render.yaml` marks the secr
 | `ANTHROPIC_API_KEY` | Anthropic console, API keys. |
 | `ANTHROPIC_MODEL` | Already filled in as `claude-sonnet-5-5`. Leave it unless you have been told to use a different Claude model. |
 | `ASANA_ACCESS_TOKEN` | Asana. My Settings → Apps → Developer apps → Personal access tokens. Or a service account token. |
+| `CANVA_CLIENT_ID` | Canva developer integration. Optional until you want the bot to build designs. Leave it blank and the bot only sends template links. |
+| `CANVA_CLIENT_SECRET` | Canva developer integration. Same as above. Starts with `cnvca`. |
 | `REDIS_URL` | Filled in by the blueprint from the Key Value service. Leave it alone. |
 
 The same secret names are listed in `.env.example`. That file has no secrets in it. Do not fill it in and commit it.
 
 If the service fails immediately and the log says `Missing environment variables`, one of the Slack, Anthropic, or Asana boxes was empty, or `REDIS_URL` was not wired. Open the service in Render, go to **Environment**, paste any missing secret, and save. Render restarts on its own. If `REDIS_URL` is the one missing, apply the blueprint again instead of typing a value.
 
-Key Value holds two things: the brief for each Slack thread or DM, and the id of each Slack delivery for 15 minutes. The second one is how a retry is ignored.
+Key Value holds the brief for each Slack thread or DM, the id of each Slack delivery for 15 minutes, and the Canva connection once you finish the steps below. The delivery id is how a retry is ignored. A thread that is waiting on copy and photos is stored on that same thread key, so a reply later in the thread picks up where it left off.
 
 ## 5. Turn on events and buttons in Slack
 
@@ -136,7 +138,7 @@ Do this in a private channel, not in a channel the whole company is watching.
 
 4. The bot should reply in the thread, not in the channel. It should ask for the missing pieces in one message (date, copy, approver, and so on), not one question at a time.
 5. Reply in that same thread with the missing answers.
-6. If a Canva template fits, the bot sends the template name and link and waits. Reply that you want the team to design it if you want to keep going. It will note that the template was offered.
+6. If a Canva template fits and Canva is connected, the bot offers to build the design and asks for the final copy and the photos in that same thread. Upload the photos or paste links. If you don't have them, it tells you to find them or check with your marketing manager and reply in that thread. It then sends a Canva edit link. A change request in the thread makes a new design and says it is a fresh version. If Canva is not connected, or the template cannot be filled, it sends the template link and the copy instead. Reply that you want the team to design it if you want the normal brief.
 7. When the brief is complete, the bot posts a summary with a green **Confirm** button and a **Make changes** button. Nothing is created in Asana before Confirm.
 8. Click **Confirm**. The reply should include an Asana link on New Intake Board. Open it and check:
    - The task name looks like `SMP, Holiday newsletter` (property code, then the request name).
@@ -161,6 +163,42 @@ The bot follows the same path as the Marketing Intake Form.
 
 Request types are Creative, Web, CRM & Paid, Social, and Marketing. Designing an email is Creative. Sending a newsletter is CRM & Paid. A new offer is Marketing → Offers. Building or editing a live web page is Web.
 
+## Connect Canva so the bot can build a design
+
+Skip this until you want the bot to create the Canva file. Until these steps are done, a matching template still gets a link only, and the rest of intake works as before.
+
+The Slack app already asks for the `files:read` scope in `manifest.json`. That scope lets the bot download a photo someone uploads in the thread. If the app was installed before that scope was on the manifest, open **Install App** and click **Reinstall to Workspace** after you paste the current manifest.
+
+1. Open [https://www.canva.com/developers](https://www.canva.com/developers) and create an integration (a Canva app that uses the Connect API). Use a Canva account that can see the Proper brand templates. Autofill requires a Canva plan that includes it. Canva documents that as Pro, Teams, or Enterprise. If the account cannot autofill, the bot sends the template link and the copy instead of a finished design.
+2. In the integration settings, set the redirect URL to exactly:
+
+```text
+https://proper-marketing-intake.onrender.com/canva/callback
+```
+
+3. Enable these scopes, and no others are required:
+
+```text
+brandtemplate:meta:read
+brandtemplate:content:read
+design:content:write
+design:meta:read
+asset:write
+asset:read
+```
+
+4. Copy the client ID and the client secret.
+5. On the Render web service, open **Environment**. Set `CANVA_CLIENT_ID` and `CANVA_CLIENT_SECRET`. Save. Wait until the service is Live again.
+6. While logged into that Canva account, open:
+
+```text
+https://proper-marketing-intake.onrender.com/canva/connect
+```
+
+7. Approve the request. The page should say Canva is connected. The tokens are stored in Render Key Value and refresh on their own. You do not repeat this unless the connection is removed.
+
+After that, a request that matches one live template asks for the final copy and the photos before it builds anything. The pending request stays on that Slack thread.
+
 ## If something goes wrong
 
 - **Slack says the bot didn't respond.** Open the Render logs. `slack_retry` means Slack sent the message again. `slack_retry_skipped` means the bot ignored that copy on purpose.
@@ -170,6 +208,7 @@ Request types are Creative, Web, CRM & Paid, Social, and Marketing. Designing an
 - **Claude errors.** Check `ANTHROPIC_API_KEY` and that the Anthropic account has credit.
 - **Buttons do nothing.** Interactivity Request URL is empty or different from the Events Request URL. Both must be `https://YOUR-RENDER-URL.onrender.com/slack/events`.
 - **`/health` does not say ok.** The build or start command failed. Read the latest Render deploy log. The build command is `npm install --include=dev && npm run build`. The start command is `npm start`.
+- **The bot sends a template link instead of building a design.** Canva is not connected, or the template has no autofill fields, or the Canva account cannot use autofill. Connect it with the steps above, or reply that the team should design it.
 
 ## For a developer helping Elena
 
