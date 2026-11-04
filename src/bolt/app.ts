@@ -10,6 +10,8 @@ import { withDelivery, type DeliveryContext } from "../slack/dedupe.js";
 import { handleCancelTaskCompletion, handleConfirmAction, handleConfirmTaskCompletion, handleIncomingMessage, handleReviseAction } from "../slack/handle.js";
 import { dispatchUserMessage } from "../slack/dispatch.js";
 import { HANDLER_FAILURE_TEXT } from "../slack/failure.js";
+import { normalizeSlackMessage } from "../slack/incoming.js";
+import { applyStatusAction, considerStatusUpdate, readStatusClick } from "../status/listen.js";
 import { getStore } from "../store/index.js";
 
 /** Slack Events and Interactivity both post here. */
@@ -117,9 +119,44 @@ function registerListeners(bolt: App): void {
           onMessage: (message) => handleIncomingMessage(runtime(client), message),
           postError: (channel, threadTs, text) => postFailure(client, channel, threadTs, text),
         });
+        const normalized = normalizeSlackMessage(event);
+        if (!normalized) return;
+        try {
+          await considerStatusUpdate({
+            message: normalized,
+            store: getStore(),
+            slack: slackFromWebClient(client),
+            llm: createAnthropicLlm(),
+            asanaToken: process.env.ASANA_ACCESS_TOKEN,
+          });
+        } catch (error) {
+          console.error(JSON.stringify({
+            msg: "status_update_failed",
+            error: error instanceof Error ? error.message : "unknown",
+          }));
+        }
       },
     });
   });
+
+  for (const actionId of ["status_confirm", "status_pick", "status_choose", "status_dismiss"] as const) {
+    bolt.action(actionId, async ({ ack, body, client, context }) => {
+      await ack();
+      const click = readStatusClick(body);
+      if (!click) return;
+      await withDelivery({
+        body,
+        store: getStore(),
+        context: deliveryContext(context),
+        work: () => applyStatusAction({
+          ...click,
+          store: getStore(),
+          slack: slackFromWebClient(client),
+          asanaToken: process.env.ASANA_ACCESS_TOKEN,
+        }),
+      });
+    });
+  }
 
   bolt.action("confirm_intake", async ({ ack, body, client, context }) => {
     await ack();

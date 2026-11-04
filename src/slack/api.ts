@@ -5,6 +5,8 @@ export interface SlackApi {
   updateMessage(args: { channel: string; ts: string; text: string; blocks?: unknown[] }): Promise<void>;
   userProfile(userId: string): Promise<{ name?: string; email?: string }>;
   threadReplies(channel: string, threadTs: string): Promise<Array<{ user?: string; text: string; botId?: string }>>;
+  postEphemeral?(args: { channel: string; userId: string; threadTs?: string; text: string; blocks?: unknown[] }): Promise<{ ts?: string }>;
+  permalink?(channel: string, messageTs: string): Promise<string | undefined>;
 }
 
 export function slackFromWebClient(client: WebClient): SlackApi {
@@ -37,6 +39,25 @@ export function slackFromWebClient(client: WebClient): SlackApi {
       } catch (error) {
         console.error(JSON.stringify({ msg: "slack_user_lookup_failed", error: error instanceof Error ? error.message : "unknown" }));
         return {};
+      }
+    },
+    async postEphemeral(args) {
+      const result = await client.chat.postEphemeral({
+        channel: args.channel,
+        user: args.userId,
+        thread_ts: args.threadTs,
+        text: args.text.slice(0, 4000),
+        blocks: args.blocks as never,
+      });
+      return { ts: result.message_ts };
+    },
+    async permalink(channel, messageTs) {
+      try {
+        const result = await client.chat.getPermalink({ channel, message_ts: messageTs });
+        return result.permalink;
+      } catch (error) {
+        console.error(JSON.stringify({ msg: "slack_permalink_failed", error: error instanceof Error ? error.message : "unknown" }));
+        return undefined;
       }
     },
     async threadReplies(channel, threadTs) {
