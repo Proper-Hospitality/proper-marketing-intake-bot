@@ -5,7 +5,7 @@ import { slackThreadUrl } from "../intake/brief.js";
 import { submitConfirmedBrief } from "./submit.js";
 import { finishConfirmedCompletion } from "../tasks/complete.js";
 import type { SlackApi } from "./api.js";
-import { messageClaimKey } from "./incoming.js";
+import { messageClaimKey, messageOnceKey } from "./incoming.js";
 import { conversationKey, conversationKeyFromAction, emptyConversation, type Store } from "../store/types.js";
 
 export interface IncomingMessage {
@@ -17,6 +17,7 @@ export interface IncomingMessage {
   isDm: boolean;
   files?: string[];
   uploads?: DesignDeps["uploads"];
+  edited?: boolean;
 }
 
 export async function handleIncomingMessage(deps: {
@@ -28,6 +29,10 @@ export async function handleIncomingMessage(deps: {
   today?: Date;
   design?: Omit<DesignDeps, "uploads">;
 }, message: IncomingMessage): Promise<void> {
+  if (!message.edited) {
+    const once = await deps.store.claimEvent(messageOnceKey(message), 600);
+    if (!once) return;
+  }
   const messageClaim = messageClaimKey({
     channel: message.channel,
     ts: message.ts,

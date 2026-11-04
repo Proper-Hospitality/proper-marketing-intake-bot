@@ -85,6 +85,7 @@ On the blueprint screen, Render lists these because `render.yaml` marks the secr
 | `ASANA_ACCESS_TOKEN` | Asana. My Settings → Apps → Developer apps → Personal access tokens. Or a service account token. |
 | `CANVA_CLIENT_ID` | Canva developer integration. Optional until you want the bot to build designs. Leave it blank and the bot only sends template links. |
 | `CANVA_CLIENT_SECRET` | Canva developer integration. Same as above. Starts with `cnvca`. |
+| `SLACK_INTAKE_CHANNELS` | Optional. Comma-separated Slack channel IDs. In these channels every top-level message starts intake. No @mention is required. Leave it blank and only @mentions and direct messages start intake. |
 | `SLACK_STATUS_CHANNELS` | Optional. Comma-separated Slack channel IDs, such as `C0AV038G751` for `#marketing-crew`. Leave it blank and the bot will not propose Asana status updates. |
 | `REDIS_URL` | Filled in by the blueprint from the Key Value service. Leave it alone. |
 
@@ -204,6 +205,22 @@ https://proper-marketing-intake.onrender.com/canva/connect
 7. Approve the request. The page should say Canva is connected. The tokens are stored in Render Key Value and refresh on their own. You do not repeat this unless the connection is removed.
 
 After that, a request that matches one live template asks for the final copy and the photos before it builds anything. The pending request stays on that Slack thread.
+
+## Intake channels
+
+You can name channels where people do not have to @mention the bot. Every top-level message from a person starts the same intake as a direct message or an @mention. The bot answers in a thread on that message. Later replies in that thread stay on the same request. Messages from other bots, channel join and leave notices, and edits of the original message are ignored.
+
+On the Render service, set the channel IDs separated by commas:
+
+```text
+SLACK_INTAKE_CHANNELS=C0123456789
+```
+
+To find an ID, open the channel in Slack, click the channel name, and copy the ID at the bottom of the details. Invite the bot to the channel with `/invite @Marketing Intake`. The event subscriptions `message.channels` (public) and `message.groups` (private) have to be on, which they already are if thread replies work. No new Slack scope is required.
+
+If someone @mentions the bot in that channel as well, the bot handles the message once.
+
+An intake channel does not also propose Asana status updates. Those stay on `SLACK_STATUS_CHANNELS`, and only when the message is clearly a status update, such as something going live or a new due date. You can put a channel in both lists. A design request still starts intake only. A line like "the SMP menu is live" can also offer an Asana update.
 
 ## Status updates from Slack
 

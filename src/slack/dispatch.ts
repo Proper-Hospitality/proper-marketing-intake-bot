@@ -1,6 +1,6 @@
 import { conversationKey, type Store } from "../store/types.js";
 import { HANDLER_FAILURE_TEXT } from "./failure.js";
-import { normalizeSlackMessage, shouldHandleThreadReply, type NormalizedSlackMessage, type SlackMessageShape } from "./incoming.js";
+import { intakeChannelIds, normalizeSlackMessage, shouldHandleIncoming, type NormalizedSlackMessage, type SlackMessageShape } from "./incoming.js";
 
 export async function dispatchUserMessage(args: {
   event: SlackMessageShape;
@@ -14,10 +14,15 @@ export async function dispatchUserMessage(args: {
     normalized.text = normalized.text.replace(/<@[A-Z0-9]+>/g, "").trim();
   }
   const mentioned = args.event.type === "app_mention";
-  if (!mentioned && !shouldHandleThreadReply({
+  const hasConversation = normalized.isDm ? true : await threadHasConversation(args.store, normalized);
+  if (!shouldHandleIncoming({
     isDm: normalized.isDm,
+    mentioned,
     threadTs: normalized.threadTs,
-    hasConversation: normalized.isDm ? true : await threadHasConversation(args.store, normalized),
+    messageTs: normalized.ts,
+    hasConversation,
+    intakeChannel: intakeChannelIds().has(normalized.channel),
+    edited: normalized.edited,
   })) {
     console.log(JSON.stringify({
       msg: "channel_thread_ignored",

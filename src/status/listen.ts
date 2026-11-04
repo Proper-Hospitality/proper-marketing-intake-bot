@@ -8,6 +8,7 @@ import type { Store, ListedTask } from "../store/types.js";
 import { statusProposalBlocks, canConfirmStatus, statusComment, type StatusProposal } from "./blocks.js";
 import { interpretStatus, proposedChangeLabel, type StatusIntent } from "./intent.js";
 import { asanaTaskGids, propertyHints, selectStatusTasks } from "./match.js";
+import { intakeChannelIds } from "../slack/incoming.js";
 import { mightBeStatusUpdate, nextRateWindow, statusChannelIds } from "./prefilter.js";
 
 const PROPOSAL_TTL_SECONDS = 60 * 60 * 24 * 7;
@@ -26,6 +27,11 @@ export async function considerStatusUpdate(args: {
   const channels = args.channels ?? statusChannelIds();
   if (!channels.has(args.message.channel) || args.message.isDm) return "skipped";
   if (/<@[A-Z0-9]+>/.test(args.message.text)) return "skipped";
+  if (args.message.edited) return "skipped";
+  if (intakeChannelIds().has(args.message.channel) && !mightBeStatusUpdate(args.message.text)) {
+    console.log(JSON.stringify({ msg: "status_skipped_intake_channel", channel: args.message.channel }));
+    return "skipped";
+  }
   if (!mightBeStatusUpdate(args.message.text)) return "skipped";
   const threadText = await threadContext(args.slack, args.message);
   const text = `${threadText}\n${args.message.text}`.trim();

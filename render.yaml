@@ -35,6 +35,8 @@ services:
         sync: false
       - key: SLACK_STATUS_CHANNELS
         sync: false
+      - key: SLACK_INTAKE_CHANNELS
+        sync: false
       - key: REDIS_URL
         fromService:
           type: keyvalue
