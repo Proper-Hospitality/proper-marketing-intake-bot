@@ -85,6 +85,7 @@ On the blueprint screen, Render lists these because `render.yaml` marks the secr
 | `ASANA_ACCESS_TOKEN` | Asana. My Settings → Apps → Developer apps → Personal access tokens. Or a service account token. |
 | `CANVA_CLIENT_ID` | Canva developer integration. Optional until you want the bot to build designs. Leave it blank and the bot only sends template links. |
 | `CANVA_CLIENT_SECRET` | Canva developer integration. Same as above. Starts with `cnvca`. |
+| `SLACK_STATUS_CHANNELS` | Optional. Comma-separated Slack channel IDs, such as `C0AV038G751` for `#marketing-crew`. Leave it blank and the bot will not propose Asana status updates. |
 | `REDIS_URL` | Filled in by the blueprint from the Key Value service. Leave it alone. |
 
 The same secret names are listed in `.env.example`. That file has no secrets in it. Do not fill it in and commit it.
@@ -203,6 +204,24 @@ https://proper-marketing-intake.onrender.com/canva/connect
 7. Approve the request. The page should say Canva is connected. The tokens are stored in Render Key Value and refresh on their own. You do not repeat this unless the connection is removed.
 
 After that, a request that matches one live template asks for the final copy and the photos before it builds anything. The pending request stays on that Slack thread.
+
+## Status updates from Slack
+
+The bot can notice a status update in a channel it has joined and offer to write that onto an Asana task. It never changes Asana until someone clicks **Confirm**. Confirm works for the person who wrote the message, or for the Asana assignee.
+
+It looks for a task that is done, live, or sent, a new due date, a note that the work is no longer needed, or a short progress note. Thanks, jokes, and other chit-chat are ignored before Claude is asked. An Asana link in the message or the thread is used first. Otherwise it searches incomplete tasks by the words in the message, a property code such as SMP or AUP, and the speaker as the assignee. If more than one task fits, it shows up to three choices.
+
+The card is visible only to the speaker when Slack allows an ephemeral reply in the thread. Otherwise it is a normal thread reply. **Pick another task** shows the other matches. **Dismiss** leaves Asana unchanged. After Confirm, the card updates and the task gets a comment that starts with `Updated from Slack by` plus a link back to the Slack message.
+
+This stays off until you list channel IDs. On the Render service, set:
+
+```text
+SLACK_STATUS_CHANNELS=C0AV038G751
+```
+
+`C0AV038G751` is `#marketing-crew`. Add more IDs separated by commas. The bot has to be in each channel. The same event subscriptions as thread replies are required: `message.channels` for public channels and `message.groups` for private channels, plus `message.im` and `app_mention`. No new Slack scope is required. `chat:write` is already on the app, which is what sends the ephemeral card.
+
+The bot will not propose twice for the same message, and it will not propose more than eight updates in one channel in ten minutes.
 
 ## If something goes wrong
 

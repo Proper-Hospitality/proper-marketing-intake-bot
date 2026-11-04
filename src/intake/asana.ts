@@ -270,6 +270,69 @@ export async function addTaskComment(input: {
   });
 }
 
+export interface TaskSummary {
+  gid: string;
+  name: string;
+  url: string;
+  completed: boolean;
+  dueOn?: string;
+  assigneeName?: string;
+  assigneeGid?: string;
+  projectNames: string[];
+}
+
+export async function fetchTaskSummary(input: {
+  token: string;
+  taskGid: string;
+  fetchImpl?: typeof fetch;
+}): Promise<TaskSummary | null> {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  try {
+    const payload = await asanaRequest<{ data: {
+      gid?: string;
+      name?: string;
+      permalink_url?: string;
+      completed?: boolean;
+      due_on?: string | null;
+      assignee?: { gid?: string; name?: string } | null;
+      projects?: Array<{ name?: string }>;
+    } }>(
+      fetchImpl,
+      input.token,
+      "GET",
+      `/tasks/${input.taskGid}?opt_fields=name,permalink_url,completed,due_on,assignee.name,assignee.gid,projects.name`,
+    );
+    const task = payload.data;
+    if (!task?.gid || !task.name) return null;
+    return {
+      gid: task.gid,
+      name: task.name,
+      url: task.permalink_url ?? `https://app.asana.com/0/0/${task.gid}`,
+      completed: task.completed === true,
+      dueOn: task.due_on ?? undefined,
+      assigneeName: task.assignee?.name,
+      assigneeGid: task.assignee?.gid,
+      projectNames: (task.projects ?? []).map((project) => project.name).filter((name): name is string => Boolean(name)),
+    };
+  } catch (error) {
+    console.error(JSON.stringify({ msg: "asana_task_read_failed", taskGid: input.taskGid, error: userFacingAsanaError(error) }));
+    return null;
+  }
+}
+
+export async function updateTaskStatus(input: {
+  token: string;
+  taskGid: string;
+  completed?: boolean;
+  dueOn?: string;
+  fetchImpl?: typeof fetch;
+}): Promise<void> {
+  const data: { completed?: boolean; due_on?: string } = {};
+  if (input.completed !== undefined) data.completed = input.completed;
+  if (input.dueOn) data.due_on = input.dueOn;
+  await asanaRequest(input.fetchImpl ?? fetch, input.token, "PUT", `/tasks/${input.taskGid}`, { data });
+}
+
 async function readTask(fetchImpl: typeof fetch, token: string, taskGid: string): Promise<AsanaTask> {
   const opt = [
     "permalink_url",
