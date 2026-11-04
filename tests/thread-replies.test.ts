@@ -195,6 +195,7 @@ describe("channel thread replies during Canva build", () => {
       ts: "1793744709.104469",
       threadTs: THREAD,
       isDm: false,
+      edited: true,
       uploads: [{ source: "slack", slackFileId: "F0CERJE1F1S", name: "photo.png" }],
     });
     expect(calls).toHaveLength(2);

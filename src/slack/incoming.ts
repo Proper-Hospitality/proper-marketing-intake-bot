@@ -24,6 +24,10 @@ export interface NormalizedSlackMessage {
   edited: boolean;
 }
 
+export function intakeChannelIds(raw = process.env.SLACK_INTAKE_CHANNELS): Set<string> {
+  return new Set((raw ?? "").split(/[,\s]+/).map((id) => id.trim()).filter(Boolean));
+}
+
 interface SlackFile {
   id?: string;
   name?: string | null;
@@ -65,10 +69,45 @@ export function messageClaimKey(message: Pick<NormalizedSlackMessage, "channel" 
   return `msg:${message.channel}:${message.ts}:${text}:${files}`;
 }
 
+/** Same channel and timestamp, so an @mention and the matching message event run once. */
+export function messageOnceKey(message: Pick<NormalizedSlackMessage, "channel" | "ts">): string {
+  return `msg:${message.channel}:${message.ts}`;
+}
+
+/**
+ * DMs always count. A channel message counts when it @mentions the bot, when it
+ * is a top-level post in an intake channel, or when it is a reply in a thread
+ * the bot already owns. Edits of a root message and edits that have no thread
+ * yet are ignored.
+ */
+export function shouldHandleIncoming(input: {
+  isDm: boolean;
+  mentioned: boolean;
+  threadTs?: string;
+  messageTs: string;
+  hasConversation: boolean;
+  intakeChannel: boolean;
+  edited: boolean;
+}): boolean {
+  if (input.mentioned || input.isDm) return true;
+  const rootEdit = input.edited && (!input.threadTs || input.threadTs === input.messageTs);
+  if (rootEdit || (input.edited && !input.hasConversation)) return false;
+  if (input.threadTs && input.threadTs !== input.messageTs && input.hasConversation) return true;
+  const topLevel = !input.threadTs || input.threadTs === input.messageTs;
+  return input.intakeChannel && topLevel && !input.edited;
+}
+
 /** A channel thread reply is ours only when this thread already has a conversation. */
 export function shouldHandleThreadReply(input: { isDm: boolean; threadTs?: string; hasConversation: boolean }): boolean {
-  if (input.isDm) return true;
-  return Boolean(input.threadTs && input.hasConversation);
+  return shouldHandleIncoming({
+    isDm: input.isDm,
+    mentioned: false,
+    threadTs: input.threadTs,
+    messageTs: "reply",
+    hasConversation: input.hasConversation,
+    intakeChannel: false,
+    edited: false,
+  });
 }
 
 function fromMessage(
