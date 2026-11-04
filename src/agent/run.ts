@@ -6,6 +6,7 @@ import {
   formatTemplateAccepted,
   formatTemplateOffer,
 } from "../intake/brief.js";
+import { extractDesignCopy } from "../canva/extract-copy.js";
 import { continueDesign, declineDesign, offerDesignBuild, type CanvaDesignClient } from "../canva/turn.js";
 import { acceptTemplate, applyAnswers, declineTemplate, type FlowOutcome, type RecordInput } from "../intake/flow.js";
 import { listMissing, mentionsActualPrice } from "../intake/missing.js";
@@ -77,6 +78,7 @@ export async function runIntakeTurn(input: {
       uploads: input.design.uploads,
       canva: input.design.canva,
       download: input.design.download,
+      extractCopy: (text) => extractDesignCopy({ llm: input.llm, text }),
       today,
     });
     if (designTurn.action === "reply") return remember(state, input.userText, { text: designTurn.text });

@@ -18,20 +18,34 @@ export function photoUrls(text: string): string[] {
 }
 
 export function extractCopy(text: string): string | undefined {
-  const labeled = text.match(/(?:^|\n)\s*(?:copy|text)\s*:\s*([\s\S]+)/i);
-  const source = labeled?.[1] ?? text;
-  const withoutUrls = source.replace(/https?:\/\/[^\s>]+/gi, " ");
-  const cleaned = withoutUrls.replace(/\s+/g, " ").trim();
-  if (!cleaned || cleaned.length < 8 || NOT_COPY.test(cleaned) || NOT_READY.test(cleaned) || DECLINE.test(cleaned)) return undefined;
+  return stripDesignCopy(text);
+}
+
+/** Drops Slack lead-ins so only the words for the design remain. */
+export function stripDesignCopy(text: string): string | undefined {
+  let cleaned = text.replace(/https?:\/\/\S+/gi, " ").replace(/\s+/g, " ").trim();
+  const labeled = cleaned.match(/(?:^|\s)(?:copy|text)\s*:\s*(.+)$/i);
+  if (labeled?.[1]) cleaned = labeled[1].trim();
+  cleaned = cleaned.replace(/^here(?:'s| is)\s+the\s+copy(?:\s+and\s+the\s+photos?)?\s*[:,-]?\s*/i, "");
+  cleaned = cleaned.replace(/^(?:and\s+)?(?:here(?:'s| is)\s+)?(?:the\s+)?photos?(?:\s+(?:is|are))?(?:\s+attached)?\s*[:,-]?\s*/i, "");
+  cleaned = cleaned.replace(/^\d+\s*[.)-]\s*/, "");
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+  if (!cleaned || cleaned.length < 8 || NOT_COPY.test(cleaned) || DECLINE.test(cleaned)) return undefined;
+  if (NOT_READY.test(cleaned)) return undefined;
   return cleaned;
 }
 
-export function mergeMaterials(design: DesignBuild, text: string, uploads: DesignPhoto[]): DesignBuild {
+export function mergeMaterials(
+  design: DesignBuild,
+  text: string,
+  uploads: DesignPhoto[],
+  cleanedCopy?: string,
+): DesignBuild {
   const next: DesignBuild = {
     ...design,
     photos: [...design.photos],
   };
-  const copy = extractCopy(text);
+  const copy = cleanedCopy?.trim() || extractCopy(text);
   if (copy) {
     next.copy = design.version > 0 && design.copy && EDIT.test(text) && !/^\s*(?:copy|text)\s*:/i.test(text)
       ? `${design.copy}\n\nUpdate: ${copy}`

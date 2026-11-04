@@ -82,7 +82,11 @@ describe("Canva autofill", () => {
       fetchImpl: vi.fn(async () => json({ dataset: {} })) as unknown as typeof fetch,
       sleep: async () => {},
     });
-    expect(empty).toEqual({ kind: "fallback", reason: "this template has no autofill fields" });
+    expect(empty.kind).toBe("fallback");
+    if (empty.kind === "fallback") {
+      expect(empty.reason).toMatch(/no autofill fields tagged/);
+      expect(empty.reason).toMatch(/Connect API cannot add those tags/);
+    }
 
     const blocked = await buildAutofillDesign({
       token: "access-token",

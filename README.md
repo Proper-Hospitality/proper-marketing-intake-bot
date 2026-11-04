@@ -232,7 +232,8 @@ The bot will not propose twice for the same message, and it will not propose mor
 - **Claude errors.** Check `ANTHROPIC_API_KEY` and that the Anthropic account has credit.
 - **Buttons do nothing.** Interactivity Request URL is empty or different from the Events Request URL. Both must be `https://YOUR-RENDER-URL.onrender.com/slack/events`.
 - **`/health` does not say ok.** The build or start command failed. Read the latest Render deploy log. The build command is `npm install --include=dev && npm run build`. The start command is `npm start`.
-- **The bot sends a template link instead of building a design.** Canva is not connected, or the template has no autofill fields, or the Canva account cannot use autofill. Connect it with the steps above, or reply that the team should design it.
+- **The bot sends a template link and says the template needs fields tagged.** That template has no autofill fields. Canva's Connect API cannot add those tags. In the Canva editor, open the template, choose Apps, then Bulk Create, then Labels, and add a Data field on each text or photo element. A developer can list which live templates are tagged with `npm run datasets` on a machine that has `REDIS_URL`, `CANVA_CLIENT_ID`, and `CANVA_CLIENT_SECRET`.
+- **The bot sends a template link instead of building a design.** Canva is not connected, or the Canva account cannot use autofill. Connect it with the steps above, or reply that the team should design it.
 - **The bot stays silent on a thread reply or a photo.** In Event Subscriptions, `message.channels` and `message.groups` have to be listed next to `message.im` and `app_mention`. Save, and reinstall if Slack asks. A photo is a `file_share` message. If the bot receives the message and then fails, it replies in the thread that something went wrong. Silence means Slack did not deliver the event.
 
 ## For a developer helping Elena

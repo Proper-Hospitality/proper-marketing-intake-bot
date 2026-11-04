@@ -1,6 +1,9 @@
 import { autofillUnavailable, CanvaApiError, createAutofill, getBrandTemplateDataset, uploadAsset } from "./api.js";
 import { mapCopyToTextFields, type FieldMapper } from "./map-fields.js";
 
+export const NEEDS_TAGS_REASON =
+  "this template has no autofill fields tagged. Tag the text and photo elements in the Canva editor: open the template, choose Apps, then Bulk Create, then Labels, and add a Data field on each element. The Connect API cannot add those tags";
+
 export type BuildResult =
   | { kind: "design"; editUrl: string; viewUrl: string; photosPlaced: boolean }
   | { kind: "fallback"; reason: string }
@@ -24,7 +27,7 @@ export async function buildAutofillDesign(args: {
     });
     const entries = Object.entries(dataset);
     if (entries.length === 0) {
-      return { kind: "fallback", reason: "this template has no autofill fields" };
+      return { kind: "fallback", reason: NEEDS_TAGS_REASON };
     }
     const textFields = entries.filter(([, field]) => field.type === "text").map(([name]) => name);
     const imageFields = entries.filter(([, field]) => field.type === "image").map(([name]) => name);

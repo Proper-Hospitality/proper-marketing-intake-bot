@@ -36,6 +36,7 @@ export interface DesignTurnInput {
   uploads: DesignPhoto[];
   canva?: CanvaDesignClient;
   download?: (photo: DesignPhoto) => Promise<{ name: string; bytes: Uint8Array }>;
+  extractCopy?: (text: string) => Promise<string | undefined>;
   today?: Date;
 }
 
@@ -115,7 +116,8 @@ export async function continueDesign(input: DesignTurnInput): Promise<DesignTurn
   const intent = materialsIntent(text, design, input.uploads);
   if (intent === "decline") return { action: "decline", reason: text };
 
-  const merged = mergeMaterials(design, text, input.uploads);
+  const cleaned = input.extractCopy ? await input.extractCopy(text) : undefined;
+  const merged = mergeMaterials(design, text, input.uploads, cleaned);
   merged.candidates = liveOnly(merged.candidates);
   if (merged.templateId && ARCHIVED_IDS.has(merged.templateId)) merged.templateId = undefined;
   if (!merged.templateId && merged.candidates.length === 1) merged.templateId = merged.candidates[0].id;
