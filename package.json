@@ -12,7 +12,8 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "datasets": "tsx scripts/list-template-datasets.ts"
   },
   "repository": {
     "type": "git",
