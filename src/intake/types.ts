@@ -25,6 +25,8 @@ export interface BriefDraft {
   filingOnBehalf?: boolean;
   /** Price, pricing, or cost is not ready. Other required answers are still required. */
   pricePending?: boolean;
+  /** Questions the requester skipped with "skip" or "not sure". */
+  skipped?: Array<{ id: string; label: string }>;
 }
 
 export interface FollowUp {

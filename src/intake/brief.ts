@@ -26,7 +26,10 @@ export function buildDescription(input: {
   const followUps = draft.requestType && draft.taskType ? followUpsFor(draft.requestType, draft.taskType) : [];
   const briefLines = briefAnswerLines(draft);
   const templateLine = canvaTemplateLine(draft, input.templateOffer);
-  const pending = draft.pricePending ? [PRICE_PENDING_LINE] : [];
+  const pending = [
+    ...(draft.pricePending ? [PRICE_PENDING_LINE] : []),
+    ...(draft.skipped ?? []).map((entry) => `${entry.label}: Not sure (requester will provide)`),
+  ];
 
   const assetLines = [
     ...(draft.assets ?? []),
@@ -88,27 +91,25 @@ export function formatQuestions(input: {
   items: MissingItem[];
   warnings: string[];
   draft: BriefDraft;
+  acknowledge?: boolean;
 }): string {
+  const item = input.items[0];
+  if (!item) return "";
   const who = input.userId ? `<@${input.userId}>` : "Hi";
+  const lines: string[] = [];
+  if (input.acknowledge) lines.push("Got it.", "");
+  lines.push(`${who} — *${item.label}*`);
+  const choices = choiceList(item.id, input.draft.requestType);
+  if (choices) lines.push(choices);
+  else if (item.hint) lines.push(item.hint);
   const contact = secondContact(input.draft.properties ?? []);
-  const lines = [
-    `${who} — I need the following before this can be filed. Answer in one reply. If you don't know, ${contact} may.`,
-    "",
-  ];
-  input.items.forEach((item, index) => {
-    const choices = choiceList(item.id, input.draft.requestType);
-    if (choices) {
-      lines.push(`${index + 1}. *${item.label}*`);
-      lines.push(choices);
-      return;
-    }
-    const hint = item.hint ? ` — ${item.hint}` : "";
-    lines.push(`${index + 1}. *${item.label}*${hint}`);
-  });
   if (input.warnings.length > 0) {
     lines.push("", ...input.warnings.map((warning) => `• ${warning}`));
   }
-  lines.push("", nextStepLine(input.draft));
+  lines.push(
+    "",
+    `Answer this, or send a few answers at once. Say skip or not sure if you don't have it — ${contact} may. Say back to change your last answer.`,
+  );
   return lines.join("\n");
 }
 
@@ -215,13 +216,6 @@ function choiceList(itemId: string, requestType: BriefDraft["requestType"]): str
   if (itemId === "requestType") return formatRequestTypeChoices();
   if (itemId === "taskType" && requestType) return formatTaskTypeChoices(requestType);
   return undefined;
-}
-
-function nextStepLine(draft: BriefDraft): string {
-  if (draft.requestType && draft.taskType) {
-    return `Once these are answered, this goes into Asana as ${draft.requestType} → ${draft.taskType} and you'll get the link here.`;
-  }
-  return "Once these are answered, I'll either point you at a Canva template or finish the brief for Asana.";
 }
 
 function followUpDestination(draft: BriefDraft): string | undefined {

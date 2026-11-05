@@ -81,6 +81,11 @@ export interface ConversationState {
   completionRequesterEmail?: string;
   completionReport?: string;
   design?: DesignBuild;
+  /** The question currently waiting on an answer, so skip and back know which field. */
+  lastAskedId?: string;
+  lastAskedLabel?: string;
+  /** Field ids already asked, newest last, so the requester can go back. */
+  answerTrail?: string[];
   updatedAt: string;
 }
 

@@ -1,6 +1,6 @@
 # Proper Marketing Intake
 
-This is a Slack bot for Proper Hospitality. Someone messages it (or @mentions it in a channel) with a marketing request. It figures out the request type, checks whether a Canva template already exists, asks for anything the intake form still needs, shows a summary, and files the task on the New Intake Board only after they click **Confirm**.
+This is a Slack bot for Proper Hospitality. Someone messages it (or @mentions it in a channel) with a marketing request. It figures out the request type, checks whether a Canva template already exists, then asks for anything the intake form still needs one question at a time. They can answer a few things in one reply, say skip or not sure, or say back to change the last answer. It shows a summary, and files the task on the New Intake Board only after they click **Confirm**. The thread remembers where they were.
 
 It also answers questions about how intake works, and it shares the form link when someone would rather fill that in themselves.
 
@@ -143,8 +143,8 @@ Do this in a private channel, not in a channel the whole company is watching.
 @Marketing Intake Can you help me get a holiday email designed for Santa Monica?
 ```
 
-4. The bot should reply in the thread, not in the channel. It should ask for the missing pieces in one message (date, copy, approver, and so on), not one question at a time.
-5. Reply in that same thread with the missing answers.
+4. The bot should reply in the thread, not in the channel. It should ask one thing, then the next, not the whole form at once. The date and why that date are one question.
+5. Reply in that same thread. You can answer just that question, or include a few answers at once. Say skip or not sure to move on. Say back to change the last answer.
 6. If a Canva template fits and Canva is connected, the bot offers to build the design and asks for the final copy and the photos in that same thread. Upload the photos or paste links. If you don't have them, it tells you to find them or check with your marketing manager and reply in that thread. It then sends a Canva edit link. A change request in the thread makes a new design and says it is a fresh version. If Canva is not connected, or the template cannot be filled, it sends the template link and the copy instead. Reply that you want the team to design it if you want the normal brief.
 7. When the brief is complete, the bot posts a summary with a green **Confirm** button and a **Make changes** button. Nothing is created in Asana before Confirm.
 8. Click **Confirm**. The reply should include an Asana link on New Intake Board. Open it and check:
