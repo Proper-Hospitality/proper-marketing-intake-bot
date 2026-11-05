@@ -5,6 +5,7 @@ import {
   normalizeDate,
   taskTypeNames,
 } from "./catalog.js";
+import { dropSkipsThatWereAnswered } from "./conversation.js";
 import { isPricePendingStatement, listMissing, mentionsActualPrice, type MissingReport } from "./missing.js";
 import { matchTemplates, type TemplateMatchResult } from "./templates.js";
 import type { BriefDraft, RequestType } from "./types.js";
@@ -52,6 +53,7 @@ export interface FlowState {
 export function applyAnswers(state: FlowState, input: RecordInput, today = new Date()): FlowOutcome {
   const errors = mergeDraft(state.draft, input);
   if (errors.length > 0) return { kind: "invalid", errors };
+  dropSkipsThatWereAnswered(state.draft);
   return advance(state, today);
 }
 

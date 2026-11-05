@@ -13,13 +13,15 @@ describe("missing fields", () => {
     expect(labels).toContain("Request name");
     expect(labels).toContain("Audience / Distribution Plan");
     expect(labels).toContain("Recommended Copy / Details");
-    expect(labels).toContain("Requested completion date");
-    expect(labels).toContain("Consequence of delay");
-    expect(labels).toContain("Assets");
+    expect(labels).toContain("When do you need this, and what happens if it's late?");
+    expect(labels).not.toContain("Requested completion date");
+    expect(labels).not.toContain("Consequence of delay");
+    expect(labels).toContain("Photo Link");
+    expect(labels).not.toContain("Assets");
     expect(labels).toContain("Final approver");
-    expect(labels).toContain("Where it goes live");
+    expect(labels).toContain("CTA Link");
+    expect(labels).not.toContain("Where it goes live");
     expect(labels).not.toContain("Final copy, or who is writing it and when it's due");
-    expect(labels).not.toContain("Photo Link");
   });
 
   it("is empty once the brief is complete", () => {

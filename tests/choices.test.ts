@@ -104,10 +104,28 @@ describe("request and task type lists", () => {
       warnings: [],
       draft: {},
     });
-    expect(text).toContain("1. *Your name*");
+    expect(text).toContain("*Your name*");
+    expect(text).not.toContain("*What can we help you with?*");
+    expect(text).not.toContain("1. *Your email*");
+  });
+
+  it("asks what we can help with, with the examples, only once that is the next question", () => {
+    const draft = {
+      requesterName: "Elena Ruiz",
+      requesterEmail: "elena@example.com",
+      requestName: "Holiday menu",
+      properties: ["SMP"],
+    };
+    const text = formatQuestions({
+      userId: "U1",
+      items: listMissing(draft).items,
+      warnings: [],
+      draft,
+    });
     expect(text).toContain("*What can we help you with?*");
     expect(text).toContain("• *Creative* — new designs like emails, menus, social graphics");
     expect(text).toContain("Start with Creative for most new design.");
+    expect(text).not.toContain("*Your name*");
   });
 
   it("lists every task type once a request type is chosen", () => {

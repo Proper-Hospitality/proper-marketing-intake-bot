@@ -104,7 +104,7 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
       label: "What can we help you with?",
       hint: REQUEST_TYPES.join(", ") + ". Start with Creative for most new design. Offers go to Marketing. Quick edits can go straight to Web, CRM & Paid, or Social.",
     });
-    return { items, warnings };
+    return { items: presentQuestions(draft, items, []), warnings };
   }
 
   if (!draft.taskType) {
@@ -113,7 +113,7 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
       label: SUPPORT_QUESTION[draft.requestType],
       hint: taskTypeNames(draft.requestType).join(", "),
     });
-    return { items, warnings };
+    return { items: presentQuestions(draft, items, []), warnings };
   }
 
   const followUps = followUpsFor(draft.requestType, draft.taskType);
@@ -187,7 +187,62 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
     }
   }
 
-  return { items, warnings };
+  return { items: presentQuestions(draft, items, followUps), warnings };
+}
+
+function presentQuestions(draft: BriefDraft, items: MissingItem[], followUps: FollowUp[]): MissingItem[] {
+  const skipped = new Set((draft.skipped ?? []).map((entry) => entry.id));
+  if (skipped.has("timing")) {
+    skipped.add("requestedCompletionDate");
+    skipped.add("consequenceOfDelay");
+  }
+  if (skipped.has("eventWhen")) {
+    skipped.add("followup:Event Date(s)");
+    skipped.add("followup:Event Time (Start – End)");
+  }
+  const visible = items
+    .map((item) => specificQuestion(item, followUps, draft))
+    .filter((item) => !skipped.has(item.id));
+  return combineQuestions(visible);
+}
+
+function specificQuestion(item: MissingItem, followUps: FollowUp[], draft: BriefDraft): MissingItem {
+  if (item.id === "assets") {
+    const field = followUps.find((entry) => entry.satisfies?.includes("assets") && !isFilled(draft.followUps?.[entry.label]));
+    if (field) return missingFollowUp(field, Boolean(draft.pricePending));
+  }
+  if (item.id === "whereItGoesLive") {
+    const field = followUps.find((entry) => entry.satisfies?.includes("destination") && !isFilled(draft.followUps?.[entry.label]));
+    if (field) return missingFollowUp(field, Boolean(draft.pricePending));
+  }
+  return item;
+}
+
+export function combineQuestions(items: MissingItem[]): MissingItem[] {
+  let next = [...items];
+  const dateAt = next.findIndex((item) => item.id === "requestedCompletionDate");
+  const whyAt = next.findIndex((item) => item.id === "consequenceOfDelay");
+  if (dateAt >= 0 && whyAt >= 0) {
+    const at = Math.min(dateAt, whyAt);
+    next = next.filter((item) => item.id !== "requestedCompletionDate" && item.id !== "consequenceOfDelay");
+    next.splice(at, 0, {
+      id: "timing",
+      label: "When do you need this, and what happens if it's late?",
+      hint: "A real date, not ASAP, and one line on what is lost if it's late.",
+    });
+  }
+  const eventDate = "followup:Event Date(s)";
+  const eventTime = "followup:Event Time (Start – End)";
+  if (next.some((item) => item.id === eventDate) && next.some((item) => item.id === eventTime)) {
+    const at = next.findIndex((item) => item.id === eventDate || item.id === eventTime);
+    next = next.filter((item) => item.id !== eventDate && item.id !== eventTime);
+    next.splice(at, 0, {
+      id: "eventWhen",
+      label: "When is the event?",
+      hint: "The date, plus the start and end time.",
+    });
+  }
+  return next;
 }
 
 function missingFollowUp(field: FollowUp, pricePending: boolean): MissingItem {

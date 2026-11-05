@@ -8,6 +8,7 @@ import {
 } from "../intake/brief.js";
 import { extractDesignCopy } from "../canva/extract-copy.js";
 import { continueDesign, declineDesign, offerDesignBuild, type CanvaDesignClient } from "../canva/turn.js";
+import { isBackAnswer, isSkipAnswer, rewindLastAnswer, skipAsked } from "../intake/conversation.js";
 import { acceptTemplate, applyAnswers, declineTemplate, type FlowOutcome, type RecordInput } from "../intake/flow.js";
 import { listMissing, mentionsActualPrice } from "../intake/missing.js";
 import type { ConversationState, DesignPhoto } from "../store/types.js";
@@ -71,6 +72,18 @@ export async function runIntakeTurn(input: {
   if (input.slackUser.email && !state.draft.requesterEmail) state.draft.requesterEmail = input.slackUser.email;
 
   let preset: FlowOutcome | undefined;
+  if (state.lastAskedId && (state.phase === "collecting" || state.phase === "awaiting_confirm")) {
+    if (isBackAnswer(input.userText) && rewindLastAnswer(state)) {
+      const outcome = applyAnswers(state, {}, today);
+      const reply = renderReply(state, input.slackUser.id, "Let's change that.", outcome, today);
+      reply.text = `Let's change that.\n\n${reply.text.replace(/^Got it\.\n\n/, "")}`;
+      return remember(state, input.userText, reply);
+    }
+    if (isSkipAnswer(input.userText) && skipAsked(state)) {
+      const outcome = applyAnswers(state, {}, today);
+      return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
+    }
+  }
   if (input.design && (state.phase === "awaiting_design_materials" || state.phase === "design_ready")) {
     const designTurn = await continueDesign({
       state,
@@ -318,12 +331,22 @@ function renderReply(
     return { text: formatPropertyQuestion(userId) };
   }
   if (outcome?.kind === "ask") {
+    const item = outcome.missing.items[0];
+    if (item) {
+      const previous = state.lastAskedId;
+      if (previous && previous !== item.id) {
+        state.answerTrail = [...(state.answerTrail ?? []), previous].slice(-30);
+      }
+      state.lastAskedId = item.id;
+      state.lastAskedLabel = item.label;
+    }
     return {
       text: formatQuestions({
         userId,
-        items: outcome.missing.items,
-        warnings: outcome.missing.warnings,
+        items: item ? [item] : [],
+        warnings: item && /timing|date|late/i.test(item.id + item.label) ? outcome.missing.warnings : [],
         draft: state.draft,
+        acknowledge: Boolean(state.answerTrail?.length),
       }),
     };
   }
