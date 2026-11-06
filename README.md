@@ -157,6 +157,33 @@ Do this in a private channel, not in a channel the whole company is watching.
 
 A direct message keeps one ongoing brief. A channel mention starts a thread, and that thread is its own brief.
 
+## Existing sales collateral
+
+For sales collateral, menus, and fact sheets, the bot checks a curated catalog before it builds a new brief. Canva templates still come first. If a template fits, the bot offers that first. After the template is declined, or when no template fits, it can ask one year question and then show original links.
+
+Saying *I'll use this* stops there. Nothing is filed in Asana. Saying the file is outdated, or that a new year is needed, continues the normal one-question brief. The same files are not offered again.
+
+Counts, by what was actually usable:
+
+- Verified documents with text or an image description on record: 5. SMP Holiday Menu 2025, SMP Holiday Menu 2026, Santa Monica Proper Fact Sheet, SMP-MediaBook-2026, and Charmaine's floor plan.
+- Verified Santa Monica Canva links whose view URL was checked, with the design body not copied here: 18 current menus, fact-sheet templates, and wedding packages, matched by title and type. Holiday Menu 2025 is the older verified file. Menus titled 2026–2027 cover both years. Fact sheets with no year stay unknown.
+- Not offered: the OBB Media proposal (candidate-only) and the SMP DO NOT USE folder.
+- Source candidates, not opened documents: 5. Three San Francisco PDFs (banquet menu, meetings brochure, and `SFP-Fact-Sheet-2025_ADA.pdf`, whose filename year is 2025) have working Slack links and no PDF bytes. The Shelborne Recovery Room one-pager is filename year 2026 and the PDF bytes are missing. Lindsay's Ocean Way deck `DAHQtuWCJSw` resolved, then Canva denied access. Its year is unknown and it is not treated as a current canonical file. It is offered only when the request mentions Ocean Way, cabanas, or a partnership deck.
+- Folder pointers, not an indexed library: 2. Shelborne `1-RESOURCES` returned 403, so no files were listed. `1-PICTURES` resolves and is imagery only. It is not a menu, fact sheet, or deck.
+- Verified Hotel June and Downtown LA files, text read, year 2026 by Elena's confirmation of the current folders (8): Hotel June brochure, Hotel June tour script, DTLAP fact sheet, DTLAP sports-team fact sheet, DTLAP capacity chart, DTLAP meetings brochure, DTLAP banquet menu, and Proper Fact Sheet.pdf. That confirmation is not copied onto Santa Monica, San Francisco, or Shelborne files. Proper Fact Sheet.pdf was stored in the Downtown LA folder. Its text names Santa Monica, San Francisco, Downtown LA, Austin, Hotel June Malibu, Hotel June West LA, Avalon Beverly Hills, Avalon Palm Springs, and The Culver Hotel, so it is not DTLA-only.
+- Austin Proper, five Slack attachments from Ryan Galvin in #atxp-sales on 2026-11-05 (https://properhospitalitycorp.slack.com/archives/C0B62QUHBK4/p1793928288710819). There is no Austin folder. Years are unknown. The Travel + Leisure 2022 line on the fact sheet is an award year, not the document year. The Hotel June / Downtown LA 2026 confirmation does not apply. Text was read for the fact sheet, Kappo Kappo events one-pager, capacity chart, and the clean second-floor meetings plan. Updated Floor Plan is an eight-page image-only guest-room set with page descriptions and no text layer. It is not the same file as Austin Proper Floor Plan.
+- No separate folder rows: ABH and APS. ABH was asked on Nov 4 and Nov 5 and got no replies. No placeholder rows were added for a channel with no files. The summer Downtown LA share is the same Downtown LA folder, not a second catalog.
+
+Shelborne sales collateral is included. A separate request removed Shelborne from Claude Design templates in another repository. That does not remove SMB from this catalog. The Canva template list in this bot is unchanged.
+
+Elena's confirmation that the current Hotel June and Downtown LA files are 2026 applies only to those eight files. It does not apply to Santa Monica, San Francisco, or Shelborne. A 2026 Hotel June or Downtown LA file is an older starting point for a 2027 request, not the current file.
+
+Opening a link still depends on that person's Canva, Slack, or SharePoint access. The bot does not sync folders and does not refresh itself.
+
+To refresh the catalog, replace the records in `src/intake/collateral/catalog.ts` from a new verified handoff. Keep each file's own year, the place that year came from (title, filename, or text), and whether it is verified, metadata-only, or a 403 pointer. Do not copy a year from another property, and do not use a file's modified date as its content year. Leave a file's year unknown when the handoff does not prove one. Do not mark a 403 folder or an unread PDF as a verified document.
+
+No new environment variable and no new Slack scope are required. The catalog ships with the app. After this branch is merged, deploy the existing Render service the same way as the other intake updates. The bot does not sync SharePoint, Canva, or Slack folders on its own.
+
 ## How a request is filed
 
 The bot follows the same path as the Marketing Intake Form.

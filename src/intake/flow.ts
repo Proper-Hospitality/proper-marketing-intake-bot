@@ -7,6 +7,9 @@ import {
 } from "./catalog.js";
 import { dropSkipsThatWereAnswered } from "./conversation.js";
 import { isPricePendingStatement, listMissing, mentionsActualPrice, type MissingReport } from "./missing.js";
+import { formatCollateralOffer } from "./collateral/format.js";
+import { matchCollateral, yearInText } from "./collateral/match.js";
+import type { CollateralOffer } from "./collateral/types.js";
 import { matchTemplates, type TemplateMatchResult } from "./templates.js";
 import type { BriefDraft, RequestType } from "./types.js";
 
@@ -36,6 +39,9 @@ export interface RecordInput {
 export type FlowOutcome =
   | { kind: "need_property" }
   | { kind: "offer_template"; match: TemplateMatchResult }
+  | { kind: "ask_collateral_year" }
+  | { kind: "offer_collateral"; offer: CollateralOffer }
+  | { kind: "accepted_collateral"; offer: CollateralOffer }
   | { kind: "ask"; missing: MissingReport }
   | { kind: "confirm"; missing: MissingReport }
   | { kind: "accepted_template"; match: TemplateMatchResult }
@@ -47,6 +53,9 @@ export interface FlowState {
   templateOffer: TemplateMatchResult | null;
   templateDeclinedReason?: string;
   templateDeclinedFor?: string;
+  collateralOffer?: CollateralOffer | null;
+  collateralDeclinedFor?: string;
+  collateralOfferedFor?: string;
   confirmVersion: number;
 }
 
@@ -77,6 +86,20 @@ export function acceptTemplate(state: FlowState): FlowOutcome {
   return { kind: "accepted_template", match: state.templateOffer };
 }
 
+export function acceptCollateral(state: FlowState): FlowOutcome {
+  if (!state.collateralOffer) return { kind: "invalid", errors: ["No existing collateral has been offered yet."] };
+  state.phase = "collateral_accepted";
+  return { kind: "accepted_collateral", offer: state.collateralOffer };
+}
+
+export function declineCollateral(state: FlowState, reason: string, today = new Date()): FlowOutcome {
+  const year = yearInText(reason);
+  if (year && !state.draft.collateralYear) state.draft.collateralYear = year;
+  state.collateralDeclinedFor = collateralKey(state.draft);
+  state.phase = "collecting";
+  return advance(state, today);
+}
+
 function advance(state: FlowState, today: Date): FlowOutcome {
   const draft = state.draft;
   if (draft.requestType && draft.taskType) {
@@ -105,6 +128,9 @@ function advance(state: FlowState, today: Date): FlowOutcome {
       state.templateOffer = null;
     }
   }
+
+  const collateral = considerCollateral(state);
+  if (collateral) return collateral;
 
   const missing = listMissing(draft, today);
   if (missing.items.length > 0) {
@@ -222,4 +248,40 @@ function matchText(draft: BriefDraft): string {
 
 function declineKey(draft: BriefDraft): string {
   return `${draft.requestType}|${draft.taskType}`;
+}
+
+function collateralKey(draft: BriefDraft): string {
+  return `${(draft.properties ?? []).join(",")}|${draft.taskType ?? ""}`;
+}
+
+const COLLATERAL_TASKS = new Set(["Sales Collateral", "Menu (F&B, Spa)", "Presentation / Deck"]);
+
+function considerCollateral(state: FlowState): FlowOutcome | undefined {
+  const draft = state.draft;
+  if (!draft.taskType || !COLLATERAL_TASKS.has(draft.taskType)) return undefined;
+  if (!draft.properties || draft.properties.length === 0) return undefined;
+  if (state.phase === "template_offered" || state.phase === "awaiting_design_materials" || state.phase === "design_ready") {
+    return undefined;
+  }
+  const text = matchText(draft);
+  const requestedYear = draft.collateralYear ?? yearInText(text);
+  const result = matchCollateral({
+    properties: draft.properties,
+    taskType: draft.taskType,
+    text,
+    requestedYear,
+    yearUnspecified: draft.collateralYearUnspecified,
+  });
+  if (result.needsYear && !draft.collateralYear && !draft.collateralYearUnspecified) {
+    state.phase = "collecting";
+    return { kind: "ask_collateral_year" };
+  }
+  const key = collateralKey(draft);
+  if (!result.offer) return undefined;
+  if (state.collateralDeclinedFor === key) return undefined;
+  if (state.collateralOfferedFor === key && state.phase !== "collateral_offered") return undefined;
+  state.collateralOffer = result.offer;
+  state.collateralOfferedFor = key;
+  state.phase = "collateral_offered";
+  return { kind: "offer_collateral", offer: result.offer };
 }

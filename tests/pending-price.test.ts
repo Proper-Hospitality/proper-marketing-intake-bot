@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { runIntakeTurn, type Llm } from "../src/agent/run.js";
 import { buildDescription, formatSummary } from "../src/intake/brief.js";
-import { applyAnswers } from "../src/intake/flow.js";
+import { applyAnswers, declineCollateral } from "../src/intake/flow.js";
 import { isReadyToConfirm, listMissing, PRICE_PENDING_LINE } from "../src/intake/missing.js";
 import { emptyConversation } from "../src/store/types.js";
 import type { BriefDraft } from "../src/intake/types.js";
@@ -29,8 +29,13 @@ describe("pending prices", () => {
         [MENU]: "Test burger. Don't have the price yet, will send it later.",
       },
     }, today);
-    expect(outcome.kind).toBe("confirm");
+    expect(outcome.kind).toBe("ask_collateral_year");
     expect(state.draft.pricePending).toBe(true);
+    state.draft.collateralYear = 2027;
+    const offered = applyAnswers(state, {}, today);
+    expect(offered.kind).toBe("offer_collateral");
+    const confirmed = declineCollateral(state, "Need a new menu", today);
+    expect(confirmed.kind).toBe("confirm");
     expect(listMissing(state.draft, today).items).toEqual([]);
     expect(isReadyToConfirm(state.draft, today)).toBe(true);
     const labels = listMissing(state.draft, today).items.map((item) => item.label);
