@@ -11,9 +11,9 @@ const TODAY = new Date("2026-11-05T12:00:00Z");
 
 describe("existing collateral catalog", () => {
   it("keeps each SMP and SFP file's own year and does not borrow the HJLA/DTLA confirmation", () => {
-    expect(COLLATERAL_CATALOG).toHaveLength(39);
-    expect(COLLATERAL_CATALOG.filter((asset) => asset.active)).toHaveLength(30);
-    expect(COLLATERAL_CATALOG.filter((asset) => asset.contentRead)).toHaveLength(13);
+    expect(COLLATERAL_CATALOG).toHaveLength(44);
+    expect(COLLATERAL_CATALOG.filter((asset) => asset.active)).toHaveLength(35);
+    expect(COLLATERAL_CATALOG.filter((asset) => asset.contentRead)).toHaveLength(17);
     expect(COLLATERAL_CATALOG.filter((asset) => asset.tier === "candidate")).toHaveLength(5);
     expect(COLLATERAL_CATALOG.filter((asset) => asset.tier === "pointer")).toHaveLength(2);
     const confirmed = COLLATERAL_CATALOG.filter((asset) => asset.yearProvenance === "user_confirmation");
@@ -361,6 +361,92 @@ describe("existing collateral catalog", () => {
     expect(smpFact.offer?.unknownYear.some((asset) => asset.title === "Santa Monica Proper Fact Sheet")).toBe(true);
     expect(smpFact.offer?.unknownYear.every((asset) => asset.years.kind === "unknown")).toBe(true);
     expect(smpFact.offer?.current.map((asset) => asset.id)).toEqual(["dtla:Proper Fact Sheet.pdf"]);
+  });
+
+  it("adds Ryan Galvin's five Austin files with unknown years and two different floor plans", () => {
+    expect(canonicalizeProperty("ATXP")).toBe("AUP");
+    expect(canonicalizeProperty("atxp")).toBe("AUP");
+    expect(canonicalizeProperty("Austin")).toBe("AUP");
+    const thread = "https://properhospitalitycorp.slack.com/archives/C0B62QUHBK4/p1793928288710819";
+    const files: Record<string, { fileId: string; contentRead: boolean; retrieval: string }> = {
+      "atxp:upload:ATXP_Fact_Sheet": { fileId: "F0CFH30LNBE", contentRead: true, retrieval: "read" },
+      "atxp:upload:Kappo_Kappo_Events": { fileId: "F0CFBCT6PUN", contentRead: true, retrieval: "read" },
+      "atxp:upload:Updated_Floor_Plan": { fileId: "F0CEY0S35NK", contentRead: false, retrieval: "image_described" },
+      "atxp:upload:Austin_Proper_Capacity_Chart": { fileId: "F0CFF8RLS01", contentRead: true, retrieval: "read" },
+      "atxp:upload:Austin_Proper_Floor_Plan": { fileId: "F0CFBCUKK0E", contentRead: true, retrieval: "read" },
+    };
+    for (const [id, expected] of Object.entries(files)) {
+      const asset = COLLATERAL_CATALOG.find((row) => row.id === id);
+      expect(asset?.sourceUrl).toBe(thread);
+      expect(asset?.sourceUrl).not.toContain("files.slack.com");
+      expect(asset?.provenanceNote).toContain(expected.fileId);
+      expect(asset).toMatchObject({
+        appliesTo: ["AUP"],
+        years: { kind: "unknown" },
+        yearProvenance: "unknown",
+        contentRead: expected.contentRead,
+        retrieval: expected.retrieval,
+        active: true,
+      });
+    }
+    const fact = COLLATERAL_CATALOG.find((row) => row.id === "atxp:upload:ATXP_Fact_Sheet");
+    expect(fact?.summary).toMatch(/2022/);
+    expect(fact?.summary).toMatch(/award year/i);
+    expect(fact?.years).toEqual({ kind: "unknown" });
+
+    const factMatch = matchCollateral({
+      properties: ["ATXP"],
+      taskType: "Sales Collateral",
+      text: "fact sheet",
+      requestedYear: 2026,
+    });
+    expect(factMatch.offer?.current.map((asset) => asset.id)).toEqual(["dtla:Proper Fact Sheet.pdf"]);
+    expect(factMatch.offer?.unknownYear.map((asset) => asset.id)).toContain("atxp:upload:ATXP_Fact_Sheet");
+    expect(factMatch.offer?.unknownYear.every((asset) => asset.years.kind === "unknown")).toBe(true);
+
+    const kappo = matchCollateral({
+      properties: ["Austin"],
+      taskType: "Sales Collateral",
+      text: "Kappo Kappo events",
+    });
+    expect(kappo.offer?.unknownYear.map((asset) => asset.id)).toEqual(["atxp:upload:Kappo_Kappo_Events"]);
+
+    const capacity = matchCollateral({
+      properties: ["Austin Proper"],
+      taskType: "Sales Collateral",
+      text: "capacity chart",
+      requestedYear: 2027,
+    });
+    expect(capacity.offer?.current).toEqual([]);
+    expect(capacity.offer?.older).toEqual([]);
+    expect(capacity.offer?.unknownYear.map((asset) => asset.id)).toEqual(["atxp:upload:Austin_Proper_Capacity_Chart"]);
+
+    const bothPlans = matchCollateral({
+      properties: ["ATXP"],
+      taskType: "Sales Collateral",
+      text: "floor plan",
+    });
+    expect(bothPlans.offer?.unknownYear.map((asset) => asset.id).sort()).toEqual([
+      "atxp:upload:Austin_Proper_Floor_Plan",
+      "atxp:upload:Updated_Floor_Plan",
+    ]);
+    const updated = matchCollateral({
+      properties: ["AUP"],
+      taskType: "Sales Collateral",
+      text: "updated floor plan",
+    });
+    expect(updated.offer?.unknownYear.map((asset) => asset.id)).toEqual(["atxp:upload:Updated_Floor_Plan"]);
+    expect(formatCollateralOffer(updated.offer!)).toContain("no text layer");
+    expect(formatCollateralOffer(updated.offer!)).not.toContain("Covers 2026");
+    const salesPlan = matchCollateral({
+      properties: ["ATXP"],
+      taskType: "Sales Collateral",
+      text: "second floor meeting floor plan",
+    });
+    expect(salesPlan.offer?.unknownYear.map((asset) => asset.id)).toEqual(["atxp:upload:Austin_Proper_Floor_Plan"]);
+
+    expect(COLLATERAL_CATALOG.filter((asset) => asset.id.startsWith("hjla:") || asset.id.startsWith("dtla:")).length).toBe(8);
+    expect(COLLATERAL_CATALOG.filter((asset) => asset.appliesTo.includes("SMP") && asset.yearProvenance === "user_confirmation").map((asset) => asset.id)).toEqual(["dtla:Proper Fact Sheet.pdf"]);
   });
 });
 

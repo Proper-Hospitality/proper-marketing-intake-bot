@@ -2,9 +2,11 @@ import type { CollateralAsset, CollateralOffer } from "./types.js";
 import { isOlderThan, yearLabel } from "./match.js";
 
 function verifiedNote(asset: CollateralAsset, note: string): string {
-  const unread = asset.contentRead
-    ? ""
-    : " Matched from the title and type. The design body was not copied into this catalog.";
+  const unread = asset.retrieval === "image_described"
+    ? " Image-only. Page descriptions are on record. There is no text layer to search."
+    : asset.contentRead
+      ? ""
+      : " Matched from the title and type. The design body was not copied into this catalog.";
   return `• ${asset.title} (${yearLabel(asset.years)}). ${note}${asset.summary}${unread}\n  ${asset.sourceUrl}`;
 }
 

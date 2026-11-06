@@ -33,7 +33,15 @@ function wantedKinds(taskType: string | undefined, text: string): Set<Collateral
   const t = text.toLowerCase();
   if (/fact\s*sheet/.test(t)) kinds.add("fact-sheet");
   if (/wedding/.test(t)) kinds.add("wedding");
-  if (/floor plan|charmaine/.test(t)) kinds.add("floor-plan");
+  if (/updated floor plan|annotated floor|guest room floor|architectural floor/.test(t)) {
+    kinds.add("architectural-floor-plan");
+  } else if (/(second floor|meeting|sales).{0,40}floor plan|floor plan.{0,40}(second floor|meeting|sales)/.test(t)) {
+    kinds.add("floor-plan");
+  } else if (/floor plan|floorplan|charmaine/.test(t)) {
+    kinds.add("floor-plan");
+    if (!/charmaine/.test(t)) kinds.add("architectural-floor-plan");
+  }
+  if (/kappo/.test(t)) kinds.add("one-pager");
   if (/brochure|meetings?\s*&?\s*events|\bm&e\b/.test(t)) kinds.add("brochure");
   if (/tour script|\btour\b/.test(t)) kinds.add("tour-script");
   if (/capacity/.test(t)) kinds.add("capacity-chart");

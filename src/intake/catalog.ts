@@ -187,6 +187,7 @@ const PROPERTY_NICKNAMES: Record<string, string> = {
   "all proper": "All Proper",
   austin: "AUP",
   "austin proper": "AUP",
+  atxp: "AUP",
   aup: "AUP",
   dtla: "DTLA",
   dtlap: "DTLA",

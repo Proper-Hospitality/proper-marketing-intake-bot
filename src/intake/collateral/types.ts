@@ -20,7 +20,8 @@ export type CollateralKind =
   | "folder-pointer"
   | "imagery"
   | "tour-script"
-  | "capacity-chart";
+  | "capacity-chart"
+  | "architectural-floor-plan";
 
 /**
  * verified: a file whose link was checked, or whose text or image was read.
@@ -43,13 +44,14 @@ export interface CollateralAsset {
   sourceKind: "canva" | "slack" | "sharepoint";
   /**
    * How the file was checked.
-   * read: text or an image description is on record.
+   * read: text was extracted.
+   * image_described: pages were viewed. There is no text layer to search.
    * link_verified: a live view link was checked. The body was not copied here.
    * metadata_only: title, link, and year only. The file was not downloaded or read.
    * source_unavailable: the source returned 403. Nothing inside was listed.
    * imagery_pointer: a pictures folder, not a sales document.
    */
-  retrieval?: "read" | "link_verified" | "metadata_only" | "source_unavailable" | "imagery_pointer";
+  retrieval?: "read" | "link_verified" | "metadata_only" | "source_unavailable" | "imagery_pointer" | "image_described";
   /** Omitted rows are verified. Candidates and pointers are source leads, not opened documents. */
   tier?: CollateralTier;
   /** False when the file body was not read. Filename and link only. */
