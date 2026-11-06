@@ -11,14 +11,24 @@ const TODAY = new Date("2026-11-05T12:00:00Z");
 
 describe("existing collateral catalog", () => {
   it("keeps each SMP and SFP file's own year and does not borrow the HJLA/DTLA confirmation", () => {
-    expect(COLLATERAL_CATALOG).toHaveLength(31);
-    expect(COLLATERAL_CATALOG.filter((asset) => asset.active)).toHaveLength(22);
-    expect(COLLATERAL_CATALOG.filter((asset) => asset.contentRead)).toHaveLength(5);
+    expect(COLLATERAL_CATALOG).toHaveLength(39);
+    expect(COLLATERAL_CATALOG.filter((asset) => asset.active)).toHaveLength(30);
+    expect(COLLATERAL_CATALOG.filter((asset) => asset.contentRead)).toHaveLength(13);
     expect(COLLATERAL_CATALOG.filter((asset) => asset.tier === "candidate")).toHaveLength(5);
     expect(COLLATERAL_CATALOG.filter((asset) => asset.tier === "pointer")).toHaveLength(2);
-    expect(COLLATERAL_CATALOG.some((asset) => asset.yearProvenance === "user_confirmation")).toBe(false);
+    const confirmed = COLLATERAL_CATALOG.filter((asset) => asset.yearProvenance === "user_confirmation");
+    expect(confirmed.map((asset) => asset.id).sort()).toEqual([
+      "dtla:DTLAP Capacity Chart.pdf",
+      "dtla:DTLAP Fact Sheet Sports Teams.pdf",
+      "dtla:DTLAP Fact Sheet.pdf",
+      "dtla:DTLAP Meeting & Event Brochure.pdf",
+      "dtla:DTLAPBanquet Menu2026.pdf",
+      "dtla:Proper Fact Sheet.pdf",
+      "hjla:Hotel June Brochure.pdf",
+      "hjla:Hotel June Tour Script.docx",
+    ]);
     expect(COLLATERAL_CATALOG.some((asset) =>
-      asset.appliesTo.some((code) => ["AUP", "HJWL", "DTLA", "ABH", "APS"].includes(code)),
+      asset.yearProvenance === "user_confirmation" && asset.appliesTo.some((code) => ["SMP", "SFP", "SMB"].includes(code) && asset.id !== "dtla:Proper Fact Sheet.pdf"),
     )).toBe(false);
 
     const holiday2025 = COLLATERAL_CATALOG.find((asset) => asset.title === "SMP Holiday Menu 2025");
@@ -79,8 +89,9 @@ describe("existing collateral catalog", () => {
       text: "fact sheet",
       requestedYear: 2026,
     });
-    expect(fact.offer?.current).toEqual([]);
+    expect(fact.offer?.current.map((asset) => asset.id)).toEqual(["dtla:Proper Fact Sheet.pdf"]);
     expect(fact.offer?.unknownYear.some((asset) => asset.title === "Santa Monica Proper Fact Sheet")).toBe(true);
+    expect(fact.offer?.unknownYear.every((asset) => asset.years.kind === "unknown")).toBe(true);
     expect(fact.offer?.unknownYear.some((asset) => asset.id === "smp:canva:DAHHIWQS2Fo")).toBe(false);
 
     const sfpPdf = matchCollateral({
@@ -237,21 +248,119 @@ describe("existing collateral catalog", () => {
     });
     expect(genericFact.offer?.candidates.some((asset) => asset.id === "smp:canva:DAHQtuWCJSw")).toBe(false);
 
-    expect(matchCollateral({
-      properties: ["ABH"],
+    const portfolioOnly = (property: string) => matchCollateral({
+      properties: [property],
       taskType: "Sales Collateral",
       text: "fact sheet",
-    }).offer).toBeUndefined();
-    expect(matchCollateral({
-      properties: ["Austin Proper"],
+      requestedYear: 2026,
+    });
+    for (const property of ["ABH", "Austin Proper", "APS"]) {
+      const offer = portfolioOnly(property).offer;
+      expect(offer?.current.map((asset) => asset.id)).toEqual(["dtla:Proper Fact Sheet.pdf"]);
+      expect(offer?.current[0]?.summary).toMatch(/Santa Monica/);
+      expect(offer?.current[0]?.appliesTo).not.toEqual(["DTLA"]);
+    }
+  });
+
+  it("includes the eight HJLA and DTLA files and keeps 2026 older for a 2027 request", () => {
+    expect(canonicalizeProperty("HJWLA")).toBe("HJWL");
+    expect(canonicalizeProperty("DTLAP")).toBe("DTLA");
+    const expected: Record<string, string> = {
+      "hjla:Hotel June Brochure.pdf": "https://properhotels.sharepoint.com/sites/Openings/Shared%20Documents/Hotel%20June%20Los%20Angeles/HJLA%20Sales/Collateral/Hotel%20June%20Brochure.pdf",
+      "hjla:Hotel June Tour Script.docx": "https://properhotels.sharepoint.com/sites/Openings/_layouts/15/Doc.aspx?sourcedoc=%7BBE677F1A-3135-433E-8CF6-9428B3B353BD%7D&file=Hotel%20June%20Tour%20Script.docx&action=default&mobileredirect=true",
+      "dtla:Proper Fact Sheet.pdf": "https://properhotels.sharepoint.com/sites/DowntownLAProper/Shared%20Documents/Sales%20and%20Marketing/DTLAP%20Collateral/Proper%20Fact%20Sheet.pdf",
+      "dtla:DTLAP Fact Sheet.pdf": "https://properhotels.sharepoint.com/sites/DowntownLAProper/Shared%20Documents/Sales%20and%20Marketing/DTLAP%20Collateral/DTLAP%20Fact%20Sheet.pdf",
+      "dtla:DTLAP Fact Sheet Sports Teams.pdf": "https://properhotels.sharepoint.com/sites/DowntownLAProper/Shared%20Documents/Sales%20and%20Marketing/DTLAP%20Collateral/DTLAP%20Fact%20Sheet%20Sports%20Teams.pdf",
+      "dtla:DTLAP Capacity Chart.pdf": "https://properhotels.sharepoint.com/sites/DowntownLAProper/Shared%20Documents/Sales%20and%20Marketing/DTLAP%20Collateral/DTLAP%20Capacity%20Chart.pdf",
+      "dtla:DTLAP Meeting & Event Brochure.pdf": "https://properhotels.sharepoint.com/sites/DowntownLAProper/Shared%20Documents/Sales%20and%20Marketing/DTLAP%20Collateral/DTLAP%20Meeting%20%26%20Event%20Brochure.pdf",
+      "dtla:DTLAPBanquet Menu2026.pdf": "https://properhotels.sharepoint.com/sites/DowntownLAProper/Shared%20Documents/Sales%20and%20Marketing/DTLAP%20Collateral/DTLAPBanquet%20Menu2026.pdf",
+    };
+    for (const [id, link] of Object.entries(expected)) {
+      const asset = COLLATERAL_CATALOG.find((row) => row.id === id);
+      expect(asset?.sourceUrl).toBe(link);
+      expect(asset).toMatchObject({
+        retrieval: "read",
+        contentRead: true,
+        active: true,
+        yearProvenance: "user_confirmation",
+        years: { kind: "year", year: 2026 },
+      });
+    }
+
+    const brochure = matchCollateral({
+      properties: ["HJLA"],
+      taskType: "Sales Collateral",
+      text: "brochure",
+      requestedYear: 2026,
+    });
+    expect(brochure.offer?.current.map((asset) => asset.id)).toEqual(["hjla:Hotel June Brochure.pdf"]);
+
+    const tour = matchCollateral({
+      properties: ["Hotel June West LA"],
+      taskType: "Sales Collateral",
+      text: "tour script",
+      requestedYear: 2026,
+    });
+    expect(tour.offer?.current.map((asset) => asset.id)).toEqual(["hjla:Hotel June Tour Script.docx"]);
+
+    const menu2026 = matchCollateral({
+      properties: ["DTLAP"],
+      taskType: "Menu (F&B, Spa)",
+      text: "banquet menu",
+      requestedYear: 2026,
+    });
+    expect(menu2026.offer?.current.map((asset) => asset.id)).toEqual(["dtla:DTLAPBanquet Menu2026.pdf"]);
+
+    const menu2027 = matchCollateral({
+      properties: ["DTLA"],
+      taskType: "Menu (F&B, Spa)",
+      text: "banquet menu",
+      requestedYear: 2027,
+    });
+    expect(menu2027.offer?.current).toEqual([]);
+    expect(menu2027.offer?.older.map((asset) => asset.id)).toEqual(["dtla:DTLAPBanquet Menu2026.pdf"]);
+
+    const capacity = matchCollateral({
+      properties: ["DTLA"],
+      taskType: "Sales Collateral",
+      text: "capacity chart",
+      requestedYear: 2026,
+    });
+    expect(capacity.offer?.current.map((asset) => asset.id)).toEqual(["dtla:DTLAP Capacity Chart.pdf"]);
+
+    const dtlaBrochure = matchCollateral({
+      properties: ["DTLA"],
+      taskType: "Sales Collateral",
+      text: "meeting brochure",
+      requestedYear: 2026,
+    });
+    expect(dtlaBrochure.offer?.current.map((asset) => asset.id)).toEqual(["dtla:DTLAP Meeting & Event Brochure.pdf"]);
+
+    const sheets = matchCollateral({
+      properties: ["DTLA"],
       taskType: "Sales Collateral",
       text: "fact sheet",
-    }).offer).toBeUndefined();
-    expect(matchCollateral({
-      properties: ["APS"],
+      requestedYear: 2026,
+    });
+    expect(sheets.offer?.current.map((asset) => asset.id).sort()).toEqual([
+      "dtla:DTLAP Fact Sheet Sports Teams.pdf",
+      "dtla:DTLAP Fact Sheet.pdf",
+      "dtla:Proper Fact Sheet.pdf",
+    ]);
+    const portfolio = sheets.offer?.current.find((asset) => asset.id === "dtla:Proper Fact Sheet.pdf");
+    expect(portfolio?.appliesTo).toEqual(["SMP", "SFP", "DTLA", "AUP", "HJM", "HJWL", "ABH", "APS", "TCH"]);
+    expect(portfolio?.summary).toMatch(/Santa Monica/);
+    expect(portfolio?.summary).toMatch(/San Francisco/);
+
+    const smpFact = matchCollateral({
+      properties: ["SMP"],
       taskType: "Sales Collateral",
       text: "fact sheet",
-    }).offer).toBeUndefined();
+      requestedYear: 2026,
+    });
+    expect(smpFact.offer?.unknownYear.some((asset) => asset.title === "Santa Monica Proper Fact Sheet")).toBe(true);
+    expect(smpFact.offer?.unknownYear.every((asset) => asset.years.kind === "unknown")).toBe(true);
+    expect(smpFact.offer?.current.map((asset) => asset.id)).toEqual(["dtla:Proper Fact Sheet.pdf"]);
   });
 });
 
@@ -399,7 +508,7 @@ describe("existing collateral in the intake", () => {
       }]),
       today: TODAY,
     });
-    const offer = first.text.toLowerCase().includes("template")
+    let offer = first.text.toLowerCase().includes("template")
       ? await runIntakeTurn({
         state,
         userText: "The team should design it",
@@ -408,10 +517,20 @@ describe("existing collateral in the intake", () => {
         today: TODAY,
       })
       : first;
+    if (offer.text.includes("Which year")) {
+      offer = await runIntakeTurn({
+        state,
+        userText: "2026",
+        slackUser: { id: "U1" },
+        llm: scripted([{ type: "text", text: "unused" }]),
+        today: TODAY,
+      });
+    }
     expect(offer.text).toContain("Santa Monica Proper Fact Sheet");
     expect(offer.text).toContain("Year not printed on the file");
-    expect(offer.text).not.toContain("Covers 2026");
     expect(offer.text).toContain("https://www.canva.com/d/SUMubvcHQ5mF1Dz");
+    expect(offer.text).toContain("Proper Fact Sheet.pdf");
+    expect(offer.text).toContain("Covers 2026");
 
     const sfp = emptyConversation("C1:sfp");
     const sfpTurn = await runIntakeTurn({

@@ -35,6 +35,8 @@ function wantedKinds(taskType: string | undefined, text: string): Set<Collateral
   if (/wedding/.test(t)) kinds.add("wedding");
   if (/floor plan|charmaine/.test(t)) kinds.add("floor-plan");
   if (/brochure|meetings?\s*&?\s*events|\bm&e\b/.test(t)) kinds.add("brochure");
+  if (/tour script|\btour\b/.test(t)) kinds.add("tour-script");
+  if (/capacity/.test(t)) kinds.add("capacity-chart");
   if (/media book/.test(t)) kinds.add("media-book");
   if (/holiday menu/.test(t)) kinds.add("holiday-menu");
   else if (/menu|banquet|catering|cocktail|breakfast|brunch|dinner|reception/.test(t)) kinds.add("menu");
@@ -51,6 +53,8 @@ function wantedKinds(taskType: string | undefined, text: string): Set<Collateral
     kinds.add("media-book");
     kinds.add("wedding");
     kinds.add("one-pager");
+    kinds.add("tour-script");
+    kinds.add("capacity-chart");
   } else if (taskType === "Presentation / Deck") {
     kinds.add("media-book");
   }

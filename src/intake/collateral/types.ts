@@ -18,7 +18,9 @@ export type CollateralKind =
   | "one-pager"
   | "partnership-deck"
   | "folder-pointer"
-  | "imagery";
+  | "imagery"
+  | "tour-script"
+  | "capacity-chart";
 
 /**
  * verified: a file whose link was checked, or whose text or image was read.

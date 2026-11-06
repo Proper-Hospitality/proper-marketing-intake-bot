@@ -170,11 +170,12 @@ Counts, by what was actually usable:
 - Not offered: the OBB Media proposal (candidate-only) and the SMP DO NOT USE folder.
 - Source candidates, not opened documents: 5. Three San Francisco PDFs (banquet menu, meetings brochure, and `SFP-Fact-Sheet-2025_ADA.pdf`, whose filename year is 2025) have working Slack links and no PDF bytes. The Shelborne Recovery Room one-pager is filename year 2026 and the PDF bytes are missing. Lindsay's Ocean Way deck `DAHQtuWCJSw` resolved, then Canva denied access. Its year is unknown and it is not treated as a current canonical file. It is offered only when the request mentions Ocean Way, cabanas, or a partnership deck.
 - Folder pointers, not an indexed library: 2. Shelborne `1-RESOURCES` returned 403, so no files were listed. `1-PICTURES` resolves and is imagery only. It is not a menu, fact sheet, or deck.
-- No rows: Hotel June / HJLA / HJWLA, Downtown LA, Austin, ABH, and APS. The eight-file HJLA/DTLA extract was not in this workspace, so those links were not invented. ABH was asked on Nov 4 and Nov 5 and got no replies. No placeholder rows were added for a channel with no files. The summer Downtown LA share is the same Downtown LA folder, not a second catalog.
+- Verified Hotel June and Downtown LA files, text read, year 2026 by Elena's confirmation of the current folders (8): Hotel June brochure, Hotel June tour script, DTLAP fact sheet, DTLAP sports-team fact sheet, DTLAP capacity chart, DTLAP meetings brochure, DTLAP banquet menu, and Proper Fact Sheet.pdf. That confirmation is not copied onto Santa Monica, San Francisco, or Shelborne files. Proper Fact Sheet.pdf was stored in the Downtown LA folder. Its text names Santa Monica, San Francisco, Downtown LA, Austin, Hotel June Malibu, Hotel June West LA, Avalon Beverly Hills, Avalon Palm Springs, and The Culver Hotel, so it is not DTLA-only.
+- No separate folder rows: Austin, ABH, and APS. ABH was asked on Nov 4 and Nov 5 and got no replies. No placeholder rows were added for a channel with no files. The summer Downtown LA share is the same Downtown LA folder, not a second catalog.
 
 Shelborne sales collateral is included. A separate request removed Shelborne from Claude Design templates in another repository. That does not remove SMB from this catalog. The Canva template list in this bot is unchanged.
 
-Elena's confirmation that the current Hotel June and Downtown LA files are 2026 does not apply to Santa Monica, San Francisco, or Shelborne.
+Elena's confirmation that the current Hotel June and Downtown LA files are 2026 applies only to those eight files. It does not apply to Santa Monica, San Francisco, or Shelborne. A 2026 Hotel June or Downtown LA file is an older starting point for a 2027 request, not the current file.
 
 Opening a link still depends on that person's Canva, Slack, or SharePoint access. The bot does not sync folders and does not refresh itself.
 
