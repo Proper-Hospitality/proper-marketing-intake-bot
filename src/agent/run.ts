@@ -9,7 +9,17 @@ import {
 import { extractDesignCopy } from "../canva/extract-copy.js";
 import { continueDesign, declineDesign, offerDesignBuild, type CanvaDesignClient } from "../canva/turn.js";
 import { isBackAnswer, isSkipAnswer, rewindLastAnswer, skipAsked } from "../intake/conversation.js";
-import { acceptTemplate, applyAnswers, declineTemplate, type FlowOutcome, type RecordInput } from "../intake/flow.js";
+import { COLLATERAL_YEAR_QUESTION, formatCollateralOffer } from "../intake/collateral/format.js";
+import { yearInText } from "../intake/collateral/match.js";
+import {
+  acceptCollateral,
+  acceptTemplate,
+  applyAnswers,
+  declineCollateral,
+  declineTemplate,
+  type FlowOutcome,
+  type RecordInput,
+} from "../intake/flow.js";
 import { listMissing, mentionsActualPrice } from "../intake/missing.js";
 import type { ConversationState, DesignPhoto } from "../store/types.js";
 import {
@@ -80,8 +90,22 @@ export async function runIntakeTurn(input: {
       return remember(state, input.userText, reply);
     }
     if (isSkipAnswer(input.userText) && skipAsked(state)) {
+      if (state.lastAskedId === "collateralYear") state.draft.collateralYearUnspecified = true;
       const outcome = applyAnswers(state, {}, today);
       return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
+    }
+  }
+  if (state.phase === "collateral_offered") {
+    const outcome = looksLikeUseExisting(input.userText)
+      ? acceptCollateral(state)
+      : declineCollateral(state, input.userText, today);
+    return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
+  }
+  if (state.lastAskedId === "collateralYear" && state.phase === "collecting") {
+    const year = yearInText(input.userText);
+    if (year) {
+      state.draft.collateralYear = year;
+      preset = applyAnswers(state, {}, today);
     }
   }
   if (input.design && (state.phase === "awaiting_design_materials" || state.phase === "design_ready")) {
@@ -204,7 +228,12 @@ async function executeTool(
     return { payload: outcome, outcome };
   }
   if (name === "record_answers") {
-    if (state.phase === "template_offered" || state.phase === "awaiting_design_materials" || state.phase === "design_ready") {
+    if (
+      state.phase === "template_offered" ||
+      state.phase === "collateral_offered" ||
+      state.phase === "awaiting_design_materials" ||
+      state.phase === "design_ready"
+    ) {
       return {
         payload: {
           ok: false,
@@ -323,6 +352,21 @@ function renderReply(
   if (outcome?.kind === "accepted_template") {
     return { text: formatTemplateAccepted(outcome.match) };
   }
+  if (outcome?.kind === "accepted_collateral") {
+    return {
+      text: `Use this existing collateral. Nothing was filed.\n\n${formatCollateralOffer(outcome.offer)}`,
+    };
+  }
+  if (outcome?.kind === "offer_collateral") {
+    return { text: formatCollateralOffer(outcome.offer) };
+  }
+  if (outcome?.kind === "ask_collateral_year") {
+    state.answerTrail = [...(state.answerTrail ?? []), state.lastAskedId].filter((id): id is string => Boolean(id)).slice(-30);
+    state.lastAskedId = "collateralYear";
+    state.lastAskedLabel = "Collateral year";
+    const ack = state.answerTrail && state.answerTrail.length > 0 ? "Got it.\n\n" : "";
+    return { text: `${ack}${COLLATERAL_YEAR_QUESTION}` };
+  }
   if (outcome?.kind === "offer_template" || (state.phase === "template_offered" && state.templateOffer && outcome)) {
     const match = outcome?.kind === "offer_template" ? outcome.match : state.templateOffer;
     if (match) return { text: formatTemplateOffer(match) };
@@ -409,6 +453,13 @@ function remember(state: ConversationState, userText: string, reply: AgentReply,
   if (state.messages.length > 40) state.messages.splice(0, state.messages.length - 40);
   state.updatedAt = new Date().toISOString();
   return reply;
+}
+
+function looksLikeUseExisting(text: string): boolean {
+  const trimmed = text.trim();
+  return /^(yes|yep|yeah|sure|ok|okay)[.!]?\s*$/i.test(trimmed)
+    || /\bi'?ll use (this|it|the link|the existing)\b/i.test(trimmed)
+    || /\buse (this|the link|the existing file)\b/i.test(trimmed);
 }
 
 function looksLikeAccept(text: string): boolean {

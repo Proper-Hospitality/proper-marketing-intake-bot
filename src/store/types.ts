@@ -1,9 +1,12 @@
+import type { CollateralOffer } from "../intake/collateral/types.js";
 import type { BriefDraft } from "../intake/types.js";
 import type { TemplateMatchResult } from "../intake/templates.js";
 
 export type Phase =
   | "collecting"
   | "template_offered"
+  | "collateral_offered"
+  | "collateral_accepted"
   | "awaiting_design_materials"
   | "design_ready"
   | "awaiting_confirm"
@@ -67,6 +70,9 @@ export interface ConversationState {
   templateOffer: TemplateMatchResult | null;
   templateDeclinedReason?: string;
   templateDeclinedFor?: string;
+  collateralOffer?: CollateralOffer | null;
+  collateralDeclinedFor?: string;
+  collateralOfferedFor?: string;
   confirmVersion: number;
   taskGid?: string;
   taskUrl?: string;

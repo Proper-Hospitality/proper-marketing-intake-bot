@@ -27,6 +27,10 @@ export interface BriefDraft {
   pricePending?: boolean;
   /** Questions the requester skipped with "skip" or "not sure". */
   skipped?: Array<{ id: string; label: string }>;
+  /** Year the requester asked for, when they named one. Not taken from a file's modified date. */
+  collateralYear?: number;
+  /** They skipped the year question, so matches stay labeled with each file's own year. */
+  collateralYearUnspecified?: boolean;
 }
 
 export interface FollowUp {
