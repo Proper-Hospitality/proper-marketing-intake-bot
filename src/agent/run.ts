@@ -384,25 +384,26 @@ function renderReply(
       state.lastAskedId = item.id;
       state.lastAskedLabel = item.label;
     }
-    return {
-      text: formatQuestions({
-        userId,
-        items: item ? [item] : [],
-        warnings: item && /timing|date|late/i.test(item.id + item.label) ? outcome.missing.warnings : [],
-        draft: state.draft,
-        acknowledge: Boolean(state.answerTrail?.length),
-      }),
-    };
+    const question = formatQuestions({
+      userId,
+      items: item ? [item] : [],
+      warnings: item && /timing|date|late/i.test(item.id + item.label) ? outcome.missing.warnings : [],
+      draft: state.draft,
+      acknowledge: Boolean(state.answerTrail?.length),
+    });
+    return { text: outcome.preface ? `${outcome.preface}\n\n${question}` : question };
   }
   if (outcome?.kind === "confirm" || state.phase === "awaiting_confirm") {
     const missing = outcome?.kind === "confirm" ? outcome.missing : listMissing(state.draft, today);
+    const summary = formatSummary({
+      draft: state.draft,
+      warnings: missing.warnings,
+      templateOffer: state.templateOffer,
+      duplicates: state.duplicates,
+    });
+    const preface = outcome?.kind === "confirm" ? outcome.preface : undefined;
     return {
-      text: formatSummary({
-        draft: state.draft,
-        warnings: missing.warnings,
-        templateOffer: state.templateOffer,
-        duplicates: state.duplicates,
-      }),
+      text: preface ? `${preface}\n\n${summary}` : summary,
       confirm: { version: state.confirmVersion },
     };
   }

@@ -1,5 +1,6 @@
 import type { CollateralAsset, CollateralOffer } from "./types.js";
 import { isOlderThan, yearLabel } from "./match.js";
+import { salesCollateralSourceLine } from "./sources.js";
 
 function verifiedNote(asset: CollateralAsset, note: string): string {
   const unread = asset.retrieval === "image_described"
@@ -7,7 +8,12 @@ function verifiedNote(asset: CollateralAsset, note: string): string {
     : asset.contentRead
       ? ""
       : " Matched from the title and type. The design body was not copied into this catalog.";
-  return `• ${asset.title} (${yearLabel(asset.years)}). ${note}${asset.summary}${unread}\n  ${asset.sourceUrl}`;
+  const provenance = asset.yearProvenance === "elena_current_export_nov_10_2026"
+    ? " Current per Elena (exported Nov 10, 2026, relayed via her assistant). No year is printed on the file."
+    : asset.yearProvenance === "reported_by_source"
+      ? " Jul 2026 as reported by the source, not printed on the menu."
+      : "";
+  return `• ${asset.title} (${yearLabel(asset.years)}). ${note}${asset.summary}${provenance}${unread}\n  ${asset.sourceUrl}`;
 }
 
 function candidateNote(asset: CollateralAsset, requestedYear?: number): string {
@@ -64,6 +70,7 @@ export function formatCollateralOffer(offer: CollateralOffer): string {
     lines.push("", "Folder pointers (contents not indexed):");
     for (const asset of offer.pointers) lines.push(pointerNote(asset));
   }
+  lines.push("", salesCollateralSourceLine());
   lines.push("", "Reply *I'll use this* to use a link and stop here. If it's outdated or you need a new year, say so and we'll keep going on a new task.");
   return lines.join("\n");
 }

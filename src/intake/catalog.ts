@@ -222,6 +222,8 @@ const PROPERTY_NICKNAMES: Record<string, string> = {
   abh: "ABH",
   aps: "APS",
   ing: "ING",
+  ingleside: "ING",
+  "ingleside estate": "ING",
   ltp: "LTP",
   dal: "DAL",
   dallas: "DAL",

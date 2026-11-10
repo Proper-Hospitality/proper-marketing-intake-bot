@@ -4,7 +4,16 @@ export type YearSpan =
   | { kind: "range"; from: number; to: number }
   | { kind: "unknown" };
 
-export type YearProvenance = "title" | "filename" | "text" | "user_confirmation" | "unknown";
+export type YearProvenance =
+  | "title"
+  | "filename"
+  | "text"
+  | "user_confirmation"
+  | "unknown"
+  /** Avalon and Ingleside fact decks only. Not a content year, and not the HJLA/DTLA confirmation. */
+  | "elena_current_export_nov_10_2026"
+  /** Melvyn's prix-fixe only. Jul 2026 was reported, not printed. */
+  | "reported_by_source";
 
 export type CollateralKind =
   | "menu"

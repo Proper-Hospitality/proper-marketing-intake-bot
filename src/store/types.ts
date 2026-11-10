@@ -73,6 +73,7 @@ export interface ConversationState {
   collateralOffer?: CollateralOffer | null;
   collateralDeclinedFor?: string;
   collateralOfferedFor?: string;
+  collateralSourceFor?: string;
   confirmVersion: number;
   taskGid?: string;
   taskUrl?: string;
