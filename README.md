@@ -185,7 +185,15 @@ Opening a link still depends on that person's Canva, Slack, or SharePoint access
 
 To refresh the catalog, replace the records in `src/intake/collateral/catalog.ts` from a new verified handoff. Keep each file's own year, the place that year came from (title, filename, or text), and whether it is verified, metadata-only, or a 403 pointer. Do not copy a year from another property, and do not use a file's modified date as its content year. Leave a file's year unknown when the handoff does not prove one. Do not mark a 403 folder or an unread PDF as a verified document.
 
-No new environment variable and no new Slack scope are required. The catalog ships with the app. After this branch is merged, deploy the existing Render service the same way as the other intake updates. The bot does not sync SharePoint, Canva, or Slack folders on its own.
+Anyone who can message the bot may submit. There is no user allowlist.
+
+If they don't know a brief answer, the bot tells them what to check and who to ask, and leaves the question open in the thread. Only after they say they still can't get it does the bot offer *Let marketing recommend*. That exact phrase is stored as the brief answer.
+
+If a request could be an existing file or a change to one, the bot asks which. An existing file comes from the catalog. A change uses the Canva template flow. Otherwise it collects the Asana brief.
+
+Due dates use America/Los_Angeles. The bot blocks a same-day date, a next-day date, any Saturday or Sunday due date, and a Friday request due the following Monday. A Saturday request due the following Monday is allowed. Saturday and Sunday due dates cannot be approved. For a same-day, next-day, or Friday-to-Monday date, the requester can say *Request approval*. The bot DMs Koral Captain (`RUSH_APPROVER_KORAL_ID`, default `U0B5F1HN98Q`) and DeeDee Brown (`RUSH_APPROVER_DEEDEE_ID`, default `U0B6N3RE23T`) with Approve and Decline. The task is created only after one of them approves, and the task gets a comment `Rush approved by <name>` outside the Brief questions. A decline asks for a new date. Pending approvals are stored in Redis.
+
+No new Slack scope is required. The catalog ships with the app. After this branch is merged, deploy the existing Render service the same way as the other intake updates. The bot does not sync SharePoint, Canva, or Slack folders on its own.
 
 ## How a request is filed
 

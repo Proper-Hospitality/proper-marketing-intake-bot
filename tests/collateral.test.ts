@@ -814,7 +814,15 @@ describe("existing collateral in the intake", () => {
       }]),
       today: TODAY,
     });
-    let offer = first.text.toLowerCase().includes("template")
+    let offer = first.text.includes("existing file")
+      ? await runIntakeTurn({
+        state,
+        userText: "existing",
+        slackUser: { id: "U1" },
+        llm: scripted([{ type: "text", text: "unused" }]),
+        today: TODAY,
+      })
+      : first.text.toLowerCase().includes("template")
       ? await runIntakeTurn({
         state,
         userText: "The team should design it",

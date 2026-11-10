@@ -15,7 +15,7 @@ describe("pending prices", () => {
     const outcome = applyAnswers(state, {
       requesterName: "Elena Ruiz",
       requesterEmail: "elena@example.com",
-      requestName: "Dinner menu update",
+      requestName: "Dinner menu",
       properties: ["SMP"],
       requestType: "Creative",
       taskType: "Menu (F&B, Spa)",

@@ -289,5 +289,6 @@ function destinationSatisfied(draft: BriefDraft, followUps: FollowUp[]): boolean
 }
 
 export function isReadyToConfirm(draft: BriefDraft, today = new Date()): boolean {
+  if (draft.rushBlock && draft.rushApprovedFor !== draft.requestedCompletionDate) return false;
   return listMissing(draft, today).items.length === 0 && Boolean(draft.requestType && draft.taskType);
 }

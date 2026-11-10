@@ -74,6 +74,9 @@ export interface ConversationState {
   collateralDeclinedFor?: string;
   collateralOfferedFor?: string;
   collateralSourceFor?: string;
+  /** How many times the requester said they don't know the question currently open. */
+  unsureNudges?: Record<string, number>;
+  rushExplainedFor?: string;
   confirmVersion: number;
   taskGid?: string;
   taskUrl?: string;

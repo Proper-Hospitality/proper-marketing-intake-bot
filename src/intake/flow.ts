@@ -12,6 +12,8 @@ import { matchCollateral, yearInText } from "./collateral/match.js";
 import { catalogWithoutUpdatingProperties, unmatchedSourceNote } from "./collateral/sources.js";
 import type { CollateralOffer } from "./collateral/types.js";
 import { matchTemplates, type TemplateMatchResult } from "./templates.js";
+import { planRoute } from "./routing.js";
+import { classifyRush } from "./rush.js";
 import type { BriefDraft, RequestType } from "./types.js";
 
 export interface RecordInput {
@@ -41,6 +43,8 @@ export type FlowOutcome =
   | { kind: "need_property" }
   | { kind: "offer_template"; match: TemplateMatchResult }
   | { kind: "ask_collateral_year" }
+  | { kind: "ask_deliverable" }
+  | { kind: "rush_required"; reason: "same_day" | "next_day" | "friday_monday" | "weekend"; date: string }
   | { kind: "offer_collateral"; offer: CollateralOffer }
   | { kind: "accepted_collateral"; offer: CollateralOffer }
   | { kind: "ask"; missing: MissingReport; preface?: string }
@@ -58,11 +62,12 @@ export interface FlowState {
   collateralDeclinedFor?: string;
   collateralOfferedFor?: string;
   collateralSourceFor?: string;
+  rushExplainedFor?: string;
   confirmVersion: number;
 }
 
 export function applyAnswers(state: FlowState, input: RecordInput, today = new Date()): FlowOutcome {
-  const errors = mergeDraft(state.draft, input);
+  const errors = mergeDraft(state.draft, input, today);
   if (errors.length > 0) return { kind: "invalid", errors };
   dropSkipsThatWereAnswered(state.draft);
   return advance(state, today);
@@ -104,35 +109,19 @@ export function declineCollateral(state: FlowState, reason: string, today = new 
 
 function advance(state: FlowState, today: Date): FlowOutcome {
   const draft = state.draft;
-  if (draft.requestType && draft.taskType) {
-    const key = declineKey(draft);
-    if (state.templateDeclinedFor && state.templateDeclinedFor !== key) {
-      state.templateDeclinedReason = undefined;
-      state.templateDeclinedFor = undefined;
-      delete draft.templateUnusedReason;
-    }
-    if (!state.templateDeclinedReason) {
-      const match = matchTemplates({
-        requestType: draft.requestType,
-        taskType: draft.taskType,
-        properties: draft.properties ?? [],
-        text: matchText(draft),
-      });
-      if (match.needsProperty) {
-        state.phase = "collecting";
-        return { kind: "need_property" };
-      }
-      if (match.matches.length > 0) {
-        state.templateOffer = match;
-        state.phase = "template_offered";
-        return { kind: "offer_template", match };
-      }
-      state.templateOffer = null;
-    }
-  }
+  const routed = routeDeliverable(state);
+  if (routed) return routed;
 
-  const collateral = considerCollateral(state);
-  if (collateral) return collateral;
+  if (
+    draft.requestedCompletionDate
+    && draft.rushBlock
+    && draft.rushApprovedFor !== draft.requestedCompletionDate
+    && state.rushExplainedFor !== draft.requestedCompletionDate
+  ) {
+    state.rushExplainedFor = draft.requestedCompletionDate;
+    state.phase = "collecting";
+    return { kind: "rush_required", reason: draft.rushBlock, date: draft.requestedCompletionDate };
+  }
 
   const preface = sourcePreface(state);
   const missing = listMissing(draft, today);
@@ -145,7 +134,7 @@ function advance(state: FlowState, today: Date): FlowOutcome {
   return preface ? { kind: "confirm", missing, preface } : { kind: "confirm", missing };
 }
 
-function mergeDraft(draft: BriefDraft, input: RecordInput): string[] {
+function mergeDraft(draft: BriefDraft, input: RecordInput, today: Date): string[] {
   const errors: string[] = [];
   assignText(draft, "requesterName", input.requesterName);
   assignText(draft, "requesterEmail", input.requesterEmail);
@@ -166,7 +155,12 @@ function mergeDraft(draft: BriefDraft, input: RecordInput): string[] {
   if (input.requestedCompletionDate) {
     const date = normalizeDate(input.requestedCompletionDate);
     if (!date) errors.push(`Requested completion date "${input.requestedCompletionDate}" is not a real date. Use YYYY-MM-DD.`);
-    else draft.requestedCompletionDate = date;
+    else {
+      draft.requestedCompletionDate = date;
+      const rush = classifyRush(date, today);
+      if (rush && draft.rushApprovedFor !== date) draft.rushBlock = rush;
+      else delete draft.rushBlock;
+    }
   }
 
   if (input.properties && input.properties.length > 0) {
@@ -258,6 +252,64 @@ function collateralKey(draft: BriefDraft): string {
 }
 
 const COLLATERAL_TASKS = new Set(["Sales Collateral", "Menu (F&B, Spa)", "Presentation / Deck"]);
+
+function routeDeliverable(state: FlowState): FlowOutcome | undefined {
+  const draft = state.draft;
+  if (!draft.requestType || !draft.taskType) return undefined;
+  if (state.phase === "template_offered" || state.phase === "awaiting_design_materials" || state.phase === "design_ready") {
+    return undefined;
+  }
+  const text = matchText(draft);
+  const key = declineKey(draft);
+  if (state.templateDeclinedFor && state.templateDeclinedFor !== key) {
+    state.templateDeclinedReason = undefined;
+    state.templateDeclinedFor = undefined;
+    delete draft.templateUnusedReason;
+  }
+  const declined = Boolean(state.templateDeclinedReason && state.templateDeclinedFor === key);
+  const template = declined
+    ? { matches: [], needsProperty: false, duplicateName: false }
+    : matchTemplates({
+      requestType: draft.requestType,
+      taskType: draft.taskType,
+      properties: draft.properties ?? [],
+      text,
+    });
+  if (template.needsProperty && !draft.deliverableIntent) {
+    state.phase = "collecting";
+    return { kind: "need_property" };
+  }
+  const hasTemplate = template.matches.length > 0;
+  const collateral = matchCollateral({
+    properties: draft.properties ?? [],
+    taskType: draft.taskType,
+    text,
+    requestedYear: draft.collateralYear ?? yearInText(text),
+    yearUnspecified: draft.collateralYearUnspecified,
+  }, catalogWithoutUpdatingProperties(draft.properties ?? []));
+  const hasCollateral = Boolean(collateral.offer || collateral.needsYear);
+  const plan = planRoute({
+    chosen: draft.deliverableIntent,
+    text,
+    hasTemplate,
+    hasCollateral,
+  });
+  if (plan === "ask") {
+    state.phase = "collecting";
+    return { kind: "ask_deliverable" };
+  }
+  if (plan === "existing") {
+    const offered = considerCollateral(state);
+    if (offered) return offered;
+    return undefined;
+  }
+  if (plan === "modification" && hasTemplate) {
+    state.templateOffer = template;
+    state.phase = "template_offered";
+    return { kind: "offer_template", match: template };
+  }
+  return undefined;
+}
 
 function considerCollateral(state: FlowState): FlowOutcome | undefined {
   const draft = state.draft;
