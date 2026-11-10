@@ -20,7 +20,7 @@ import {
   wantsMarketingRecommend,
 } from "../intake/recommend.js";
 import { DELIVERABLE_QUESTION, parseDeliverableChoice } from "../intake/routing.js";
-import { rushExplanation } from "../intake/rush.js";
+import { rushAllowsApproval, rushExplanation } from "../intake/rush.js";
 import { COLLATERAL_YEAR_QUESTION, formatCollateralOffer } from "../intake/collateral/format.js";
 import { yearInText } from "../intake/collateral/match.js";
 import {
@@ -166,6 +166,11 @@ export async function runIntakeTurn(input: {
     }
   }
   if (/^request approval[.!]?$/i.test(input.userText.trim()) && state.draft.rushBlock && state.draft.requestedCompletionDate && input.rush) {
+    if (!rushAllowsApproval(state.draft.rushBlock)) {
+      return remember(state, input.userText, {
+        text: rushExplanation(state.draft.rushBlock, state.draft.requestedCompletionDate),
+      });
+    }
     const { startRushApproval } = await import("../intake/rush-approval.js");
     await startRushApproval({
       state,

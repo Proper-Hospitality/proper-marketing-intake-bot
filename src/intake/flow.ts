@@ -44,7 +44,7 @@ export type FlowOutcome =
   | { kind: "offer_template"; match: TemplateMatchResult }
   | { kind: "ask_collateral_year" }
   | { kind: "ask_deliverable" }
-  | { kind: "rush_required"; reason: "same_day" | "next_day" | "weekend"; date: string }
+  | { kind: "rush_required"; reason: "same_day" | "next_day" | "friday_monday" | "weekend"; date: string }
   | { kind: "offer_collateral"; offer: CollateralOffer }
   | { kind: "accepted_collateral"; offer: CollateralOffer }
   | { kind: "ask"; missing: MissingReport; preface?: string }

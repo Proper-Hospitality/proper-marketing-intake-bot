@@ -1,6 +1,6 @@
 const LA = "America/Los_Angeles";
 
-export type RushReason = "same_day" | "next_day" | "weekend";
+export type RushReason = "same_day" | "next_day" | "friday_monday" | "weekend";
 
 export interface RushApprover {
   id: string;
@@ -36,26 +36,34 @@ export function weekdayIndex(iso: string): number {
   return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
 }
 
+/** Saturday and Sunday due dates cannot be approved. Next-day and Friday → Monday can. */
+export function rushAllowsApproval(reason: RushReason): boolean {
+  return reason !== "weekend";
+}
+
 /**
  * Block same-day and next-day dates, any Saturday or Sunday due date, and a
- * Friday request that is due the following Saturday, Sunday, or Monday.
- * A Saturday request due the following Monday is allowed: Monday is not a
- * weekend day, and it is not the next day.
+ * Friday request due the following Monday.
+ * A Saturday or Sunday due date has no approval path, including Friday → Saturday.
+ * A Saturday request due the following Monday is allowed.
  */
 export function classifyRush(dueIso: string, now: Date): RushReason | null {
   const today = laIsoDate(now);
   if (dueIso < today) return null;
-  if (dueIso === today) return "same_day";
-  if (dueIso === addCalendarDays(today, 1)) return "next_day";
   const dueDay = weekdayIndex(dueIso);
   if (dueDay === 0 || dueDay === 6) return "weekend";
-  if (weekdayIndex(today) === 5 && dueIso === addCalendarDays(today, 3)) return "weekend";
+  if (weekdayIndex(today) === 5 && dueIso === addCalendarDays(today, 3)) return "friday_monday";
+  if (dueIso === today) return "same_day";
+  if (dueIso === addCalendarDays(today, 1)) return "next_day";
   return null;
 }
 
 export function rushExplanation(reason: RushReason, dueIso: string): string {
-  const why = reason === "weekend"
-    ? `${dueIso} is a weekend date, or the Monday after a Friday request.`
+  if (reason === "weekend") {
+    return `${dueIso} is a Saturday or Sunday, so it can't be the due date. Send a weekday.`;
+  }
+  const why = reason === "friday_monday"
+    ? `${dueIso} is the Monday after a Friday request.`
     : reason === "same_day"
       ? `${dueIso} is the same day.`
       : `${dueIso} is the next day.`;

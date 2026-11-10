@@ -103,21 +103,22 @@ describe("Elena's Nov 10 intake decisions", () => {
 
   it("blocks next-day and Friday-into-Monday dates, and files only after approval", async () => {
     const friday = new Date("2026-11-06T20:00:00Z");
-    expect(classifyRush("2026-11-07", friday)).toBe("next_day");
+    expect(classifyRush("2026-11-07", friday)).toBe("weekend");
     expect(classifyRush("2026-11-08", friday)).toBe("weekend");
-    expect(classifyRush("2026-11-09", friday)).toBe("weekend");
+    expect(classifyRush("2026-11-09", friday)).toBe("friday_monday");
     expect(classifyRush("2026-11-10", friday)).toBeNull();
     const saturday = new Date("2026-11-07T20:00:00Z");
     expect(classifyRush("2026-11-09", saturday)).toBeNull();
-    expect(classifyRush("2026-11-08", saturday)).toBe("next_day");
+    expect(classifyRush("2026-11-08", saturday)).toBe("weekend");
 
+    const thursday = new Date("2026-11-05T20:00:00Z");
     const state = blank("C:rush");
     state.channel = "C1";
     state.threadTs = "1.2";
     const outcome = applyAnswers(state, {
       ...completeDraft(),
-      requestedCompletionDate: "2026-11-07",
-    }, friday);
+      requestedCompletionDate: "2026-11-06",
+    }, thursday);
     expect(outcome.kind).toBe("rush_required");
     const store = new MemoryStore();
     await store.saveConversation(state);
@@ -125,9 +126,9 @@ describe("Elena's Nov 10 intake decisions", () => {
     await startRushApproval({
       state,
       store,
-      date: "2026-11-07",
+      date: "2026-11-06",
       reason: "next_day",
-      summary: "Alex needs a banner by 2026-11-07.",
+      summary: "Alex needs a banner by 2026-11-06.",
       channel: "C1",
       threadTs: "1.2",
       postDm: async (userId) => { dms.push(userId); },
@@ -158,6 +159,54 @@ describe("Elena's Nov 10 intake decisions", () => {
     const description = buildDescription({ draft: reloaded!.draft, templateOffer: null });
     expect(description).toContain("Rush approved by DeeDee Brown");
     expect(description.split("## Brief")[1]?.split("Rush approved")[0]).not.toContain("Rush approved");
+  });
+
+  it("lets Koral or DeeDee approve a Friday request due Monday, and refuses a Saturday due date", async () => {
+    const friday = new Date("2026-11-06T20:00:00Z");
+    const state = blank("C:fri-mon");
+    const outcome = applyAnswers(state, {
+      ...completeDraft(),
+      requestedCompletionDate: "2026-11-09",
+    }, friday);
+    expect(outcome.kind).toBe("rush_required");
+    if (outcome.kind === "rush_required") expect(outcome.reason).toBe("friday_monday");
+    const store = new MemoryStore();
+    await store.saveConversation(state);
+    const dms: string[] = [];
+    await startRushApproval({
+      state,
+      store,
+      date: "2026-11-09",
+      reason: "friday_monday",
+      summary: "Alex needs a banner by Monday.",
+      channel: "C1",
+      threadTs: "1.2",
+      postDm: async (userId) => { dms.push(userId); },
+    });
+    expect(dms).toEqual(["U0B5F1HN98Q", "U0B6N3RE23T"]);
+    const decision = await applyRushDecision({
+      store,
+      approvalId: state.draft.rushApprovalId ?? "",
+      approverId: "U0B5F1HN98Q",
+      decision: "approved",
+    });
+    expect(decision.text).toContain("Rush approved by Koral Captain");
+    const weekend = blank("C:weekend");
+    const blocked = applyAnswers(weekend, {
+      ...completeDraft(),
+      requestedCompletionDate: "2026-11-07",
+    }, friday);
+    expect(blocked.kind).toBe("rush_required");
+    if (blocked.kind === "rush_required") expect(blocked.reason).toBe("weekend");
+    await expect(startRushApproval({
+      state: weekend,
+      store,
+      date: "2026-11-07",
+      reason: "weekend",
+      summary: "Weekend",
+      channel: "C1",
+      postDm: async () => undefined,
+    })).rejects.toThrow(/cannot be approved/);
   });
 });
 

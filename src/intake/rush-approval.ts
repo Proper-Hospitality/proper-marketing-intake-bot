@@ -1,6 +1,6 @@
 import type { KnownBlock } from "@slack/types";
 import type { ConversationState, Store } from "../store/types.js";
-import { rushApprovers, type RushReason } from "./rush.js";
+import { rushAllowsApproval, rushApprovers, type RushReason } from "./rush.js";
 
 export interface RushApproval {
   id: string;
@@ -67,6 +67,9 @@ export async function startRushApproval(input: {
   threadTs?: string;
   postDm: (userId: string, text: string, blocks: KnownBlock[]) => Promise<void>;
 }): Promise<RushApproval> {
+  if (!rushAllowsApproval(input.reason)) {
+    throw new Error("Saturday and Sunday due dates cannot be approved.");
+  }
   const id = `rush_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const approval: RushApproval = {
     id,
