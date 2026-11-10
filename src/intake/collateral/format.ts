@@ -8,7 +8,12 @@ function verifiedNote(asset: CollateralAsset, note: string): string {
     : asset.contentRead
       ? ""
       : " Matched from the title and type. The design body was not copied into this catalog.";
-  return `• ${asset.title} (${yearLabel(asset.years)}). ${note}${asset.summary}${unread}\n  ${asset.sourceUrl}`;
+  const provenance = asset.yearProvenance === "elena_current_export_nov_10_2026"
+    ? " Current per Elena (exported Nov 10, 2026, relayed via her assistant). No year is printed on the file."
+    : asset.yearProvenance === "reported_by_source"
+      ? " Jul 2026 as reported by the source, not printed on the menu."
+      : "";
+  return `• ${asset.title} (${yearLabel(asset.years)}). ${note}${asset.summary}${provenance}${unread}\n  ${asset.sourceUrl}`;
 }
 
 function candidateNote(asset: CollateralAsset, requestedYear?: number): string {

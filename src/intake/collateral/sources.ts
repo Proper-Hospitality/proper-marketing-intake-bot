@@ -10,7 +10,7 @@ export function salesCollateralSourceLine(): string {
   return `Full list of where each property's sales docs live: ${SALES_COLLATERAL_SOURCE_URL}`;
 }
 
-export type SalesSourceStatus = "confirmed" | "partial" | "no_shared_folder" | "no_reply" | "not_asked";
+export type SalesSourceStatus = "confirmed" | "partial" | "no_shared_folder" | "no_reply" | "not_asked" | "pending";
 
 export type SalesLocationType =
   | "canva_folder"
@@ -31,6 +31,8 @@ export interface PropertySalesSource {
   gaps: string;
   /** Catalog file ids to name when the property has no folder. */
   catalogFileIds?: string[];
+  /** Named items with no file bytes and no URL. */
+  metadataOnly?: { title: string; note: string }[];
 }
 
 /**
@@ -50,7 +52,7 @@ export const PROPERTY_SALES_SOURCES: PropertySalesSource[] = [
       "https://www.canva.com/d/H8Vl4EBRTWrEh5s",
     ],
     confirmedBy: { name: "Lindsay Louise", when: "Aug 6, 2026" },
-    gaps: "Confirmed from the Aug 6 canvas only. The Nov 2026 #smp-sales threads had no reply. The links are example files, not a folder URL, and they cover Print Collateral only.",
+    gaps: "Elena chose the Aug 6 answer on Nov 10, 2026. The Nov #smp-sales threads had no reply. The links are example files, not a folder URL, and they cover Print Collateral only.",
   },
   {
     property: "SMB",
@@ -62,16 +64,20 @@ export const PROPERTY_SALES_SOURCES: PropertySalesSource[] = [
       "https://properhotels.sharepoint.com/:f:/s/Shelborne-SalesandMarketing/IgAAqDglcY6KR6CK_N-o8M5tAQJjVO99dQ3AvFnjCvXpeBE?e=2ZHNhg",
     ],
     confirmedBy: { name: "Sheila Garcia", when: "Aug 7, 2026, 6:01 AM PT" },
-    gaps: "Nov 2026 follow-up tagged owners and added no new link. 1-RESOURCES still needed a direct look. This catalog could not list that folder (403).",
+    gaps: "Elena chose the Aug 7 answer on Nov 10, 2026. The Nov follow-up tagged owners and added no new link. 1-RESOURCES still needed a direct look. This catalog could not list that folder (403).",
   },
   {
     property: "APS",
     name: "Avalon Palm Springs",
     status: "confirmed",
     locationType: "slack_files",
-    links: ["https://properhospitalitycorp.slack.com/archives/C0B62Q4NLCA"],
+    links: ["https://properhospitalitycorp.slack.com/docs/T0ANG0N34PP/F0B9JBS0UFM"],
     confirmedBy: { name: "Abbie Nienkamp", when: "Nov 6, 2026, 10:00 AM PT" },
-    gaps: "No external folder URL. Abbie said the files are in #aps-sales under Files & Links. That list was not opened, and no APS file bytes are in the catalog.",
+    gaps: "Files & Links is the #aps-sales Sales Resources canvas (F0B9JBS0UFM). Elena exported the two client-facing fact decks on Nov 10, 2026. Map & Room List and Room Capacities are on that canvas. No URLs were given for those two, and they are not file records.",
+    metadataOnly: [
+      { title: "Map & Room List", note: "Canva. No URL was given. It is on the #aps-sales Sales Resources canvas." },
+      { title: "Room Capacities", note: "Canva. No URL was given. It is on the #aps-sales Sales Resources canvas." },
+    ],
   },
   {
     property: "DTLA",
@@ -88,35 +94,35 @@ export const PROPERTY_SALES_SOURCES: PropertySalesSource[] = [
   {
     property: "MYC",
     name: "Montauk Yacht Club",
-    status: "not_asked",
+    status: "pending",
     locationType: "unknown",
     links: [],
-    gaps: "The Nov request was never posted in #myc-sales. The Aug #myc-marketing ask also had no reply. No location and no MYC files.",
+    gaps: "Pending. The Nov request was never posted in #myc-sales. An ask was drafted for Elena and has not been answered. No location and no MYC files.",
   },
   {
     property: "ABH",
     name: "Avalon Beverly Hills",
-    status: "partial",
+    status: "pending",
     locationType: "google_drive",
     links: ["https://drive.google.com/drive/folders/1smEyn8ipOL_jRFrLggnWjG1zRzVnnZ7h"],
     confirmedBy: { name: "Maria Shekhovtsova", when: "Aug 2026" },
-    gaps: "Partial only. The Nov #abh-sales threads had no reply. Maria described the HERO Drive folder as imagery. Flyers and presentations were on a laptop and were not shared. No ABH file bytes are in the catalog.",
+    gaps: "Pending. Elena's ask to Maria was drafted and has not been answered. The August HERO Drive folder is partial and imagery only. It is not a confirmed sales-doc location. No ABH file bytes are in the catalog.",
   },
   {
     property: "TCH",
     name: "The Culver Hotel",
-    status: "not_asked",
+    status: "pending",
     locationType: "unknown",
     links: [],
-    gaps: "The Nov request was never posted in #tch-sales. The Culver Hotel was not on the Aug canvas. No location was given.",
+    gaps: "Pending. The Nov request was never posted in #tch-sales. An ask was drafted for Elena and has not been answered. No location was given.",
   },
   {
     property: "SFP",
     name: "San Francisco Proper",
-    status: "no_reply",
+    status: "pending",
     locationType: "unknown",
     links: [],
-    gaps: "No folder link. Isabel asked DeeDee, and Elena asked Patty and Katrina, with no link back. The Aug canvas also had no response. Group and DBR spreadsheets are not a sales-collateral location.",
+    gaps: "Pending. No folder link yet. A follow-up with Patty and Katrina was drafted and has not been answered. Existing Slack files stay in the catalog. Group and DBR spreadsheets are not a sales-collateral location.",
   },
   {
     property: "AUP",
@@ -141,10 +147,9 @@ export const PROPERTY_SALES_SOURCES: PropertySalesSource[] = [
     locationType: "sharepoint_folder",
     links: [
       "https://properhotels.sharepoint.com/:f:/s/Openings/IgA18ewHhHKLQ6SgGEVH8FQkAbrrD6hGoayOczj8t6CW1Hs?e=fBwV7I",
-      "https://properhotels.sharepoint.com/sites/Openings/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FOpenings%2FShared%20Documents%2FHotel%20June%20Los%20Angeles%2FHJLA%20Sales&viewid=361cfbba-883e-4b98-aa60-4afe64684896&p=true&ct=1716929925190&or=Teams-HL&ga=1",
     ],
-    confirmedBy: { name: "Jasmyne Vandyleu", when: "Nov 5, 2026, 12:29 PM PT" },
-    gaps: "Jasmyne shared the Nov 5 Openings folder. Golnaz said people also save files on their own computers. The August HJLA Sales folder was mostly floor plans. The catalog has the checked brochure and tour script, not the whole folder.",
+    confirmedBy: { name: "Jasmyne Vandyleuam", when: "Nov 5, 2026, 12:29 PM PT" },
+    gaps: "Elena chose Jasmyne's Nov 5 Openings folder. The older August HJLA Sales link is not the source. People also save files on their own computers. The catalog has the checked brochure and tour script, not the whole folder.",
   },
 ];
 
@@ -163,14 +168,18 @@ export function formatSalesSource(source: PropertySalesSource): string {
     const place = source.locationType === "canva_folder"
       ? `${who} said print collateral is in Canva, in Santa Monica (SMP) → Print Collateral. The links below are examples from that note, not a folder URL and not a full file list.`
       : source.locationType === "slack_files"
-        ? `${who} said the files are in #aps-sales under Files & Links. No folder URL was provided. This channel is the location, not a cataloged file.`
+        ? `${who} said the files are in #aps-sales under Files & Links. That is the Sales Resources canvas, not a cataloged file.`
         : source.property === "SMB"
           ? `${who} said written collateral is in SharePoint 1-RESOURCES and imagery is in 1-PICTURES. These are folder locations. 1-RESOURCES was not listed, so this is not a file list.`
           : `${who} shared this folder. It is a location, not a cataloged file of the item you asked for.`;
+    const extra = (source.metadataOnly ?? [])
+      .map((item) => `• ${item.title}. ${item.note} This is not a file in the catalog.`)
+      .join("\n");
     return [
       `No matching sales file is in the catalog for this request. ${place}`,
       linkLines(source.links),
-    ].join("\n");
+      extra,
+    ].filter(Boolean).join("\n");
   }
   if (source.status === "partial") {
     const who = source.confirmedBy ? `${source.confirmedBy.name} (${source.confirmedBy.when})` : "A teammate";
@@ -186,6 +195,20 @@ export function formatSalesSource(source: PropertySalesSource): string {
       ...titles.map((title) => `• ${title}`),
       linkLines(source.links),
     ].join("\n");
+  }
+  if (source.status === "pending") {
+    const waiting = source.property === "ABH"
+      ? " An earlier Google Drive folder called HERO file was described as imagery only. That note is partial, and the sales-doc location is not confirmed yet."
+      : source.property === "SFP"
+        ? " A follow-up was drafted and has not been answered."
+        : " An ask was drafted and has not been answered.";
+    const channel = source.property === "MYC"
+      ? " The Nov request was never posted in #myc-sales."
+      : source.property === "TCH"
+        ? " The Nov request was never posted in #tch-sales."
+        : "";
+    const links = source.property === "ABH" ? `\n${linkLines(source.links)}` : "";
+    return `No matching sales file is in the catalog for ${source.name}, and a sales-doc location is not confirmed yet.${channel}${waiting}${links}`;
   }
   const where = source.status === "not_asked"
     ? ` The request was never posted in ${source.property === "MYC" ? "#myc-sales" : "#tch-sales"}.`

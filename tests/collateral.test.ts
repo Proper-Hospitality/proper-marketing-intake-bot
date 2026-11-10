@@ -13,9 +13,9 @@ const TODAY = new Date("2026-11-05T12:00:00Z");
 
 describe("existing collateral catalog", () => {
   it("keeps each SMP and SFP file's own year and does not borrow the HJLA/DTLA confirmation", () => {
-    expect(COLLATERAL_CATALOG).toHaveLength(44);
-    expect(COLLATERAL_CATALOG.filter((asset) => asset.active)).toHaveLength(35);
-    expect(COLLATERAL_CATALOG.filter((asset) => asset.contentRead)).toHaveLength(17);
+    expect(COLLATERAL_CATALOG).toHaveLength(47);
+    expect(COLLATERAL_CATALOG.filter((asset) => asset.active)).toHaveLength(38);
+    expect(COLLATERAL_CATALOG.filter((asset) => asset.contentRead)).toHaveLength(20);
     expect(COLLATERAL_CATALOG.filter((asset) => asset.tier === "candidate")).toHaveLength(5);
     expect(COLLATERAL_CATALOG.filter((asset) => asset.tier === "pointer")).toHaveLength(2);
     const confirmed = COLLATERAL_CATALOG.filter((asset) => asset.yearProvenance === "user_confirmation");
@@ -454,7 +454,7 @@ describe("existing collateral catalog", () => {
 
   it("tells where sales docs live when no catalog file matches, and does not invent one", () => {
     expect(PROPERTY_SALES_SOURCES).toHaveLength(10);
-    expect(COLLATERAL_CATALOG).toHaveLength(44);
+    expect(COLLATERAL_CATALOG).toHaveLength(47);
     const declined = {
       templateDeclinedReason: "The team should design it",
       templateDeclinedFor: "Creative|Sales Collateral",
@@ -476,27 +476,30 @@ describe("existing collateral catalog", () => {
     const aps = ask("APS", "capacity chart");
     expect(aps.kind).toBe("ask");
     if (aps.kind === "ask") {
-      expect(aps.preface).toContain("Files & Links");
-      expect(aps.preface).toContain("https://properhospitalitycorp.slack.com/archives/C0B62Q4NLCA");
+      expect(aps.preface).toContain("Sales Resources");
+      expect(aps.preface).toContain("https://properhospitalitycorp.slack.com/docs/T0ANG0N34PP/F0B9JBS0UFM");
+      expect(aps.preface).toContain("Room Capacities");
+      expect(aps.preface).toContain("Map & Room List");
+      expect(aps.preface).toContain("not a file in the catalog");
       expect(aps.preface).not.toContain("capacity chart file");
     }
 
     const sfp = unmatchedSourceNote({ properties: ["SFP"], taskType: "Sales Collateral", text: "wedding flyer" });
-    expect(sfp).toContain("not confirmed");
+    expect(sfp).toContain("not confirmed yet");
     expect(sfp).not.toContain("sharepoint.com");
 
     const myc = unmatchedSourceNote({ properties: ["MYC"], taskType: "Menu (F&B, Spa)", text: "banquet menu" });
-    expect(myc).toContain("not confirmed");
+    expect(myc).toContain("not confirmed yet");
     expect(myc).toContain("never posted");
     expect(myc).toContain("#myc-sales");
 
     const tch = unmatchedSourceNote({ properties: ["TCH"], taskType: "Sales Collateral", text: "tour script" });
-    expect(tch).toContain("not confirmed");
+    expect(tch).toContain("not confirmed yet");
     expect(tch).toContain("#tch-sales");
 
     const abh = unmatchedSourceNote({ properties: ["ABH"], taskType: "Sales Collateral", text: "brochure" });
     expect(abh).toContain("partial");
-    expect(abh).toContain("not confirmed");
+    expect(abh).toContain("not confirmed yet");
     expect(abh).toContain("https://drive.google.com/drive/folders/1smEyn8ipOL_jRFrLggnWjG1zRzVnnZ7h");
 
     const austin = unmatchedSourceNote({ properties: ["ATXP"], taskType: "Sales Collateral", text: "brochure" });
@@ -507,6 +510,45 @@ describe("existing collateral catalog", () => {
     expect(austin).toContain("Austin Proper Capacity Chart");
     expect(austin).toContain("Austin Proper Floor Plan");
     expect(austin).toContain("https://properhospitalitycorp.slack.com/archives/C0B62QUHBK4/p1793928288710819");
+
+    const apsFacts = matchCollateral({
+      properties: ["APS"],
+      taskType: "Sales Collateral",
+      text: "fact sheet",
+      requestedYear: 2026,
+    });
+    const factIds = [...(apsFacts.offer?.current ?? []), ...(apsFacts.offer?.unknownYear ?? [])].map((asset) => asset.id);
+    expect(factIds).toContain("aps:canva:DAG-70QWvfs");
+    expect(factIds).toContain("aps:canva:DAG_e80rIHc");
+    const decks = COLLATERAL_CATALOG.filter((asset) => asset.yearProvenance === "elena_current_export_nov_10_2026");
+    expect(decks.map((asset) => asset.id).sort()).toEqual(["aps:canva:DAG-70QWvfs", "aps:canva:DAG_e80rIHc"]);
+    expect(decks.every((asset) => asset.years.kind === "unknown")).toBe(true);
+    const deckText = formatCollateralOffer({
+      property: "APS",
+      requestedYear: 2026,
+      current: [],
+      older: [],
+      unknownYear: decks,
+      candidates: [],
+      pointers: [],
+      yearUnspecified: false,
+    });
+    expect(deckText).toContain("Current per Elena (exported Nov 10, 2026, relayed via her assistant)");
+    expect(deckText).not.toContain("user_confirmation");
+
+    const melvyn = matchCollateral({
+      properties: ["APS"],
+      taskType: "Menu (F&B, Spa)",
+      text: "Melvyn's prix-fixe menu",
+      requestedYear: 2026,
+    });
+    expect(melvyn.offer?.current.map((asset) => asset.id)).toContain("aps:slack:F0BFYMJEK5K");
+    expect(melvyn.offer?.current.find((asset) => asset.id === "aps:slack:F0BFYMJEK5K")?.yearProvenance).toBe("reported_by_source");
+    expect(formatCollateralOffer(melvyn.offer!)).toContain("Jul 2026 as reported by the source, not printed");
+
+    const hjla = PROPERTY_SALES_SOURCES.find((source) => source.property === "HJWL");
+    expect(hjla?.links).toEqual(["https://properhotels.sharepoint.com/:f:/s/Openings/IgA18ewHhHKLQ6SgGEVH8FQkAbrrD6hGoayOczj8t6CW1Hs?e=fBwV7I"]);
+    expect(hjla?.links.join(" ")).not.toContain("HJLA%20Sales");
 
     expect(unmatchedSourceNote({
       properties: ["SMP"],
@@ -544,7 +586,7 @@ describe("existing collateral catalog", () => {
       requestType: "Creative",
       taskType: "Menu (F&B, Spa)",
     }, TODAY);
-    expect(first.kind === "ask" && first.preface).toContain("not confirmed");
+    expect(first.kind === "ask" && first.preface).toContain("not confirmed yet");
     const second = applyAnswers(state, {}, TODAY);
     expect(second.kind === "ask" ? second.preface : undefined).toBeUndefined();
   });
