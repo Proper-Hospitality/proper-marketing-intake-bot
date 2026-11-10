@@ -1,5 +1,6 @@
+import { attachmentAssetLines, attachmentBriefLines } from "./attachments.js";
 import { formatRequestTypeChoices, formatTaskTypeChoices } from "./choices.js";
-import { expectedRoutingBucket, formatDisplayDate, formatFullDate, FORM_URL, normalizeDate, propertyNames, secondContact } from "./catalog.js";
+import { expectedRoutingBucket, formatDisplayDate, formatFullDate, normalizeDate, propertyNames, secondContact } from "./catalog.js";
 import { PRICE_PENDING_LINE, type MissingItem } from "./missing.js";
 import { followUpsFor, SUPPORT_QUESTION } from "./question-tree.js";
 import type { TemplateMatchResult } from "./templates.js";
@@ -40,6 +41,7 @@ export function buildDescription(input: {
   if (draft.assetsOwner) {
     assetLines.push(`Coming from ${draft.assetsOwner}${draft.assetsDue ? ` by ${draft.assetsDue}` : ""}`);
   }
+  assetLines.push(...attachmentAssetLines(draft));
 
   const support = draft.requestType ? SUPPORT_QUESTION[draft.requestType] : "What type of support do you need?";
 
@@ -182,6 +184,7 @@ export function formatSummary(input: {
     }
   }
   if ((draft.assets ?? []).length > 0) lines.push(`Assets: ${(draft.assets ?? []).join(", ")}`);
+  for (const line of attachmentAssetLines(draft)) lines.push(`File: ${line}`);
   if (draft.finalCopy) lines.push(`Copy: ${truncate(draft.finalCopy, 500)}`);
   const offer = input.templateOffer;
   if (offer && offer.matches.length > 0) {
@@ -204,13 +207,12 @@ export function formatSummary(input: {
     }
     lines.push("Confirm still creates a new task. Say if you want a note on the existing one instead.");
   }
-  lines.push("", `Prefer the form? ${FORM_URL}`);
   return lines.join("\n");
 }
 
 export function formatTemplateAccepted(result: TemplateMatchResult): string {
   const links = result.matches.map((match) => `${match.name}: ${match.url}`).join("\n");
-  return `Use the template and you don't need a task.\n${links}\nIf you later want the team to design it, say so and I'll collect the brief. Form, if you'd rather fill it yourself: ${FORM_URL}`;
+  return `Use the template and you don't need a task.\n${links}\nIf you later want the team to design it, say so and I'll collect the brief.`;
 }
 
 function choiceList(itemId: string, requestType: BriefDraft["requestType"]): string | undefined {
@@ -237,6 +239,7 @@ function briefAnswerLines(draft: BriefDraft): string[] {
     if (!value?.trim()) continue;
     lines.push(`${field.label}: ${renderRequesterAnswer(field.kind, value)}`);
   }
+  lines.push(...attachmentBriefLines(draft));
   if (draft.finalCopy?.trim()) lines.push(`Final copy: ${draft.finalCopy.trim()}`);
   if (draft.copyOwner?.trim()) {
     const due = draft.copyDueDate ? normalizeDate(draft.copyDueDate) : undefined;

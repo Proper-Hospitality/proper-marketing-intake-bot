@@ -1,3 +1,4 @@
+import { deferAttachmentAnswer } from "./attachments.js";
 import type { ConversationState } from "../store/types.js";
 
 export const LET_MARKETING_RECOMMEND = "Let marketing recommend";
@@ -40,6 +41,7 @@ export function recordMarketingRecommend(state: ConversationState): boolean {
   const label = state.lastAskedLabel;
   if (!id || !label || isDateQuestion(id)) return false;
   const draft = state.draft;
+  if (id.startsWith("attachment")) return deferAttachmentAnswer(draft, id);
   if (id.startsWith("followup:")) {
     const key = id.slice("followup:".length);
     draft.followUps = { ...(draft.followUps ?? {}), [key]: LET_MARKETING_RECOMMEND };

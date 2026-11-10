@@ -20,6 +20,12 @@ export interface BriefDraft {
   assets?: string[];
   assetsOwner?: string;
   assetsDue?: string;
+  /** Files, uploads, Dropbox links, or website links that belong to this request. */
+  attachments?: RequestAttachment[];
+  /** The requester is sending files, even if the link has not arrived yet. */
+  involvesFiles?: boolean;
+  /** They could not provide the file and flagged it for marketing. */
+  filesDeferred?: boolean;
   templateUnusedReason?: string;
   notes?: string;
   filingOnBehalf?: boolean;
@@ -40,6 +46,22 @@ export interface BriefDraft {
   /** Name of the approver. Kept outside the Brief question/answer lines. */
   rushApprovedBy?: string;
   rushApprovalId?: string;
+}
+
+export const ATTACHMENT_KINDS = ["menu_or_brochure", "photo", "page_content", "context"] as const;
+
+export type AttachmentKind = (typeof ATTACHMENT_KINDS)[number];
+
+export interface RequestAttachment {
+  /** Filename, Slack upload name, Dropbox link, or website link. */
+  ref: string;
+  kind?: AttachmentKind;
+  /** Clear name when it differs from ref, such as SMP_Calabra_Dinner_Nov2026.pdf. */
+  fileName?: string;
+  /** Menu or brochure is an upload-ready PDF, one menu in the file. */
+  uploadReady?: boolean;
+  /** They could not export an upload-ready PDF. Marketing needs to know. */
+  pdfDeferred?: boolean;
 }
 
 export interface FollowUp {

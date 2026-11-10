@@ -31,6 +31,26 @@ export const INTAKE_TOOLS = [
         assets: { type: "array", items: { type: "string" } },
         assetsOwner: { type: "string" },
         assetsDue: { type: "string" },
+        involvesFiles: {
+          type: "boolean",
+          description: "True only when this request includes a file, upload, Dropbox link, or website file link. Leave it unset when there is no attachment.",
+        },
+        attachments: {
+          type: "array",
+          description: "Each file. ref is the filename or link. kind is menu_or_brochure, photo, page_content, or context. uploadReady is true only for an upload-ready PDF, one menu per file, never a Figma Buzz file. pdfDeferred is true when they cannot export a PDF and marketing should know.",
+          items: {
+            type: "object",
+            properties: {
+              ref: { type: "string" },
+              kind: { type: "string" },
+              fileName: { type: "string" },
+              uploadReady: { type: "boolean" },
+              pdfDeferred: { type: "boolean" },
+            },
+            required: ["ref"],
+            additionalProperties: false,
+          },
+        },
         notes: { type: "string", description: "Do not use. The brief is question/answer lines from followUps only." },
         filingOnBehalf: { type: "boolean" },
         pricePending: {

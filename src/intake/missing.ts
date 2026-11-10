@@ -1,3 +1,4 @@
+import { attachmentMissing, requestHasFiles } from "./attachments.js";
 import { daysUntil, propertyNames, taskTypeNames } from "./catalog.js";
 import { followUpsFor, SUPPORT_QUESTION } from "./question-tree.js";
 import { REQUEST_TYPES, type BriefDraft, type FollowUp, type RequestType } from "./types.js";
@@ -158,7 +159,9 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
     });
   }
 
-  if (!assetsSatisfied(draft, followUps)) {
+  if (requestHasFiles(draft)) {
+    items.push(...attachmentMissing(draft));
+  } else if (!assetsSatisfied(draft, followUps)) {
     items.push({
       id: "assets",
       label: "Assets",

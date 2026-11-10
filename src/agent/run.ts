@@ -1,3 +1,11 @@
+import {
+  applyAttachmentAnswer,
+  captureIncomingFiles,
+  isAttachmentQuestion,
+  uploadReadyPdfPrompt,
+  viewAttachments,
+  type AttachmentInput,
+} from "../intake/attachments.js";
 import { addTaskComment, searchExistingTasks, userFacingAsanaError } from "../intake/asana.js";
 import {
   formatPropertyQuestion,
@@ -98,6 +106,7 @@ export async function runIntakeTurn(input: {
   const state = input.state;
   if (input.slackUser.name && !state.draft.requesterName) state.draft.requesterName = input.slackUser.name;
   if (input.slackUser.email && !state.draft.requesterEmail) state.draft.requesterEmail = input.slackUser.email;
+  captureIncomingFiles(state.draft, input.userText, state.lastAskedId);
 
   let preset: FlowOutcome | undefined;
   if (state.lastAskedId && (state.phase === "collecting" || state.phase === "awaiting_confirm")) {
@@ -127,6 +136,23 @@ export async function runIntakeTurn(input: {
       if (state.lastAskedId === "collateralYear") state.draft.collateralYearUnspecified = true;
       const outcome = applyAnswers(state, {}, today);
       return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
+    }
+    if (isAttachmentQuestion(state.lastAskedId)) {
+      const result = applyAttachmentAnswer(state.draft, state.lastAskedId, input.userText);
+      if (result === "recorded") {
+        const outcome = applyAnswers(state, {}, today);
+        return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
+      }
+      if (result === "need_pdf") {
+        const index = Number(state.lastAskedId.slice("attachmentPdf:".length));
+        const attachment = viewAttachments(state.draft)[index];
+        const prompt = attachment
+          ? uploadReadyPdfPrompt(state.draft, attachment)
+          : "Send an upload-ready PDF, one menu per file. Figma Buzz files can't be used by the dev team.";
+        return remember(state, input.userText, {
+          text: `${prompt}\n\nThat file still isn't an upload-ready PDF the dev team can post. Export one PDF per menu, or reply *Let marketing recommend* if you can't.`,
+        });
+      }
     }
   }
   if (state.phase === "collateral_offered") {
@@ -261,6 +287,14 @@ export async function runIntakeTurn(input: {
     messages.push({ role: "user", content: results });
     if (outcome && outcome.kind !== "invalid") break;
     if (completion && completion.kind !== "listed") break;
+  }
+
+  if (!outcome && state.phase === "awaiting_confirm") {
+    const missingNow = listMissing(state.draft, today);
+    if (missingNow.items.length > 0) {
+      state.phase = "collecting";
+      outcome = { kind: "ask", missing: missingNow };
+    }
   }
 
   if (outcome?.kind === "offer_template" && input.design) {
@@ -568,10 +602,30 @@ function toRecord(payload: Record<string, unknown>): RecordInput {
     assets: asStringArray(payload.assets),
     assetsOwner: asString(payload.assetsOwner),
     assetsDue: asString(payload.assetsDue),
+    attachments: asAttachments(payload.attachments),
+    involvesFiles: payload.involvesFiles === true ? true : undefined,
     notes: asString(payload.notes),
     filingOnBehalf: typeof payload.filingOnBehalf === "boolean" ? payload.filingOnBehalf : undefined,
     pricePending: typeof payload.pricePending === "boolean" ? payload.pricePending : undefined,
   };
+}
+
+function asAttachments(value: unknown): AttachmentInput[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const attachments: AttachmentInput[] = [];
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    const ref = asString(item.ref) ?? asString(item.url) ?? asString(item.name);
+    if (!ref?.trim()) continue;
+    attachments.push({
+      ref,
+      kind: asString(item.kind),
+      fileName: asString(item.fileName),
+      uploadReady: item.uploadReady === true,
+      pdfDeferred: item.pdfDeferred === true,
+    });
+  }
+  return attachments;
 }
 
 function asString(value: unknown): string | undefined {

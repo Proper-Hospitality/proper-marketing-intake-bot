@@ -2,7 +2,7 @@
 
 This is a Slack bot for Proper Hospitality. Someone messages it (or @mentions it in a channel) with a marketing request. It figures out the request type, checks whether a Canva template already exists, then asks for anything the intake form still needs one question at a time. They can answer a few things in one reply, say skip or not sure, or say back to change the last answer. It shows a summary, and files the task on the New Intake Board only after they click **Confirm**. The thread remembers where they were.
 
-It also answers questions about how intake works, and it shares the form link when someone would rather fill that in themselves.
+It also answers questions about how intake works. The bot is the intake path. If someone asks for the form, it shares the current Marketing Intake Form and does not create a task.
 
 If the price, pricing, or cost is not ready yet, the bot still files the task. The Asana description lists that as `Price: TBD (requester will provide)` under Pending from requester, and the confirmation asks them to reply with the price in the Asana task or the Slack thread. The Brief section is only the requester's answers, one question per line, not a written summary. A price sent later in that thread is added as a comment on the task. Other required answers are still required.
 
@@ -193,11 +193,13 @@ If a request could be an existing file or a change to one, the bot asks which. A
 
 Due dates use America/Los_Angeles. The bot blocks a same-day date, a next-day date, any Saturday or Sunday due date, and a Friday request due the following Monday. A Saturday request due the following Monday is allowed. Saturday and Sunday due dates cannot be approved. For a same-day, next-day, or Friday-to-Monday date, the requester can say *Request approval*. The bot DMs Koral Captain (`RUSH_APPROVER_KORAL_ID`, default `U0B5F1HN98Q`) and DeeDee Brown (`RUSH_APPROVER_DEEDEE_ID`, default `U0B6N3RE23T`) with Approve and Decline. The task is created only after one of them approves, and the task gets a comment `Rush approved by <name>` outside the Brief questions. A decline asks for a new date. Pending approvals are stored in Redis.
 
+When a request includes a file, the bot asks which kind each one is: a PDF of a menu or brochure to link onto a page, a photo for the page, a PDF of content to build as a page (sales group offers often arrive this way), or context such as a previous version or a deck. An upload, a Dropbox link, or a link to a file already on the website all count. A menu or brochure that will be posted has to be an upload-ready PDF, one menu per file, named clearly (the bot suggests `Property_Outlet_MenuName_MonthYear`, for example `SMP_Calabra_Dinner_Nov2026`). Figma Buzz files cannot be used by the dev team. If the requester truly cannot export a PDF, *Let marketing recommend* flags that on the task. A request with no file does not get these questions. The Asana brief lists the attachment type and the link.
+
 No new Slack scope is required. The catalog ships with the app. After this branch is merged, deploy the existing Render service the same way as the other intake updates. The bot does not sync SharePoint, Canva, or Slack folders on its own.
 
 ## How a request is filed
 
-The bot follows the same path as the Marketing Intake Form.
+The bot is the intake path. The current form, if someone asks for it, is [the Marketing Intake Form](https://form.asana.com/?k=JYO_VqiFFnSlwJs_3XoMIg&d=361605662576941). That is the only form link the bot uses. Confirm does not send people away to the form. The form link is also the fallback when Asana filing fails.
 
 - Project: New Intake Board (`1217171684008018`)
 - Section at creation: New requests - Manually Created (`1217518666052136`)
