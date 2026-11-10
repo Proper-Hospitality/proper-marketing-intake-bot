@@ -220,6 +220,8 @@ const PROPERTY_NICKNAMES: Record<string, string> = {
   hjm: "HJM",
   "hotel june malibu": "HJM",
   abh: "ABH",
+  "avalon beverly hills": "ABH",
+  "beverly hills": "ABH",
   aps: "APS",
   ing: "ING",
   ingleside: "ING",

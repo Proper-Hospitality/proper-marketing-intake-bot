@@ -1,5 +1,6 @@
 import { canonicalizeProperty } from "../catalog.js";
 import { COLLATERAL_CATALOG } from "./catalog.js";
+import type { CollateralAsset } from "./types.js";
 import { matchCollateral } from "./match.js";
 import type { CollateralQuery } from "./types.js";
 
@@ -10,7 +11,16 @@ export function salesCollateralSourceLine(): string {
   return `Full list of where each property's sales docs live: ${SALES_COLLATERAL_SOURCE_URL}`;
 }
 
-export type SalesSourceStatus = "confirmed" | "partial" | "no_shared_folder" | "no_reply" | "not_asked" | "pending";
+export type SalesSourceStatus =
+  | "confirmed"
+  | "partial"
+  | "no_shared_folder"
+  | "no_reply"
+  | "not_asked"
+  | "pending"
+  | "collateral_being_updated";
+
+export const COLLATERAL_BEING_UPDATED_LABEL = "Collateral being updated, new files coming";
 
 export type SalesLocationType =
   | "canva_folder"
@@ -102,11 +112,11 @@ export const PROPERTY_SALES_SOURCES: PropertySalesSource[] = [
   {
     property: "ABH",
     name: "Avalon Beverly Hills",
-    status: "pending",
+    status: "collateral_being_updated",
     locationType: "google_drive",
     links: ["https://drive.google.com/drive/folders/1smEyn8ipOL_jRFrLggnWjG1zRzVnnZ7h"],
-    confirmedBy: { name: "Maria Shekhovtsova", when: "Aug 2026" },
-    gaps: "Pending. Elena's ask to Maria was drafted and has not been answered. The August HERO Drive folder is partial and imagery only. It is not a confirmed sales-doc location. No ABH file bytes are in the catalog.",
+    confirmedBy: { name: "Elena Ruiz", when: "Nov 10, 2026" },
+    gaps: "Collateral being updated, new files coming. Do not suggest older Avalon Beverly Hills files. The August HERO Drive folder is imagery only, not sales collateral.",
   },
   {
     property: "TCH",
@@ -196,19 +206,23 @@ export function formatSalesSource(source: PropertySalesSource): string {
       linkLines(source.links),
     ].join("\n");
   }
+  if (source.status === "collateral_being_updated") {
+    return [
+      `${COLLATERAL_BEING_UPDATED_LABEL}. ${source.name} is updating its sales collateral. Check back or ask marketing. Do not use older ${source.name} files.`,
+      "The Google Drive HERO folder is imagery only, not sales collateral.",
+      linkLines(source.links),
+    ].join("\n");
+  }
   if (source.status === "pending") {
-    const waiting = source.property === "ABH"
-      ? " An earlier Google Drive folder called HERO file was described as imagery only. That note is partial, and the sales-doc location is not confirmed yet."
-      : source.property === "SFP"
-        ? " A follow-up was drafted and has not been answered."
-        : " An ask was drafted and has not been answered.";
+    const waiting = source.property === "SFP"
+      ? " A follow-up was drafted and has not been answered."
+      : " An ask was drafted and has not been answered.";
     const channel = source.property === "MYC"
       ? " The Nov request was never posted in #myc-sales."
       : source.property === "TCH"
         ? " The Nov request was never posted in #tch-sales."
         : "";
-    const links = source.property === "ABH" ? `\n${linkLines(source.links)}` : "";
-    return `No matching sales file is in the catalog for ${source.name}, and a sales-doc location is not confirmed yet.${channel}${waiting}${links}`;
+    return `No matching sales file is in the catalog for ${source.name}, and a sales-doc location is not confirmed yet.${channel}${waiting}`;
   }
   const where = source.status === "not_asked"
     ? ` The request was never posted in ${source.property === "MYC" ? "#myc-sales" : "#tch-sales"}.`
@@ -216,8 +230,21 @@ export function formatSalesSource(source: PropertySalesSource): string {
   return `No matching sales file is in the catalog for ${source.name}, and a sales-doc location is not confirmed.${where}`;
 }
 
+export function catalogWithoutUpdatingProperties(
+  properties: string[],
+  catalog: CollateralAsset[] = COLLATERAL_CATALOG,
+): CollateralAsset[] {
+  const blocked = new Set<string>();
+  for (const raw of properties) {
+    const source = salesSourceFor(raw);
+    if (source?.status === "collateral_being_updated") blocked.add(source.property);
+  }
+  if (blocked.size === 0) return catalog;
+  return catalog.filter((asset) => !asset.appliesTo.some((code) => blocked.has(code)));
+}
+
 export function unmatchedSourceNote(query: CollateralQuery): string | undefined {
-  const result = matchCollateral(query);
+  const result = matchCollateral(query, catalogWithoutUpdatingProperties(query.properties));
   if (result.offer || result.needsYear) return undefined;
   const notes: string[] = [];
   const seen = new Set<string>();
