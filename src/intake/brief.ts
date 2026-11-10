@@ -71,6 +71,7 @@ export function buildDescription(input: {
     "## Brief",
     briefLines.join("\n") || "(none)",
     "",
+    ...(draft.rushApprovedBy ? [`Rush approved by ${draft.rushApprovedBy}`, ""] : []),
     ...(templateLine ? [templateLine, ""] : []),
     "## Pending from requester",
     pending.join("\n") || "(none)",

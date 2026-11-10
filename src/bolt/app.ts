@@ -194,6 +194,35 @@ function registerListeners(bolt: App): void {
     });
   });
 
+  for (const actionId of ["rush_approve", "rush_decline"] as const) {
+    bolt.action(actionId, async ({ ack, body, client, context }) => {
+      await ack();
+      const click = readRushClick(body);
+      if (!click) return;
+      await withDelivery({
+        body,
+        store: getStore(),
+        context: deliveryContext(context),
+        work: async () => {
+          const { applyRushDecision } = await import("../intake/rush-approval.js");
+          const result = await applyRushDecision({
+            store: getStore(),
+            approvalId: click.approvalId,
+            approverId: click.userId,
+            decision: actionId === "rush_approve" ? "approved" : "declined",
+          });
+          if (result.approval) {
+            await client.chat.postMessage({
+              channel: result.approval.channel,
+              thread_ts: result.approval.threadTs,
+              text: result.text,
+            });
+          }
+        },
+      });
+    });
+  }
+
   bolt.action("revise_intake", async ({ ack, body, client, context }) => {
     await ack();
     const action = readAction(body);
@@ -254,6 +283,15 @@ async function safeHandle(client: WebClient, channel: string, threadTs: string |
 
 async function postFailure(client: WebClient, channel: string, threadTs: string | undefined, text: string): Promise<void> {
   await client.chat.postMessage({ channel, thread_ts: threadTs, text });
+}
+
+function readRushClick(body: unknown): { approvalId: string; userId: string } | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const record = body as { user?: { id?: string }; actions?: Array<{ value?: string }> };
+  const approvalId = record.actions?.[0]?.value;
+  const userId = record.user?.id;
+  if (!approvalId || !userId) return undefined;
+  return { approvalId, userId };
 }
 
 function readAction(body: unknown): { version: number; channel: string; messageTs: string; threadTs?: string } | undefined {

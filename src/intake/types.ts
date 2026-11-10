@@ -31,6 +31,15 @@ export interface BriefDraft {
   collateralYear?: number;
   /** They skipped the year question, so matches stay labeled with each file's own year. */
   collateralYearUnspecified?: boolean;
+  /** Existing file, or a change to that file. Set after one disambiguating question. */
+  deliverableIntent?: "existing" | "modification";
+  /** Set when the requested date is same-day, next-day, or a weekend rule. */
+  rushBlock?: "same_day" | "next_day" | "weekend";
+  /** The date Koral or DeeDee approved. */
+  rushApprovedFor?: string;
+  /** Name of the approver. Kept outside the Brief question/answer lines. */
+  rushApprovedBy?: string;
+  rushApprovalId?: string;
 }
 
 export interface FollowUp {

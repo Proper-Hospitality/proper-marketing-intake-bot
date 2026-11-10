@@ -1,4 +1,4 @@
-import { createIntakeTask, userFacingAsanaError } from "../intake/asana.js";
+import { addTaskComment, createIntakeTask, userFacingAsanaError } from "../intake/asana.js";
 import { FORM_URL, formatDisplayDate } from "../intake/catalog.js";
 import { isReadyToConfirm } from "../intake/missing.js";
 import { taskName } from "../intake/brief.js";
@@ -32,6 +32,9 @@ export async function submitConfirmedBrief(input: {
   if (state.phase !== "awaiting_confirm" && !(state.taskGid && state.fieldsApplied < 3)) {
     return { text: "There's no brief waiting to be filed. Tell me what you need and I'll collect it first." };
   }
+  if (state.draft.rushBlock && state.draft.rushApprovedFor !== state.draft.requestedCompletionDate) {
+    return { text: "That date needs approval from Koral Captain or DeeDee Brown before I can file it. Nothing was created." };
+  }
   if (!isReadyToConfirm(state.draft)) {
     return { text: "The brief is missing something, so I didn't create a task. Tell me what to change and I'll show a new summary." };
   }
@@ -57,6 +60,14 @@ export async function submitConfirmedBrief(input: {
     state.taskGid = result.taskGid;
     state.taskUrl = result.permalinkUrl;
     state.fieldsApplied = 3;
+    if (state.draft.rushApprovedBy) {
+      await addTaskComment({
+        token: input.token,
+        taskGid: result.taskGid,
+        text: `Rush approved by ${state.draft.rushApprovedBy}`,
+        fetchImpl: input.fetchImpl,
+      });
+    }
     await input.store.saveConversation(state);
     const date = state.draft.requestedCompletionDate ? formatDisplayDate(state.draft.requestedCompletionDate) : "no date";
     const lines = [

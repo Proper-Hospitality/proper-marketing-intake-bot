@@ -9,6 +9,18 @@ import {
 import { extractDesignCopy } from "../canva/extract-copy.js";
 import { continueDesign, declineDesign, offerDesignBuild, type CanvaDesignClient } from "../canva/turn.js";
 import { isBackAnswer, isSkipAnswer, rewindLastAnswer, skipAsked } from "../intake/conversation.js";
+import {
+  dateStillNeeded,
+  isDateQuestion,
+  isUnsureAnswer,
+  nudgeToFindAnswer,
+  offerMarketingRecommend,
+  recordMarketingRecommend,
+  stillCantGetIt,
+  wantsMarketingRecommend,
+} from "../intake/recommend.js";
+import { DELIVERABLE_QUESTION, parseDeliverableChoice } from "../intake/routing.js";
+import { rushExplanation } from "../intake/rush.js";
 import { COLLATERAL_YEAR_QUESTION, formatCollateralOffer } from "../intake/collateral/format.js";
 import { yearInText } from "../intake/collateral/match.js";
 import {
@@ -75,6 +87,12 @@ export async function runIntakeTurn(input: {
   fetchImpl?: typeof fetch;
   today?: Date;
   design?: DesignDeps;
+  rush?: {
+    store: import("../store/types.js").Store;
+    channel: string;
+    threadTs?: string;
+    postDm: (userId: string, text: string, blocks: import("@slack/types").KnownBlock[]) => Promise<void>;
+  };
 }): Promise<AgentReply> {
   const today = input.today ?? new Date();
   const state = input.state;
@@ -89,6 +107,22 @@ export async function runIntakeTurn(input: {
       reply.text = `Let's change that.\n\n${reply.text.replace(/^Got it\.\n\n/, "")}`;
       return remember(state, input.userText, reply);
     }
+    if ((isUnsureAnswer(input.userText) || stillCantGetIt(input.userText)) && state.lastAskedId && state.lastAskedLabel) {
+      const id = state.lastAskedId;
+      const nudges = { ...(state.unsureNudges ?? {}) };
+      nudges[id] = (nudges[id] ?? 0) + 1;
+      state.unsureNudges = nudges;
+      const text = nudges[id] === 1
+        ? nudgeToFindAnswer(state.lastAskedLabel)
+        : isDateQuestion(id)
+          ? dateStillNeeded(state.lastAskedLabel)
+          : offerMarketingRecommend(state.lastAskedLabel);
+      return remember(state, input.userText, { text });
+    }
+    if (wantsMarketingRecommend(input.userText) && recordMarketingRecommend(state)) {
+      const outcome = applyAnswers(state, {}, today);
+      return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
+    }
     if (isSkipAnswer(input.userText) && skipAsked(state)) {
       if (state.lastAskedId === "collateralYear") state.draft.collateralYearUnspecified = true;
       const outcome = applyAnswers(state, {}, today);
@@ -100,6 +134,13 @@ export async function runIntakeTurn(input: {
       ? acceptCollateral(state)
       : declineCollateral(state, input.userText, today);
     return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
+  }
+  if (state.lastAskedId === "deliverable" && state.phase === "collecting") {
+    const choice = parseDeliverableChoice(input.userText);
+    if (choice) {
+      state.draft.deliverableIntent = choice;
+      preset = applyAnswers(state, {}, today);
+    }
   }
   if (state.lastAskedId === "collateralYear" && state.phase === "collecting") {
     const year = yearInText(input.userText);
@@ -123,6 +164,23 @@ export async function runIntakeTurn(input: {
       const outcome = declineDesign(state, designTurn.reason, today);
       return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
     }
+  }
+  if (/^request approval[.!]?$/i.test(input.userText.trim()) && state.draft.rushBlock && state.draft.requestedCompletionDate && input.rush) {
+    const { startRushApproval } = await import("../intake/rush-approval.js");
+    await startRushApproval({
+      state,
+      store: input.rush.store,
+      date: state.draft.requestedCompletionDate,
+      reason: state.draft.rushBlock,
+      summary: `${state.draft.requesterName ?? "Someone"} needs ${state.draft.requestName ?? "a request"} for ${(state.draft.properties ?? []).join(", ")} by ${state.draft.requestedCompletionDate}.`,
+      channel: input.rush.channel,
+      threadTs: input.rush.threadTs,
+      postDm: input.rush.postDm,
+    });
+    await input.rush.store.saveConversation(state);
+    return remember(state, input.userText, {
+      text: "I asked Koral Captain and DeeDee Brown to approve this date. Nothing is filed until one of them approves.",
+    });
   }
   if (state.phase === "template_offered" && looksLikeAccept(input.userText)) {
     preset = acceptTemplate(state);
@@ -359,6 +417,14 @@ function renderReply(
   }
   if (outcome?.kind === "offer_collateral") {
     return { text: formatCollateralOffer(outcome.offer) };
+  }
+  if (outcome?.kind === "ask_deliverable") {
+    state.lastAskedId = "deliverable";
+    state.lastAskedLabel = "Existing file or a change";
+    return { text: DELIVERABLE_QUESTION };
+  }
+  if (outcome?.kind === "rush_required") {
+    return { text: rushExplanation(outcome.reason, outcome.date) };
   }
   if (outcome?.kind === "ask_collateral_year") {
     state.answerTrail = [...(state.answerTrail ?? []), state.lastAskedId].filter((id): id is string => Boolean(id)).slice(-30);
