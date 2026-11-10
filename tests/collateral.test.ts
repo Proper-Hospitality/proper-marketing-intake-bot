@@ -498,9 +498,20 @@ describe("existing collateral catalog", () => {
     expect(tch).toContain("#tch-sales");
 
     const abh = unmatchedSourceNote({ properties: ["ABH"], taskType: "Sales Collateral", text: "brochure" });
-    expect(abh).toContain("partial");
-    expect(abh).toContain("not confirmed yet");
+    expect(abh).toContain("Collateral being updated, new files coming");
+    expect(abh).toContain("Check back or ask marketing");
+    expect(abh).toContain("Do not use older Avalon Beverly Hills files");
+    expect(abh).toContain("imagery only");
     expect(abh).toContain("https://drive.google.com/drive/folders/1smEyn8ipOL_jRFrLggnWjG1zRzVnnZ7h");
+    expect(abh).not.toContain("Proper Fact Sheet.pdf");
+    const abhFacts = unmatchedSourceNote({
+      properties: ["Avalon Beverly Hills"],
+      taskType: "Sales Collateral",
+      text: "fact sheet",
+      requestedYear: 2026,
+    });
+    expect(abhFacts).toContain("Collateral being updated, new files coming");
+    expect(abhFacts).not.toContain("https://properhotels.sharepoint.com/sites/DowntownLAProper/");
 
     const austin = unmatchedSourceNote({ properties: ["ATXP"], taskType: "Sales Collateral", text: "brochure" });
     expect(austin).toContain("no centralized folder");

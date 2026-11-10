@@ -9,7 +9,7 @@ import { dropSkipsThatWereAnswered } from "./conversation.js";
 import { isPricePendingStatement, listMissing, mentionsActualPrice, type MissingReport } from "./missing.js";
 import { formatCollateralOffer } from "./collateral/format.js";
 import { matchCollateral, yearInText } from "./collateral/match.js";
-import { unmatchedSourceNote } from "./collateral/sources.js";
+import { catalogWithoutUpdatingProperties, unmatchedSourceNote } from "./collateral/sources.js";
 import type { CollateralOffer } from "./collateral/types.js";
 import { matchTemplates, type TemplateMatchResult } from "./templates.js";
 import type { BriefDraft, RequestType } from "./types.js";
@@ -274,7 +274,7 @@ function considerCollateral(state: FlowState): FlowOutcome | undefined {
     text,
     requestedYear,
     yearUnspecified: draft.collateralYearUnspecified,
-  });
+  }, catalogWithoutUpdatingProperties(draft.properties));
   if (result.needsYear && !draft.collateralYear && !draft.collateralYearUnspecified) {
     state.phase = "collecting";
     return { kind: "ask_collateral_year" };
