@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { runIntakeTurn, type Llm, type LlmContentBlock } from "../src/agent/run.js";
 import { canonicalizeProperty } from "../src/intake/catalog.js";
+import { applyAnswers } from "../src/intake/flow.js";
 import { COLLATERAL_CATALOG } from "../src/intake/collateral/catalog.js";
+import { PROPERTY_SALES_SOURCES, unmatchedSourceNote } from "../src/intake/collateral/sources.js";
 import { formatCollateralOffer } from "../src/intake/collateral/format.js";
 import { matchCollateral, yearLabel } from "../src/intake/collateral/match.js";
 import type { CollateralAsset } from "../src/intake/collateral/types.js";
@@ -449,6 +451,90 @@ describe("existing collateral catalog", () => {
     expect(COLLATERAL_CATALOG.filter((asset) => asset.appliesTo.includes("SMP") && asset.yearProvenance === "user_confirmation").map((asset) => asset.id)).toEqual(["dtla:Proper Fact Sheet.pdf"]);
   });
 });
+
+  it("tells where sales docs live when no catalog file matches, and does not invent one", () => {
+    expect(PROPERTY_SALES_SOURCES).toHaveLength(10);
+    expect(COLLATERAL_CATALOG).toHaveLength(44);
+    const declined = {
+      templateDeclinedReason: "The team should design it",
+      templateDeclinedFor: "Creative|Sales Collateral",
+    };
+    const ask = (property: string, requestName: string, taskType = "Sales Collateral") => {
+      const state = emptyConversation(`C:${property}:${requestName}`);
+      state.templateDeclinedReason = declined.templateDeclinedReason;
+      state.templateDeclinedFor = declined.templateDeclinedFor;
+      return applyAnswers(state, {
+        requesterName: "Elena Ruiz",
+        requesterEmail: "elena@example.com",
+        requestName,
+        properties: [property],
+        requestType: "Creative",
+        taskType,
+      }, TODAY);
+    };
+
+    const aps = ask("APS", "capacity chart");
+    expect(aps.kind).toBe("ask");
+    if (aps.kind === "ask") {
+      expect(aps.preface).toContain("Files & Links");
+      expect(aps.preface).toContain("https://properhospitalitycorp.slack.com/archives/C0B62Q4NLCA");
+      expect(aps.preface).not.toContain("capacity chart file");
+    }
+
+    const sfp = unmatchedSourceNote({ properties: ["SFP"], taskType: "Sales Collateral", text: "wedding flyer" });
+    expect(sfp).toContain("not confirmed");
+    expect(sfp).not.toContain("sharepoint.com");
+
+    const myc = unmatchedSourceNote({ properties: ["MYC"], taskType: "Menu (F&B, Spa)", text: "banquet menu" });
+    expect(myc).toContain("not confirmed");
+    expect(myc).toContain("never posted");
+    expect(myc).toContain("#myc-sales");
+
+    const tch = unmatchedSourceNote({ properties: ["TCH"], taskType: "Sales Collateral", text: "tour script" });
+    expect(tch).toContain("not confirmed");
+    expect(tch).toContain("#tch-sales");
+
+    const abh = unmatchedSourceNote({ properties: ["ABH"], taskType: "Sales Collateral", text: "brochure" });
+    expect(abh).toContain("partial");
+    expect(abh).toContain("not confirmed");
+    expect(abh).toContain("https://drive.google.com/drive/folders/1smEyn8ipOL_jRFrLggnWjG1zRzVnnZ7h");
+
+    const austin = unmatchedSourceNote({ properties: ["ATXP"], taskType: "Sales Collateral", text: "brochure" });
+    expect(austin).toContain("no centralized folder");
+    expect(austin).toContain("ATXP Fact Sheet");
+    expect(austin).toContain("Kappo Kappo Events");
+    expect(austin).toContain("Updated Floor Plan");
+    expect(austin).toContain("Austin Proper Capacity Chart");
+    expect(austin).toContain("Austin Proper Floor Plan");
+    expect(austin).toContain("https://properhospitalitycorp.slack.com/archives/C0B62QUHBK4/p1793928288710819");
+
+    expect(unmatchedSourceNote({
+      properties: ["SMP"],
+      taskType: "Sales Collateral",
+      text: "fact sheet",
+      requestedYear: 2026,
+    })).toBeUndefined();
+
+    const smpCapacity = unmatchedSourceNote({ properties: ["Santa Monica Proper"], taskType: "Sales Collateral", text: "capacity chart" });
+    expect(smpCapacity).toContain("Print Collateral");
+    expect(smpCapacity).toContain("https://www.canva.com/d/7Hr7IQ7p_fwF3cS");
+    expect(smpCapacity).toContain("https://www.canva.com/d/H8Vl4EBRTWrEh5s");
+
+    const state = emptyConversation("C:repeat");
+    state.templateDeclinedReason = declined.templateDeclinedReason;
+    state.templateDeclinedFor = "Creative|Menu (F&B, Spa)";
+    const first = applyAnswers(state, {
+      requesterName: "Elena Ruiz",
+      requesterEmail: "elena@example.com",
+      requestName: "banquet menu",
+      properties: ["MYC"],
+      requestType: "Creative",
+      taskType: "Menu (F&B, Spa)",
+    }, TODAY);
+    expect(first.kind === "ask" && first.preface).toContain("not confirmed");
+    const second = applyAnswers(state, {}, TODAY);
+    expect(second.kind === "ask" ? second.preface : undefined).toBeUndefined();
+  });
 
 describe("existing collateral in the intake", () => {
   it("offers the 2027 link, accepts it without filing, and does not offer it twice", async () => {

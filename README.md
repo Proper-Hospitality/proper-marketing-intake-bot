@@ -178,6 +178,8 @@ Shelborne sales collateral is included. A separate request removed Shelborne fro
 
 Elena's confirmation that the current Hotel June and Downtown LA files are 2026 applies only to those eight files. It does not apply to Santa Monica, San Francisco, or Shelborne. A 2026 Hotel June or Downtown LA file is an older starting point for a 2027 request, not the current file.
 
+If no catalog file matches the property and the type, the bot says where that property's sales docs were reported to live, or that no location is confirmed. That note is separate from the 44 file records. A confirmed location is a place to look, not a claim that the requested file is in the catalog. A partial location, including Avalon Beverly Hills, is labeled partial. San Francisco, Montauk, and Culver have no confirmed location. The Nov request was never posted in `#myc-sales` or `#tch-sales`. Austin has no central folder; the five cataloged PDFs are the files Ryan attached. These location links were not opened, and the catalog does not sync them.
+
 Opening a link still depends on that person's Canva, Slack, or SharePoint access. The bot does not sync folders and does not refresh itself.
 
 To refresh the catalog, replace the records in `src/intake/collateral/catalog.ts` from a new verified handoff. Keep each file's own year, the place that year came from (title, filename, or text), and whether it is verified, metadata-only, or a 403 pointer. Do not copy a year from another property, and do not use a file's modified date as its content year. Leave a file's year unknown when the handoff does not prove one. Do not mark a 403 folder or an unread PDF as a verified document.

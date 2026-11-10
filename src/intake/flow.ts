@@ -9,6 +9,7 @@ import { dropSkipsThatWereAnswered } from "./conversation.js";
 import { isPricePendingStatement, listMissing, mentionsActualPrice, type MissingReport } from "./missing.js";
 import { formatCollateralOffer } from "./collateral/format.js";
 import { matchCollateral, yearInText } from "./collateral/match.js";
+import { unmatchedSourceNote } from "./collateral/sources.js";
 import type { CollateralOffer } from "./collateral/types.js";
 import { matchTemplates, type TemplateMatchResult } from "./templates.js";
 import type { BriefDraft, RequestType } from "./types.js";
@@ -42,8 +43,8 @@ export type FlowOutcome =
   | { kind: "ask_collateral_year" }
   | { kind: "offer_collateral"; offer: CollateralOffer }
   | { kind: "accepted_collateral"; offer: CollateralOffer }
-  | { kind: "ask"; missing: MissingReport }
-  | { kind: "confirm"; missing: MissingReport }
+  | { kind: "ask"; missing: MissingReport; preface?: string }
+  | { kind: "confirm"; missing: MissingReport; preface?: string }
   | { kind: "accepted_template"; match: TemplateMatchResult }
   | { kind: "invalid"; errors: string[] };
 
@@ -56,6 +57,7 @@ export interface FlowState {
   collateralOffer?: CollateralOffer | null;
   collateralDeclinedFor?: string;
   collateralOfferedFor?: string;
+  collateralSourceFor?: string;
   confirmVersion: number;
 }
 
@@ -132,14 +134,15 @@ function advance(state: FlowState, today: Date): FlowOutcome {
   const collateral = considerCollateral(state);
   if (collateral) return collateral;
 
+  const preface = sourcePreface(state);
   const missing = listMissing(draft, today);
   if (missing.items.length > 0) {
     state.phase = "collecting";
-    return { kind: "ask", missing };
+    return preface ? { kind: "ask", missing, preface } : { kind: "ask", missing };
   }
   state.phase = "awaiting_confirm";
   state.confirmVersion += 1;
-  return { kind: "confirm", missing };
+  return preface ? { kind: "confirm", missing, preface } : { kind: "confirm", missing };
 }
 
 function mergeDraft(draft: BriefDraft, input: RecordInput): string[] {
@@ -284,4 +287,22 @@ function considerCollateral(state: FlowState): FlowOutcome | undefined {
   state.collateralOfferedFor = key;
   state.phase = "collateral_offered";
   return { kind: "offer_collateral", offer: result.offer };
+}
+
+function sourcePreface(state: FlowState): string | undefined {
+  const draft = state.draft;
+  if (!draft.taskType || !COLLATERAL_TASKS.has(draft.taskType)) return undefined;
+  if (!draft.properties || draft.properties.length === 0) return undefined;
+  const key = collateralKey(draft);
+  if (state.collateralSourceFor === key) return undefined;
+  const note = unmatchedSourceNote({
+    properties: draft.properties,
+    taskType: draft.taskType,
+    text: matchText(draft),
+    requestedYear: draft.collateralYear ?? yearInText(matchText(draft)),
+    yearUnspecified: draft.collateralYearUnspecified,
+  });
+  if (!note) return undefined;
+  state.collateralSourceFor = key;
+  return note;
 }
