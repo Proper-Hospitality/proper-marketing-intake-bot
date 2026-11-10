@@ -13,10 +13,10 @@ const TODAY = new Date("2026-11-05T12:00:00Z");
 
 describe("existing collateral catalog", () => {
   it("keeps each SMP and SFP file's own year and does not borrow the HJLA/DTLA confirmation", () => {
-    expect(COLLATERAL_CATALOG).toHaveLength(47);
-    expect(COLLATERAL_CATALOG.filter((asset) => asset.active)).toHaveLength(38);
-    expect(COLLATERAL_CATALOG.filter((asset) => asset.contentRead)).toHaveLength(20);
-    expect(COLLATERAL_CATALOG.filter((asset) => asset.tier === "candidate")).toHaveLength(5);
+    expect(COLLATERAL_CATALOG).toHaveLength(54);
+    expect(COLLATERAL_CATALOG.filter((asset) => asset.active)).toHaveLength(45);
+    expect(COLLATERAL_CATALOG.filter((asset) => asset.contentRead)).toHaveLength(26);
+    expect(COLLATERAL_CATALOG.filter((asset) => asset.tier === "candidate")).toHaveLength(4);
     expect(COLLATERAL_CATALOG.filter((asset) => asset.tier === "pointer")).toHaveLength(2);
     const confirmed = COLLATERAL_CATALOG.filter((asset) => asset.yearProvenance === "user_confirmation");
     expect(confirmed.map((asset) => asset.id).sort()).toEqual([
@@ -210,16 +210,19 @@ describe("existing collateral catalog", () => {
       properties: ["Shelborne"],
       taskType: "Sales Collateral",
       text: "sales collateral",
+      yearUnspecified: true,
     });
-    expect(sales.offer?.current).toEqual([]);
-    expect(sales.offer?.candidates.map((asset) => asset.id)).toEqual(["smb:slack:F0BP25X0X8B"]);
+    const offeredIds = [
+      ...(sales.offer?.current ?? []),
+      ...(sales.offer?.older ?? []),
+      ...(sales.offer?.unknownYear ?? []),
+      ...(sales.offer?.candidates ?? []),
+    ].map((asset) => asset.id);
+    expect(offeredIds.filter((id) => id.includes("Recovery") || id.includes("F0BP25X0X8B"))).toEqual(["smb:upload:The_Recovery_Room"]);
     expect(sales.offer?.pointers.map((asset) => asset.id)).toEqual(["smb:sp:1-RESOURCES"]);
     const salesText = formatCollateralOffer(sales.offer!);
-    expect(salesText).toContain("No verified file is in the catalog");
     expect(salesText).toContain("The source returned 403");
     expect(salesText).toContain("not an indexed library");
-    expect(salesText).toContain("The file was not downloaded or read.");
-    expect(salesText).toContain("(2026)");
     expect(salesText).not.toContain("Covers 2026");
     expect(salesText).not.toContain("1-PICTURES");
 
@@ -454,7 +457,7 @@ describe("existing collateral catalog", () => {
 
   it("tells where sales docs live when no catalog file matches, and does not invent one", () => {
     expect(PROPERTY_SALES_SOURCES).toHaveLength(10);
-    expect(COLLATERAL_CATALOG).toHaveLength(47);
+    expect(COLLATERAL_CATALOG).toHaveLength(54);
     const declined = {
       templateDeclinedReason: "The team should design it",
       templateDeclinedFor: "Creative|Sales Collateral",
@@ -600,6 +603,71 @@ describe("existing collateral catalog", () => {
     expect(first.kind === "ask" && first.preface).toContain("not confirmed yet");
     const second = applyAnswers(state, {}, TODAY);
     expect(second.kind === "ask" ? second.preface : undefined).toBeUndefined();
+  });
+
+  it("returns Elena's Shelborne files once and keeps the 2025 guide outdated", () => {
+    const titles = COLLATERAL_CATALOG.map((asset) => asset.title);
+    for (const excluded of ["Golf / Padel near The Shelborne", "The Shelborne Cabana Experiences", "4 Day Group Trip Itinerary", "Audiovisual Packages 2025"]) {
+      expect(titles).not.toContain(excluded);
+    }
+    const guide = COLLATERAL_CATALOG.find((asset) => asset.id === "smb:upload:Meeting_Events_Information_Guide");
+    expect(guide).toMatchObject({
+      years: { kind: "year", year: 2025 },
+      yearProvenance: "text",
+      outdated: true,
+      active: true,
+    });
+    const guideMatch = matchCollateral({
+      properties: ["SMB"],
+      taskType: "Sales Collateral",
+      text: "meeting and events information guide",
+      requestedYear: 2026,
+    });
+    expect(guideMatch.offer?.current.map((asset) => asset.id) ?? []).not.toContain(guide?.id);
+    expect(guideMatch.offer?.older.map((asset) => asset.id)).toContain("smb:upload:Meeting_Events_Information_Guide");
+
+    const menu = matchCollateral({
+      properties: ["Shelborne"],
+      taskType: "Menu (F&B, Spa)",
+      text: "banquet menu",
+      requestedYear: 2026,
+    });
+    expect(menu.offer?.current.map((asset) => asset.id)).toEqual(["smb:upload:Banquet_Menu"]);
+    expect(menu.offer?.current[0]).toMatchObject({ yearProvenance: "filename", years: { kind: "year", year: 2026 } });
+
+    const capacity = matchCollateral({
+      properties: ["SMB"],
+      taskType: "Sales Collateral",
+      text: "capacity chart",
+    });
+    expect(capacity.offer?.unknownYear.map((asset) => asset.id)).toEqual(["smb:upload:Capacity_Chart"]);
+
+    const recovery = matchCollateral({
+      properties: ["SMB"],
+      taskType: "Sales Collateral",
+      text: "Recovery Room one-pager",
+      requestedYear: 2026,
+    });
+    const recoveryIds = [
+      ...(recovery.offer?.current ?? []),
+      ...(recovery.offer?.older ?? []),
+      ...(recovery.offer?.unknownYear ?? []),
+      ...(recovery.offer?.candidates ?? []),
+    ].map((asset) => asset.id);
+    expect(recoveryIds.filter((id) => /recovery|F0BP25X0X8B/i.test(id))).toEqual(["smb:upload:The_Recovery_Room"]);
+
+    const villa = matchCollateral({
+      properties: ["SMB"],
+      taskType: "Sales Collateral",
+      text: "Villa 13 one-pager",
+      yearUnspecified: true,
+    });
+    expect(villa.offer?.unknownYear.map((asset) => asset.id)).toContain("smb:upload:Villa_13_Conference_Setup");
+    expect(villa.offer?.unknownYear.find((asset) => asset.id === "smb:upload:Villa_13_Conference_Setup")).toMatchObject({
+      retrieval: "image_described",
+      contentRead: false,
+      years: { kind: "unknown" },
+    });
   });
 
 describe("existing collateral in the intake", () => {
