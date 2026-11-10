@@ -3,7 +3,7 @@ import { runIntakeTurn, type Llm, type LlmContentBlock } from "../src/agent/run.
 import { canonicalizeProperty } from "../src/intake/catalog.js";
 import { applyAnswers } from "../src/intake/flow.js";
 import { COLLATERAL_CATALOG } from "../src/intake/collateral/catalog.js";
-import { PROPERTY_SALES_SOURCES, unmatchedSourceNote } from "../src/intake/collateral/sources.js";
+import { PROPERTY_SALES_SOURCES, SALES_COLLATERAL_SOURCE_URL, unmatchedSourceNote } from "../src/intake/collateral/sources.js";
 import { formatCollateralOffer } from "../src/intake/collateral/format.js";
 import { matchCollateral, yearLabel } from "../src/intake/collateral/match.js";
 import type { CollateralAsset } from "../src/intake/collateral/types.js";
@@ -519,6 +519,19 @@ describe("existing collateral catalog", () => {
     expect(smpCapacity).toContain("Print Collateral");
     expect(smpCapacity).toContain("https://www.canva.com/d/7Hr7IQ7p_fwF3cS");
     expect(smpCapacity).toContain("https://www.canva.com/d/H8Vl4EBRTWrEh5s");
+    expect(smpCapacity).toContain("Full list of where each property's sales docs live:");
+    expect(smpCapacity).toContain(SALES_COLLATERAL_SOURCE_URL);
+
+    const matched = matchCollateral({
+      properties: ["SMP"],
+      taskType: "Menu (F&B, Spa)",
+      text: "banquet menu",
+      requestedYear: 2027,
+    });
+    const matchedText = formatCollateralOffer(matched.offer!);
+    expect(matchedText).toContain("Covers 2027");
+    expect(matchedText).toContain("Full list of where each property's sales docs live:");
+    expect(matchedText).toContain(SALES_COLLATERAL_SOURCE_URL);
 
     const state = emptyConversation("C:repeat");
     state.templateDeclinedReason = declined.templateDeclinedReason;

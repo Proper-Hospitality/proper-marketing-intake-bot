@@ -3,6 +3,13 @@ import { COLLATERAL_CATALOG } from "./catalog.js";
 import { matchCollateral } from "./match.js";
 import type { CollateralQuery } from "./types.js";
 
+/** Notion page that lists where each property's sales docs live. Not fetched. */
+export const SALES_COLLATERAL_SOURCE_URL = "https://app.notion.com/p/4146d40b27ff81a0be75e59df252a920";
+
+export function salesCollateralSourceLine(): string {
+  return `Full list of where each property's sales docs live: ${SALES_COLLATERAL_SOURCE_URL}`;
+}
+
 export type SalesSourceStatus = "confirmed" | "partial" | "no_shared_folder" | "no_reply" | "not_asked";
 
 export type SalesLocationType =
@@ -198,5 +205,5 @@ export function unmatchedSourceNote(query: CollateralQuery): string | undefined 
     notes.push(formatSalesSource(source));
   }
   if (notes.length === 0) return undefined;
-  return notes.join("\n\n");
+  return `${notes.join("\n\n")}\n\n${salesCollateralSourceLine()}`;
 }

@@ -1,5 +1,6 @@
 import type { CollateralAsset, CollateralOffer } from "./types.js";
 import { isOlderThan, yearLabel } from "./match.js";
+import { salesCollateralSourceLine } from "./sources.js";
 
 function verifiedNote(asset: CollateralAsset, note: string): string {
   const unread = asset.retrieval === "image_described"
@@ -64,6 +65,7 @@ export function formatCollateralOffer(offer: CollateralOffer): string {
     lines.push("", "Folder pointers (contents not indexed):");
     for (const asset of offer.pointers) lines.push(pointerNote(asset));
   }
+  lines.push("", salesCollateralSourceLine());
   lines.push("", "Reply *I'll use this* to use a link and stop here. If it's outdated or you need a new year, say so and we'll keep going on a new task.");
   return lines.join("\n");
 }
