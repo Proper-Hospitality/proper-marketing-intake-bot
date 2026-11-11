@@ -1,4 +1,4 @@
-import { addTaskComment, uploadTaskAttachment, userFacingAsanaError } from "./asana.js";
+import { addTaskComment, listTaskAttachmentNames, uploadTaskAttachment, userFacingAsanaError } from "./asana.js";
 import type { TurnAttachment } from "./capture.js";
 import { downloadSlackFile } from "../slack/files.js";
 import type { BriefDraft } from "./types.js";
@@ -56,8 +56,30 @@ export async function uploadLoadedAttachments(input: {
   files: LoadedAttachment[];
   fetchImpl?: typeof fetch;
 }): Promise<string[]> {
+  if (input.files.length === 0) return [];
   const uploaded: string[] = [];
+  const namesOnTask = new Set<string>();
+  try {
+    for (const name of await listTaskAttachmentNames({
+      token: input.asanaToken,
+      taskGid: input.taskGid,
+      fetchImpl: input.fetchImpl,
+    })) {
+      namesOnTask.add(normalizeFileName(name));
+    }
+  } catch (error) {
+    console.error(JSON.stringify({
+      msg: "asana_attachment_list_failed",
+      taskGid: input.taskGid,
+      error: userFacingAsanaError(error),
+    }));
+  }
   for (const file of input.files) {
+    const nameKey = normalizeFileName(file.name);
+    if (nameKey && namesOnTask.has(nameKey)) {
+      uploaded.push(file.slackFileId);
+      continue;
+    }
     try {
       await uploadTaskAttachment({
         token: input.asanaToken,
@@ -68,6 +90,7 @@ export async function uploadLoadedAttachments(input: {
         fetchImpl: input.fetchImpl,
       });
       uploaded.push(file.slackFileId);
+      if (nameKey) namesOnTask.add(nameKey);
     } catch (error) {
       const link = file.permalink ? ` ${file.permalink}` : "";
       const reason = userFacingAsanaError(error);
@@ -88,6 +111,10 @@ export async function uploadLoadedAttachments(input: {
     }
   }
   return uploaded;
+}
+
+function normalizeFileName(name: string | undefined): string {
+  return name?.trim().toLowerCase() ?? "";
 }
 
 export type { TurnAttachment };

@@ -1,4 +1,5 @@
 import { FORM_URL } from "../intake/catalog.js";
+import { rememberAttachment } from "../intake/capture.js";
 import { runIntakeTurn, type DesignDeps, type Llm } from "../agent/run.js";
 import { confirmBlocks, confirmTaskCompletionBlocks, messageBlocks } from "./blocks.js";
 import { slackThreadUrl } from "../intake/brief.js";
@@ -6,6 +7,7 @@ import { submitConfirmedBrief } from "./submit.js";
 import { finishConfirmedCompletion } from "../tasks/complete.js";
 import type { SlackApi } from "./api.js";
 import { messageClaimKey, messageOnceKey } from "./incoming.js";
+import { collectThreadFiles, mergeThreadFiles } from "./thread-files.js";
 import { conversationKey, conversationKeyFromAction, emptyConversation, type Store } from "../store/types.js";
 
 export interface IncomingMessage {
@@ -84,7 +86,9 @@ async function handleFreshMessage(deps: {
   }
 
   const profile = await deps.slack.userProfile(message.userId);
-  const attachments = (message.uploads ?? []).flatMap((file) => (
+  const parentTs = message.threadTs && message.threadTs !== message.ts ? message.threadTs : (state.threadTs || message.ts);
+  const fromThread = await collectThreadFiles(deps.slack, message.channel, parentTs, message.ts);
+  const currentFiles = (message.uploads ?? []).flatMap((file) => (
     file.slackFileId ? [{
       slackFileId: file.slackFileId,
       name: file.name,
@@ -92,6 +96,7 @@ async function handleFreshMessage(deps: {
       mimetype: file.mimetype,
     }] : []
   ));
+  const attachments = mergeThreadFiles(fromThread, currentFiles);
   const fileNote = attachments.length > 0
     ? `\nFiles attached (saved on this request): ${attachments.map((file) => file.permalink ? `${file.name ?? file.slackFileId} ${file.permalink}` : (file.name ?? file.slackFileId)).join(", ")}`
     : "";
@@ -190,6 +195,10 @@ export async function handleConfirmAction(deps: {
       blocks: messageBlocks("Filing this on the New Intake Board."),
     });
     const thread = action.threadTs ?? action.messageTs;
+    if (state.channel && state.threadTs) {
+      const files = await collectThreadFiles(deps.slack, state.channel, state.threadTs);
+      for (const file of files) rememberAttachment(state.draft, file);
+    }
     const result = await submitConfirmedBrief({
       confirmed: true,
       version: action.version,

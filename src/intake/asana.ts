@@ -258,6 +258,22 @@ export async function searchExistingTasks(input: {
   }
 }
 
+export async function listTaskAttachmentNames(input: {
+  token: string;
+  taskGid: string;
+  fetchImpl?: typeof fetch;
+}): Promise<string[]> {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const payload = await asanaRequest<{ data?: Array<{ name?: string }> | { name?: string } }>(
+    fetchImpl,
+    input.token,
+    "GET",
+    `/tasks/${input.taskGid}/attachments?opt_fields=name,gid`,
+  );
+  const rows = Array.isArray(payload.data) ? payload.data : [];
+  return rows.map((row) => row.name?.trim() ?? "").filter(Boolean);
+}
+
 export async function uploadTaskAttachment(input: {
   token: string;
   taskGid: string;
