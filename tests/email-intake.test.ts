@@ -12,6 +12,7 @@ import { MemoryStore } from "../src/store/memory.js";
 import { emptyConversation } from "../src/store/types.js";
 import { TAHOE_BODY, TAHOE_CHANNEL, TAHOE_SUBJECT, TAHOE_TS, tahoeSlackEvent } from "./fixtures/tahoe-email.js";
 import { TAHOE_LIVE_BODY, TAHOE_LIVE_CHANNEL, TAHOE_LIVE_SUBJECT, TAHOE_LIVE_TS, tahoeLiveSlackEvent } from "./fixtures/tahoe-live-email.js";
+import { NESTED_BODY, NESTED_CHANNEL, NESTED_SUBJECT, NESTED_TS, nestedSlackEvent } from "./fixtures/tahoe-nested-forward.js";
 
 const TODAY = new Date("2026-11-11T20:00:00Z");
 
@@ -57,21 +58,16 @@ describe("forwarded email intake", () => {
       expect(posts).toHaveLength(1);
       expect(posts[0]?.threadTs).toBe(TAHOE_TS);
       const text = posts[0]?.text ?? "";
-      expect(text).toContain("4 separate");
-      expect(text).toContain("Jamie Mark");
+      expect(text).toContain("Hi Jamie!");
       expect(text).toContain("Rowan Smith forwarded");
+      expect(text).toContain("Want me to split them?");
+      expect(text).not.toContain("Splitting this into");
       expect(text).not.toContain("SVP Memberships");
       expect(text).not.toContain("All Properties, All Proper");
-      expect(text).toContain("Web → Page Edit");
-      expect(text).toContain("Newsletter Send");
-      expect(text).toContain("New User Journey");
-      expect(text).toContain("Marketing → Marketing Plan");
-      expect(text).toContain("Incline Village");
+      expect(text).toContain("Lake Tahoe membership interest form");
       expect(text).toContain("500+");
-      expect(text).toContain("info@");
-      expect(text).toContain("how often");
-      expect(text).toContain("Nothing is filed");
-      expect(JSON.stringify(posts[0]?.blocks)).toContain("email_split");
+      expect(text).toContain("Nothing gets filed");
+      expect(JSON.stringify(posts[0]?.blocks)).not.toContain("email_split");
       expect(JSON.stringify(posts[0]?.blocks)).not.toContain("confirm_intake");
       const saved = await store.getConversation(`${TAHOE_CHANNEL}:${TAHOE_TS}`);
       expect(saved?.phase).toBe("awaiting_email_split");
@@ -129,9 +125,8 @@ describe("forwarded email intake", () => {
         isDm: false,
       });
       const brief = posts[1]?.text ?? "";
-      expect(brief).toContain("Brief 1 of 4");
-      expect(brief).toContain("Web → Page Edit");
-      expect(brief).toContain("Jamie Mark");
+      expect(brief).toContain("1 of 4");
+      expect(brief).toContain("membership interest form");
       expect(brief).toContain("Lake Tahoe (LTP)");
       expect(brief).not.toContain("Rowan Smith");
       expect(brief).not.toContain("*Property*");
@@ -230,7 +225,7 @@ describe("forwarded email intake", () => {
         bodyText: TAHOE_BODY,
         files: [],
       });
-      expect(posts[0]?.text).toContain("4 separate");
+      expect(posts[0]?.text).toContain("Want me to split them?");
       await handleEmailSplitAction({ store, slack, today: TODAY }, {
         choice: "one",
         channel: TAHOE_CHANNEL,
@@ -239,14 +234,15 @@ describe("forwarded email intake", () => {
       });
       expect(updates[0]).toContain("Keeping this as one");
       const text = posts[1]?.text ?? "";
-      expect(text).toContain("Marketing → Marketing Plan");
-      expect(text).toContain("500+");
-      expect(text).toContain("info@");
+      expect(text).toContain("Lake Tahoe");
+      expect(text).not.toContain("1 of 4");
       expect(text).not.toContain("Brief 1 of 4");
       const state = await store.getConversation(`${TAHOE_CHANNEL}:${TAHOE_TS}`);
       expect(state?.emailIntake?.mode).toBe("single");
       expect(state?.emailIntake?.proposals).toHaveLength(1);
       expect(state?.draft.followUps?.["Detailed Request"]).toContain("Incline Village");
+      expect(state?.draft.followUps?.["Detailed Request"]).toContain("500+");
+      expect(state?.draft.followUps?.["Detailed Request"]).toContain("info@");
     });
   });
 
@@ -429,8 +425,8 @@ describe("forwarded email intake", () => {
         },
       });
       expect(loads).toBe(1);
-      expect(posts[0]?.text).toContain("Jamie Mark");
-      expect(posts[0]?.text).toContain("4 separate");
+      expect(posts[0]?.text).toContain("Hi Jamie!");
+      expect(posts[0]?.text).toContain("Want me to split them?");
     });
   });
 
@@ -629,22 +625,15 @@ describe("live Lake Tahoe forward", () => {
         botUserId: "UINTAKE",
       });
       const text = posts[0]?.text ?? "";
-      expect(text).toContain("<@UJAMIE>");
+      expect(text).toContain("Hi <@UJAMIE>!");
       expect(text).toContain("Elena Ruiz forwarded");
-      expect(text).toContain("4 separate");
-      expect(text).toContain("Lake Tahoe (LTP)");
-      expect(text).toContain("Lake Tahoe membership interest form");
-      expect(text).toContain("Membership interest questionnaire");
-      expect(text).toContain("Merge and clean interest contacts");
-      expect(text).toContain("Project update plan");
-      expect(text).toContain("Incline Village");
+      expect(text).toContain("Lake Tahoe membership page");
       expect(text).toContain("500+");
-      expect(text).toContain("info@");
-      expect(text).toContain("how often");
-      expect(text).toContain("Nothing is filed");
-      expect(text).not.toMatch(/Elena —|Manager, Sales Operations|Disclaimer|Mimecast/);
+      expect(text).toContain("Want me to split them?");
+      expect(text).not.toContain("Splitting this into");
+      expect(text).not.toMatch(/Elena —|Manager, Sales Operations|Disclaimer|Mimecast|shelborne/i);
       expect(text).not.toContain("All Properties, All Proper");
-      expect(JSON.stringify(posts[0]?.blocks)).toContain("email_split");
+      expect(JSON.stringify(posts[0]?.blocks)).not.toContain("email_split");
       expect(JSON.stringify(posts[0]?.blocks)).not.toContain("confirm_intake");
       const saved = await store.getConversation(`${TAHOE_LIVE_CHANNEL}:${TAHOE_LIVE_TS}`);
       expect(saved?.draft.requesterName).toBe("Jamie Mark");
@@ -684,10 +673,65 @@ describe("live Lake Tahoe forward", () => {
       expect(confirmed?.draft.requesterName).toBe("Jamie Mark");
       expect(confirmed?.emailIntake?.propertyConfirmed).toBe(true);
       const followUp = posts.at(-1)?.text ?? "";
-      expect(followUp).toContain("<@UJAMIE>");
-      expect(followUp).not.toContain("Elena —");
-      expect(followUp).not.toContain("All Properties, All Proper");
+      expect(followUp).toContain("Perfect, LTP it is.");
+      expect(followUp).toContain("Lake Tahoe membership page");
+      expect(followUp).toContain("properhotel.com/");
+      expect(followUp).not.toContain("*URL*");
+      expect(followUp).not.toContain("Koral Captain");
+      expect(followUp).not.toContain("<@");
     }, TAHOE_LIVE_CHANNEL);
+  });
+});
+
+describe("nested Lake Tahoe forward", () => {
+  it("tags Jamie, ignores Shelborne in the signature, and waits to split", async () => {
+    const proposals = proposeEmailBriefs({ subject: NESTED_SUBJECT, bodyText: NESTED_BODY });
+    expect(proposals).toHaveLength(4);
+    const details = proposals.map((proposal) => proposal.detail).join("\n");
+    expect(details).not.toMatch(/shelborne|Rowan Hand|Can you guys use this/i);
+    expect(details).toContain("Incline Village");
+
+    await withEmailChannel(async () => {
+      const store = new MemoryStore();
+      const lookedUp: string[] = [];
+      const { slack, posts } = recordingSlack();
+      slack.userByEmail = async (email) => {
+        lookedUp.push(email);
+        if (email === "rowan.hand@properhotel.com") return { id: "UROWAN", name: "Rowan Hand" };
+        return undefined;
+      };
+      await dispatchUserMessage({
+        event: nestedSlackEvent(),
+        store,
+        onMessage: async () => {
+          throw new Error("an email must not enter the human intake path");
+        },
+        postError: async () => undefined,
+        onEmail: (email) => beginEmailIntake({ store, slack, today: TODAY }, email),
+        botId: "BINTAKE",
+      });
+      const text = posts[0]?.text ?? "";
+      expect(lookedUp).toEqual(["jamie.mark@properhotel.com"]);
+      expect(text).toContain("Hi Jamie!");
+      expect(text).not.toContain("<@");
+      expect(text).not.toContain("UROWAN");
+      expect(text).toContain("Elena Ruiz forwarded");
+      expect(text).toContain("refresh the Lake Tahoe membership page with a better interest form");
+      expect(text).toContain("500+ person list");
+      expect(text).toContain("Want me to split them?");
+      expect(text).toContain("say skip or not sure");
+      expect(text).not.toContain("Splitting this into");
+      expect(text).not.toMatch(/SMB|shelborne/i);
+      expect(posts).toHaveLength(1);
+      const saved = await store.getConversation(`${NESTED_CHANNEL}:${NESTED_TS}`);
+      expect(saved?.phase).toBe("awaiting_email_split");
+      expect(saved?.draft.requesterName).toBe("Jamie Mark");
+      expect(saved?.draft.requesterEmail).toBe("jamie.mark@properhotel.com");
+      expect(saved?.emailIntake?.requesterSlackId).toBeUndefined();
+      expect(saved?.emailIntake?.inferredProperties).toEqual(["LTP"]);
+      expect(saved?.draft.forwardedBy).toContain("Elena Ruiz");
+      expect(saved?.draft.forwardedBy).not.toContain("Rowan");
+    }, NESTED_CHANNEL);
   });
 });
 

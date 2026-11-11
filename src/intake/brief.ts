@@ -1,6 +1,7 @@
+import { fieldQuestion, friendlyRecap, naturalAck } from "./ask-text.js";
 import { attachmentAssetLines, attachmentBriefLines } from "./attachments.js";
 import { formatRequestTypeChoices, formatTaskTypeChoices } from "./choices.js";
-import { expectedRoutingBucket, formatDisplayDate, formatFullDate, FORM_URL, normalizeDate, propertyNames, secondContact } from "./catalog.js";
+import { expectedRoutingBucket, formatDisplayDate, formatFullDate, FORM_URL, normalizeDate, secondContact } from "./catalog.js";
 import { PRICE_PENDING_LINE, type MissingItem } from "./missing.js";
 import { followUpsFor, SUPPORT_QUESTION } from "./question-tree.js";
 import type { TemplateMatchResult } from "./templates.js";
@@ -103,34 +104,36 @@ export function formatQuestions(input: {
   captured?: string;
   /** Replaces the @mention when the person to ask is known by name only. */
   who?: string;
+  /** First question only. Later questions stay short. */
+  offerHelp?: boolean;
+  /** Field just answered, so the acknowledgement can name it. */
+  ackFor?: string;
 }): string {
   const item = input.items[0];
   if (!item) return "";
-  const who = input.who ?? (input.userId ? `<@${input.userId}>` : "Hi");
+  const question = fieldQuestion(item, input.draft);
   const lines: string[] = [];
-  if (input.acknowledge) lines.push("Got it.", "");
+  if (input.acknowledge) lines.push(naturalAck({ lastId: input.ackFor, draft: input.draft }), "");
   if (input.captured) lines.push(input.captured, "");
-  lines.push(`${who} — *${item.label}*`);
+  if (!input.acknowledge && input.userId) lines.push(`Hi <@${input.userId}>! ${question}`);
+  else if (!input.acknowledge && input.who) lines.push(`Hi ${input.who}! ${question}`);
+  else lines.push(question);
   const choices = choiceList(item.id, input.draft.requestType);
-  if (choices) lines.push(choices);
-  else if (item.hint) lines.push(item.hint);
-  const contact = secondContact(input.draft.properties ?? []);
+  if (choices) lines.push("", choices);
+  else if (item.hint && !item.hint.startsWith("One or more of") && item.id !== "properties") lines.push(item.hint);
   if (input.warnings.length > 0) {
     lines.push("", ...input.warnings.map((warning) => `• ${warning}`));
   }
-  lines.push(
-    "",
-    `Answer this, or send a few answers at once. Say skip or not sure if you don't have it — ${contact} may. Say back to change your last answer.`,
-  );
+  if (input.offerHelp) {
+    const contact = secondContact(input.draft.properties ?? []);
+    lines.push("", `If you don't have it, say skip or not sure and ${contact} may know. Say back to change your last answer.`);
+  }
   return lines.join("\n");
 }
 
 export function formatPropertyQuestion(userId?: string, who?: string): string {
-  const name = who ?? (userId ? `<@${userId}>` : "Hi");
-  return [
-    `${name} — which property is this for? A property-specific Canva template may fit, so I want to check that before asking for the rest.`,
-    `Reply with one or more of: ${propertyNames().join(", ")}.`,
-  ].join("\n");
+  const hi = userId ? `Hi <@${userId}>!` : who ? `Hi ${who}!` : "Hi!";
+  return `${hi} Which property is this for? A code like SMP or LTP is perfect. I check for a template before asking for the rest.`;
 }
 
 export function formatTemplateOffer(result: TemplateMatchResult): string {
@@ -168,7 +171,7 @@ export function formatSummary(input: {
 }): string {
   const { draft } = input;
   const lines = [
-    "Nothing is filed until you click *Confirm*.",
+    friendlyRecap(draft),
     "",
     `*${taskName(draft)}*`,
     `${draft.requestType} → ${draft.taskType}`,

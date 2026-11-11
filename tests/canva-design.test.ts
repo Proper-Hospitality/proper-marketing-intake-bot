@@ -147,7 +147,7 @@ describe("building a Canva design in the thread", () => {
       llm: scripted([{ type: "text", text: "Okay." }]),
       today: new Date("2026-11-02T12:00:00Z"),
     });
-    expect(declined.text).toContain("*Your email*");
+    expect(declined.text).toContain("What's the best email");
     expect(state.draft.templateUnusedReason).toMatch(/doesn't work/);
   });
 

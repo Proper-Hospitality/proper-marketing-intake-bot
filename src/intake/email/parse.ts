@@ -28,19 +28,32 @@ export function resolveParties(input: {
   subject: string;
   envelope?: EmailParty;
 }): { original: EmailParty; forwarder: EmailParty; forwarded: boolean } {
-  const marker = input.body.search(FORWARD_MARK);
-  const region = marker >= 0 ? input.body.slice(marker) : input.body;
-  const inner = firstFrom(region);
-  const envelope = input.envelope;
+  const froms = headerFromParties(input.body);
+  const inner = froms.at(-1) ?? firstFrom(input.body);
+  const envelope = input.envelope ?? froms[0];
   const different = Boolean(
     inner?.email && envelope?.email && inner.email.toLowerCase() !== envelope.email.toLowerCase(),
   );
-  const forwarded = different || (marker >= 0 && Boolean(inner?.email) && !envelope?.email);
+  const forwarded = different || froms.length > 1 || (input.body.search(FORWARD_MARK) >= 0 && Boolean(inner?.email) && !input.envelope?.email);
   if (forwarded && inner) {
     return { original: inner, forwarder: envelope ?? inner, forwarded: true };
   }
   const party = envelope ?? inner ?? {};
   return { original: party, forwarder: party, forwarded: false };
+}
+
+/** From lines that sit in a real header block, outer forward first. */
+export function headerFromParties(body: string): EmailParty[] {
+  const lines = normalizeEmailText(body).split("\n");
+  const parties: EmailParty[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/^from:\s*.+@/i.test(lines[index]?.trim() ?? "")) continue;
+    const window = lines.slice(index, index + 8).join("\n");
+    if (!/(?:^|\n)(?:date|sent|to|cc|subject)\s*:/i.test(window)) continue;
+    const party = parseAddress((lines[index] ?? "").replace(/^from:\s*/i, "").trim());
+    if (party.email || party.name) parties.push(party);
+  }
+  return parties;
 }
 
 export function isAutomaticEmail(input: { subject: string; body: string; headers?: unknown }): boolean {
@@ -363,7 +376,7 @@ function clipAtBoundary(value: string, max: number): string {
 export function cleanEmailBody(body: string): string {
   let text = normalizeEmailText(body);
   text = extractForwardedBody(text);
-  text = stripForwardPreamble(text);
+  text = afterLastHeader(text);
   text = stripSignature(text);
   text = stripDisclaimer(text);
   text = text
@@ -394,18 +407,20 @@ function normalizeEmailText(value: string): string {
     .trim();
 }
 
-function stripForwardPreamble(body: string): string {
+function afterLastHeader(body: string): string {
   const lines = body.split(/\n/);
-  const start = lines.findIndex((line, index) => {
-    if (!/^from:\s*.+@/i.test(line.trim())) return false;
+  let last = -1;
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/^from:\s*.+@/i.test(lines[index]?.trim() ?? "")) continue;
     const window = lines.slice(index, index + 8).join("\n");
-    return /(?:^|\n)(?:date|sent|to|cc|subject)\s*:/i.test(window);
-  });
-  if (start < 0) return body;
-  let index = start;
-  while (index < lines.length && /^(from|date|sent|to|cc|bcc|subject|reply-to)\s*:/i.test(lines[index].trim())) index += 1;
-  while (index < lines.length && !lines[index].trim()) index += 1;
-  return lines.slice(index).join("\n").trim();
+    if (!/(?:^|\n)(?:date|sent|to|cc|subject)\s*:/i.test(window)) continue;
+    let cursor = index;
+    while (cursor < lines.length && /^(from|date|sent|to|cc|bcc|subject|reply-to)\s*:/i.test(lines[cursor]?.trim() ?? "")) cursor += 1;
+    while (cursor < lines.length && !lines[cursor]?.trim()) cursor += 1;
+    last = cursor;
+  }
+  if (last < 0) return body;
+  return lines.slice(last).join("\n").trim();
 }
 
 function stripDisclaimer(body: string): string {

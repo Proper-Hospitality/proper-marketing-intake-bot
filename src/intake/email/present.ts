@@ -1,9 +1,9 @@
-import { formatPropertyQuestion, formatQuestions, formatSummary, formatTemplateOffer } from "../brief.js";
+import { formatQuestions, formatSummary, formatTemplateOffer } from "../brief.js";
 import { propertyPhrase } from "../catalog.js";
 import { rushExplanation } from "../rush.js";
 import type { FlowOutcome } from "../flow.js";
 import type { ConversationState } from "../../store/types.js";
-import type { EmailIntakeState } from "./types.js";
+import type { EmailIntakeState, EmailProposal } from "./types.js";
 
 export interface EmailReply {
   text: string;
@@ -38,34 +38,37 @@ export function formatEmailPropertyConfirm(state: ConversationState): string | u
   if (!email || email.propertyConfirmed) return undefined;
   const inferred = email.inferredProperties ?? [];
   if (inferred.length === 0) return undefined;
-  const name = spokenTo(state);
   if (inferred.length === 1) {
-    return `${name} — this is ${propertyPhrase(inferred[0] ?? "")}, right? Say yes, or name a different property.`;
+    return `This is ${propertyPhrase(inferred[0] ?? "")}, right? Say yes, or name a different property.`;
   }
-  return `${name} — this mentions ${inferred.map((code) => propertyPhrase(code)).join(" and ")}. Which should I file?`;
+  return `I see ${inferred.map((code) => propertyPhrase(code)).join(" and ")}. Which should I file?`;
 }
 
 export function formatSplitProposal(state: ConversationState): string {
   const email = state.emailIntake;
   if (!email) return "";
-  const who = spokenTo(state);
-  const forwarded = email.forwarded ? `${partyName(email.forwarder) ?? "Someone"} forwarded this. ` : "";
+  const heard = heardSentence(email.proposals);
   const property = email.inferredProperties?.length === 1
-    ? ` It looks like ${propertyPhrase(email.inferredProperties[0] ?? "")}.`
+    ? ` This looks like ${propertyPhrase(email.inferredProperties[0] ?? "")}.`
     : "";
   const lines = [
-    `${who} — ${forwarded}I read ${email.proposals.length} separate asks in this email.${property} I'd file each as its own request:`,
+    `${greeting(state)} Thanks for sending this over. ${forwardNote(email)}${heard}${property}`,
+    "",
+    "I'd file these separately so each one gets its own task:",
     "",
   ];
   email.proposals.forEach((proposal, index) => {
     const route = proposal.requestType && proposal.taskType
-      ? `${proposal.requestType} → ${proposal.taskType}`
-      : "I'll ask which request type fits";
-    lines.push(`${index + 1}. *${proposal.title}* — ${route}`);
-    if (proposal.summary) lines.push(proposal.summary);
-    lines.push("");
+      ? ` (${proposal.requestType}, ${proposal.taskType})`
+      : "";
+    lines.push(`${index + 1}. ${proposal.title}${route}`);
   });
-  lines.push("Reply *yes* to split them, or *keep it as one* for a single task. Nothing is filed until you confirm.");
+  lines.push(
+    "",
+    "Want me to split them? Reply yes, or say keep it as one.",
+    "If you don't have an answer later, say skip or not sure. Say back to change the last one.",
+    "Nothing gets filed until you say so.",
+  );
   return lines.join("\n");
 }
 
@@ -88,14 +91,12 @@ export function presentEmailStep(
       state.lastAskedId = item.id;
       state.lastAskedLabel = item.label;
     }
-    const addressed = emailAddressee(state);
     const question = formatQuestions({
-      userId: addressed.who ? undefined : addressed.userId,
-      who: addressed.who,
       items: item ? [item] : [],
       warnings: item && /timing|date|late/i.test(item.id + item.label) ? outcome.missing.warnings : [],
       draft: state.draft,
       acknowledge: Boolean(state.answerTrail?.length),
+      ackFor: state.answerTrail?.at(-1),
     });
     const lead = outcome.preface ? `${outcome.preface}\n\n${question}` : question;
     return { text: joinParts(preface, lead) };
@@ -117,8 +118,7 @@ export function presentEmailStep(
     return { text: joinParts(preface, rushExplanation(outcome.reason, outcome.date)) };
   }
   if (outcome.kind === "need_property") {
-    const addressed = emailAddressee(state);
-    return { text: joinParts(preface, formatPropertyQuestion(addressed.userId, addressed.who)) };
+    return { text: joinParts(preface, "Which property is this for? A code like SMP or LTP is perfect. I check for a template before asking for the rest.") };
   }
   if (outcome.kind === "offer_template") {
     return { text: joinParts(preface, formatTemplateOffer(outcome.match)) };
@@ -129,11 +129,44 @@ export function presentEmailStep(
   return { text: preface || "Tell me how you want to handle this email. Nothing is filed until you confirm." };
 }
 
-function spokenTo(state: ConversationState): string {
+function greeting(state: ConversationState): string {
   const addressed = emailAddressee(state);
-  if (addressed.who) return addressed.who;
-  if (addressed.userId) return `<@${addressed.userId}>`;
-  return "Hi";
+  if (addressed.userId) return `Hi <@${addressed.userId}>!`;
+  const first = addressName(state.emailIntake?.originalRequester);
+  return first ? `Hi ${first}!` : "Hi!";
+}
+
+function forwardNote(email: EmailIntakeState): string {
+  if (!email.forwarded) return "";
+  const name = partyName(email.forwarder);
+  return name ? `${name} forwarded it. ` : "";
+}
+
+function heardSentence(proposals: EmailProposal[]): string {
+  const asks = proposals.map(plainAsk);
+  const first = asks[0] ?? "get this done";
+  const second = asks[1];
+  if (!second) return `It sounds like you want to ${first}.`;
+  const rest = asks.slice(2);
+  const extra = rest.length === 0
+    ? ""
+    : ` There's also ${rest.join(" and ")}.`;
+  return `It sounds like you want to ${first}, and then ${second}.${extra}`;
+}
+
+function plainAsk(proposal: EmailProposal): string {
+  const blob = `${proposal.title} ${proposal.summary ?? ""}`;
+  if (/membership/i.test(blob) && /form|page/i.test(blob)) {
+    const where = /lake tahoe/i.test(blob) ? "the Lake Tahoe membership page" : "the membership page";
+    return `refresh ${where} with a better interest form`;
+  }
+  if (/questionnaire|500\+/i.test(blob)) {
+    return "use the same questions to fill in the profiles on your 500+ person list";
+  }
+  if (/merge|clean/i.test(blob)) return "a cleanup of the interest contacts";
+  if (/plan/i.test(blob)) return "a plan for the project updates";
+  const sentence = (proposal.summary ?? proposal.title).split(/(?<=[.!?])\s/)[0] ?? proposal.title;
+  return sentence.replace(/[.!?]$/, "").replace(/^(?:i'd like to |i want to |please )/i, "");
 }
 
 function wantsProperty(outcome: FlowOutcome): boolean {
@@ -147,9 +180,8 @@ function stepPreface(state: ConversationState, intro?: boolean): string {
   const lines: string[] = [];
   if (email.mode === "split" && email.proposals.length > 1) {
     const n = (email.activeIndex ?? 0) + 1;
-    const proposal = email.proposals[email.activeIndex ?? 0];
-    const route = proposal?.requestType && proposal.taskType ? ` — ${proposal.requestType} → ${proposal.taskType}` : "";
-    lines.push(`Brief ${n} of ${email.proposals.length}${proposal?.title ? `: *${proposal.title}*` : ""}${route}.`);
+    const title = email.proposals[email.activeIndex ?? 0]?.title ?? "the next request";
+    lines.push(`I'll start with ${title} (${n} of ${email.proposals.length}).`);
   }
   if (intro) lines.push(briefIntro(state));
   return lines.join("\n\n");
@@ -158,17 +190,9 @@ function stepPreface(state: ConversationState, intro?: boolean): string {
 function briefIntro(state: ConversationState): string {
   const email = state.emailIntake;
   if (!email) return "";
-  const proposal = email.proposals[email.activeIndex ?? 0];
-  const who = spokenTo(state);
-  const summary = proposal?.summary || proposal?.title || "I read the request in this email";
-  if (email.mode === "split" && email.proposals.length > 1) {
-    return `${who} — I'll start with this one. Nothing is filed until you confirm.`;
-  }
-  const forwarded = email.forwarded ? ` ${partyName(email.forwarder) ?? "Someone"} forwarded it.` : "";
-  const route = proposal?.requestType && proposal.taskType
-    ? ` I'd file this as ${proposal.requestType} → ${proposal.taskType}.`
-    : "";
-  return `${who} — ${summary}${route}${forwarded} Nothing is filed until you confirm.`;
+  if (email.mode === "split" && email.proposals.length > 1) return "";
+  const heard = heardSentence(email.proposals);
+  return `${greeting(state)} Thanks for sending this over. ${forwardNote(email)}${heard} If you don't have an answer, say skip or not sure. Say back to change the last one.`;
 }
 
 function joinParts(...parts: Array<string | undefined>): string {

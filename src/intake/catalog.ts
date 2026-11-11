@@ -164,8 +164,34 @@ export const PROPERTIES: Record<string, string> = {
 /** Informational only. The board automations set Routing Bucket. This bot does not. */
 export const ROUTING_BUCKET_FIELD_GID = "1217171490189079";
 
-const PROPER_CODES = new Set(["AUP", "DTLA", "SFP", "SMP", "SMB", "Proper Club", "All Proper"]);
-const COLLECTIVE_CODES = new Set(["MYC", "TCH", "HJWL", "HJM", "ABH", "APS", "ING", "LTP", "DAL", "All Collective"]);
+/**
+ * Who to name when someone doesn't have an answer.
+ * DeeDee Brown: Proper hotels and By Proper hotels.
+ * Koral Captain: The Collective.
+ * Codes left out of both sets (All Properties, MIN, Corporate, New Projects/Development)
+ * name both, because they aren't one brand.
+ */
+const PROPER_CODES = new Set([
+  "All Proper",
+  "AUP", // Austin Proper
+  "DTLA", // Downtown LA Proper
+  "SFP", // San Francisco Proper
+  "SMP", // Santa Monica Proper
+  "LTP", // Lake Tahoe Proper
+  "Proper Club",
+  "SMB", // The Shelborne By Proper
+]);
+const COLLECTIVE_CODES = new Set([
+  "All Collective",
+  "MYC", // Montauk Yacht Club
+  "TCH", // The Culver Hotel
+  "HJWL", // Hotel June West LA
+  "HJM", // Hotel June Malibu
+  "ABH", // Avalon Beverly Hills
+  "APS", // Avalon Palm Springs
+  "ING", // Ingleside Estate
+  "DAL", // Dallas, not a Proper hotel
+]);
 const NEW_PROJECT_CODES = new Set(["New Projects/Development"]);
 
 export function expectedRoutingBucket(properties: string[]): string | undefined {
@@ -267,6 +293,9 @@ const INFER_SKIP = new Set([
 /** Property codes named by the email or message, longest place names first. */
 export function inferProperties(text: string): string[] {
   const found: string[] = [];
+  text = text
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/\b[a-z0-9.-]+\.(?:com|net|org|hotel)\b/gi, " ");
   const phrases = Object.entries(PROPERTY_NICKNAMES)
     .filter(([phrase]) => !INFER_SKIP.has(phrase))
     .filter(([phrase]) => phrase.includes(" ") || phrase.length >= 5)

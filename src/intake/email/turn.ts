@@ -1,6 +1,6 @@
 import { rememberAttachment } from "../capture.js";
 import { applyAnswers } from "../flow.js";
-import { confirmBlocks, emailSplitBlocks, messageBlocks } from "../../slack/blocks.js";
+import { confirmBlocks, messageBlocks } from "../../slack/blocks.js";
 import { messageOnceKey } from "../../slack/incoming.js";
 import type { SlackApi } from "../../slack/api.js";
 import { conversationKey, conversationKeyFromAction, emptyConversation, type ConversationState, type Store } from "../../store/types.js";
@@ -310,10 +310,7 @@ function hasUnstartedBrief(email: EmailIntakeState): boolean {
   return (email.activeIndex ?? 0) + 1 < email.proposals.length;
 }
 
-function replyBlocks(reply: EmailReply, proposalCount?: number): unknown[] {
+function replyBlocks(reply: EmailReply, _proposalCount?: number): unknown[] {
   if (reply.confirm) return confirmBlocks(reply.text, reply.confirm.version);
-  if (proposalCount && proposalCount >= 2 && /reply \*yes\* to split/i.test(reply.text)) {
-    return emailSplitBlocks(reply.text, proposalCount);
-  }
   return messageBlocks(reply.text);
 }

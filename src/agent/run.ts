@@ -58,6 +58,7 @@ import {
 import { assistantBlocksForReplay, isHistoryRejection, sanitizeStoredHistory } from "./history.js";
 import { buildSystemPrompt } from "./prompt.js";
 import { INTAKE_TOOLS } from "./tools.js";
+import { LEADING_ACK, naturalAck } from "../intake/ask-text.js";
 import { emailAddressee, formatEmailPropertyConfirm } from "../intake/email/present.js";
 import { interpretPropertyConfirm, userCorrectsEmailRequester, userCorrectsEmailType } from "../intake/email/parse.js";
 import { formatOverdueReport, overdueCountsForNames, parseNameList } from "../tasks/overdue.js";
@@ -121,7 +122,7 @@ export async function runIntakeTurn(input: {
     if (isBackAnswer(input.userText) && rewindLastAnswer(state)) {
       const outcome = applyAnswers(state, {}, today);
       const reply = renderReply(state, input.slackUser.id, "Let's change that.", outcome, today);
-      reply.text = `Let's change that.\n\n${reply.text.replace(/^Got it\.\n\n/, "")}`;
+      reply.text = `Let's change that.\n\n${reply.text.replace(LEADING_ACK, "")}`;
       return remember(state, input.userText, reply);
     }
     if ((isUnsureAnswer(input.userText) || stillCantGetIt(input.userText)) && state.lastAskedId && state.lastAskedLabel) {
@@ -282,7 +283,7 @@ export async function runIntakeTurn(input: {
     const outcome = applyAnswers(state, {}, today);
     const spoken = formatSpokenDate(state.dateConfirmFor);
     const reply = presentDateConfirm(state, renderReply(state, input.slackUser.id, "", outcome, today));
-    reply.text = `Got it — ${spoken}.\n\n${reply.text.replace(/^Got it\.\n\n/, "")}`;
+    reply.text = `Perfect, ${spoken}.\n\n${reply.text.replace(LEADING_ACK, "")}`;
     return remember(state, input.userText, reply);
   }
   if (awaitingPropertyConfirm(state)) {
@@ -590,7 +591,7 @@ function renderReply(
     state.answerTrail = [...(state.answerTrail ?? []), state.lastAskedId].filter((id): id is string => Boolean(id)).slice(-30);
     state.lastAskedId = "collateralYear";
     state.lastAskedLabel = "Collateral year";
-    const ack = state.answerTrail && state.answerTrail.length > 0 ? "Got it.\n\n" : "";
+    const ack = state.answerTrail && state.answerTrail.length > 0 ? "Sounds good.\n\n" : "";
     return { text: `${ack}${COLLATERAL_YEAR_QUESTION}` };
   }
   if (outcome?.kind === "offer_template" || (state.phase === "template_offered" && state.templateOffer && outcome)) {
@@ -610,8 +611,8 @@ function renderReply(
   }
   if (outcome?.kind === "ask") {
     const item = outcome.missing.items[0];
+    const previous = state.lastAskedId;
     if (item) {
-      const previous = state.lastAskedId;
       if (previous && previous !== item.id) {
         state.answerTrail = [...(state.answerTrail ?? []), previous].slice(-30);
       }
@@ -619,15 +620,21 @@ function renderReply(
       state.lastAskedLabel = item.label;
     }
     const confirm = item?.id === "properties" ? formatEmailPropertyConfirm(state) : undefined;
-    if (confirm) return { text: outcome.preface ? `${outcome.preface}\n\n${confirm}` : confirm };
+    if (confirm) {
+      const lead = state.answerTrail?.length ? `${naturalAck({ lastId: previous, draft: state.draft })}\n\n${confirm}` : confirm;
+      return { text: outcome.preface ? `${outcome.preface}\n\n${lead}` : lead };
+    }
     const captured = capturedHalf(state, item?.id);
+    const emailThread = Boolean(state.emailIntake);
     const question = formatQuestions({
-      userId: mentionId,
-      who: addressed.who,
+      userId: emailThread ? undefined : mentionId,
+      who: emailThread ? undefined : addressed.who,
       items: item ? [item] : [],
       warnings: item && /timing|date|late/i.test(item.id + item.label) ? outcome.missing.warnings : [],
       draft: state.draft,
       acknowledge: Boolean(state.answerTrail?.length),
+      ackFor: previous,
+      offerHelp: !emailThread && !state.answerTrail?.length,
       captured,
     });
     return { text: outcome.preface ? `${outcome.preface}\n\n${question}` : question };

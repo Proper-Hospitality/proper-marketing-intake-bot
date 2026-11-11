@@ -47,7 +47,7 @@ describe("relative due dates", () => {
     expect(state.draft.requestedCompletionDate).toBe("2026-11-13");
     expect(state.draft.providedLinks).toContain(USER_FORM);
     expect(first.text).toContain("Fri Nov 13 — right?");
-    expect(first.text).toContain("*Consequence of delay*");
+    expect(first.text).toContain("What happens if Basel Digital Signage Ad is late?");
     expect(first.text).not.toContain("When do you need this");
     expect(first.text).not.toContain("*Requested completion date*");
 
@@ -99,7 +99,7 @@ describe("relative due dates", () => {
     expect(state.draft.consequenceOfDelay).toMatch(/miss out on the opportunity/);
     expect(state.draft.requestedCompletionDate).toBeUndefined();
     expect(reply.text).toContain("If it's late: We miss out on the opportunity.");
-    expect(reply.text).toContain("*Requested completion date*");
+    expect(reply.text).toContain("When do you need Basel Digital Signage Ad?");
     expect(reply.text).not.toContain("When do you need this, and what happens if it's late?");
   });
 
