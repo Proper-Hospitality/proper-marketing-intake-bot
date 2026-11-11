@@ -68,7 +68,8 @@ async function handleFreshMessage(deps: {
   const key = conversationKey(message.channel, message.threadTs, message.ts, message.isDm);
   const state = (await deps.store.getConversation(key)) ?? emptyConversation(key);
   state.channel = message.channel;
-  state.slackUserId = message.userId;
+  if (state.emailIntake?.requesterSlackId) state.slackUserId = state.emailIntake.requesterSlackId;
+  else if (!state.emailIntake) state.slackUserId = message.userId;
   state.threadTs = message.threadTs ?? (message.isDm ? undefined : message.ts);
   const threadAnchor = state.threadTs;
   if (await continueEmailConversation({ store: deps.store, slack: deps.slack, today: deps.today }, state, message)) {
@@ -90,6 +91,14 @@ async function handleFreshMessage(deps: {
   }
 
   const profile = await deps.slack.userProfile(message.userId);
+  const email = state.emailIntake;
+  const slackUser = email
+    ? {
+      id: email.requesterSlackId,
+      name: email.originalName,
+      email: email.originalEmail,
+    }
+    : { id: message.userId, name: profile.name, email: profile.email };
   const parentTs = message.threadTs && message.threadTs !== message.ts ? message.threadTs : (state.threadTs || message.ts);
   const fromThread = await collectThreadFiles(deps.slack, message.channel, parentTs, message.ts);
   const currentFiles = (message.uploads ?? []).flatMap((file) => (
@@ -107,7 +116,7 @@ async function handleFreshMessage(deps: {
   const reply = await runIntakeTurn({
     state,
     userText: `${message.text}${fileNote}`.trim(),
-    slackUser: { id: message.userId, name: profile.name, email: profile.email },
+    slackUser,
     llm: deps.llm,
     asanaToken: deps.asanaToken,
     fetchImpl: deps.fetchImpl,

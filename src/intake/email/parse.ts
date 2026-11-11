@@ -1,3 +1,4 @@
+import { canonicalizeProperty, inferProperties } from "../catalog.js";
 import type { EmailParty, EmailProposal } from "./types.js";
 
 const FORWARD_MARK = /-{2,}\s*forwarded message\s*-{2,}|begin forwarded message:/i;
@@ -67,13 +68,40 @@ export function hasRequestContent(subject: string, body: string): boolean {
 }
 
 export function proposeEmailBriefs(input: { subject: string; bodyText: string }): EmailProposal[] {
-  const cleaned = stripSignature(input.bodyText);
-  const asks = splitAsks(cleaned);
-  const pieces = asks.length >= 2 ? asks : [extractForwardedBody(cleaned) || cleaned];
+  const cleaned = cleanEmailBody(input.bodyText);
+  const numbered = splitAsks(cleaned);
+  const prose = numbered.length >= 2 ? numbered : splitProseAsks(cleaned);
+  const pieces = prose.length >= 2 ? prose : [cleaned];
   return pieces
     .map((detail) => detail.trim())
     .filter((detail) => detail.length > 0)
-    .map((detail) => classifyAsk(detail, input.subject));
+    .map((detail) => {
+      const proposal = classifyAsk(detail, input.subject);
+      proposal.detail = detail;
+      proposal.summary = summarizeAsk(detail, proposal.title);
+      return proposal;
+    });
+}
+
+/**
+ * A short reply while we are confirming an inferred property.
+ * Longer messages fall through so the model can record several answers at once.
+ */
+export function interpretPropertyConfirm(
+  text: string,
+  inferred: string[],
+): "accept" | "decline" | "unclear" | { properties: string[] } {
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.length > 160) return "unclear";
+  if (/^(no|nope|nah)[.!]?$/i.test(trimmed)) return "decline";
+  const direct = canonicalizeProperty(trimmed);
+  const named = direct ? [direct] : inferProperties(trimmed);
+  const affirm = /^(yes|yep|yeah|yup|correct|right|that'?s right|that is right|ok|okay|sure|sounds good|please do)[.!]?$/i.test(trimmed);
+  if (affirm && named.length === 0) return "accept";
+  if (named.length === 0) return "unclear";
+  const same = named.every((code) => inferred.includes(code)) && named.length === inferred.length;
+  if (same || (affirm && named.every((code) => inferred.includes(code)))) return "accept";
+  return { properties: named };
 }
 
 export function parseSplitChoice(text: string): "split" | "one" | "unclear" {
@@ -110,6 +138,24 @@ export function renderEmailText(input: {
 
 const REAL_HTML = /<\/?[a-z][a-z0-9]*(?:\s[^<>]*|\/?)>/i;
 
+/** Slack sometimes stores the channel-email file as JSON with body-plain and body-html. */
+export function parseSlackEmailDocument(raw: string): { subject?: string; plainText?: string; from?: string } | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("{")) return undefined;
+  try {
+    const data = JSON.parse(trimmed) as Record<string, unknown>;
+    const plain = typeof data["body-plain"] === "string" ? data["body-plain"] : undefined;
+    const html = typeof data["body-html"] === "string" ? data["body-html"] : undefined;
+    const subject = typeof data.subject === "string" ? data.subject : undefined;
+    const from = typeof data.from === "string" ? data.from : undefined;
+    const plainText = plain?.trim() || (html ? htmlToText(html) : undefined);
+    if (!plainText && !subject && !from) return undefined;
+    return { subject, plainText, from };
+  } catch {
+    return undefined;
+  }
+}
+
 export function htmlToText(value: string): string {
   const trimmed = value.trim();
   if (!REAL_HTML.test(trimmed)) return trimmed;
@@ -133,7 +179,7 @@ function classifyAsk(detail: string, subject: string): EmailProposal {
   const text = `${subject}\n${detail}`;
   if (/\b(merge|dedup|categor)/i.test(detail) && /\b(info@|events|contacts|people|list)\b/i.test(detail)) {
     return {
-      title: "Merge interest contacts",
+      title: "Merge and clean interest contacts",
       detail,
       requestType: "CRM & Paid",
       taskType: "New User Journey (Subscriber Flows)",
@@ -198,8 +244,176 @@ function splitAsks(body: string): string[] {
     if (current && line.trim()) current.push(line.trim());
   }
   if (current) items.push(current.join("\n").trim());
-  const substantial = items.filter((item) => item.length >= 20);
+  const substantial = items.filter((item) => item.length >= 20 && REQUEST.test(item));
   return substantial.length >= 2 ? substantial : [];
+}
+
+type AskKind = "form" | "questionnaire" | "merge" | "plan";
+
+function splitProseAsks(body: string): string[] {
+  const paragraphs = body.split(/\n\s*\n/).map((paragraph) => paragraph.trim()).filter(Boolean);
+  const groups: Array<{ kind: AskKind; parts: string[] }> = [];
+  const index = new Map<AskKind, number>();
+  const add = (kind: AskKind, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const at = index.get(kind);
+    if (at === undefined) {
+      index.set(kind, groups.length);
+      groups.push({ kind, parts: [trimmed] });
+      return;
+    }
+    groups[at]?.parts.push(trimmed);
+  };
+  for (const paragraph of paragraphs) {
+    const kinds = askKinds(paragraph);
+    if (kinds.length === 0) continue;
+    if (kinds.length === 1) {
+      const kind = kinds[0];
+      if (kind) add(kind, paragraph);
+      continue;
+    }
+    let last: AskKind | undefined;
+    const held: string[] = [];
+    for (const sentence of splitSentences(paragraph)) {
+      const kind = askKinds(sentence)[0];
+      if (!kind) {
+        if (last) add(last, sentence);
+        else held.push(sentence);
+        continue;
+      }
+      if (held.length > 0) {
+        const heldText = held.join(" ");
+        if (heldText.length > 40) add(kind, heldText);
+        held.length = 0;
+      }
+      add(kind, sentence);
+      last = kind;
+    }
+  }
+  if (groups.length < 2) return [];
+  return groups.map((group) => group.parts.join("\n\n").trim());
+}
+
+function askKinds(text: string): AskKind[] {
+  const kinds: AskKind[] = [];
+  if (/\b(interest form|form fields?|page form|membership page|web ?page|landing page|homepage)\b/i.test(text)) {
+    kinds.push("form");
+  }
+  if (/\b(questionnaire|survey)\b/i.test(text)) kinds.push("questionnaire");
+  if (
+    (/\b(merge|dedup(?:e|licate)?|categori[sz]e)\b/i.test(text) && /\b(info@|events|contacts|people|list|database)\b/i.test(text))
+    || (/\binfo@\b|\bthrough events\b/i.test(text) && /\b(database|reached out|merge|contacts|people)\b/i.test(text))
+  ) {
+    kinds.push("merge");
+  }
+  if (/\bplan\b/i.test(text) && /\b(updates?|cadence|launch|share|often|owns)\b/i.test(text)) kinds.push("plan");
+  return kinds;
+}
+
+function splitSentences(paragraph: string): string[] {
+  const pieces: string[] = [];
+  let current = "";
+  for (const line of paragraph.split(/\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (/^[-*•]\s+/.test(trimmed)) {
+      if (current) pieces.push(current.trim());
+      current = "";
+      pieces.push(trimmed);
+      continue;
+    }
+    current = current ? `${current} ${trimmed}` : trimmed;
+  }
+  if (current) pieces.push(current.trim());
+  const sentences: string[] = [];
+  for (const piece of pieces) {
+    if (/^[-*•]/.test(piece)) {
+      sentences.push(piece);
+      continue;
+    }
+    sentences.push(...piece.split(/(?<=[.!?])\s+(?=[A-Z])/).map((part) => part.trim()).filter(Boolean));
+  }
+  return sentences;
+}
+
+function summarizeAsk(detail: string, title: string): string {
+  const lines = detail.split(/\n/).map((line) => line.trim()).filter(Boolean);
+  const bullets = lines.filter((line) => /^[-*•]\s+/.test(line));
+  const prose = lines.filter((line) => !/^[-*•]\s+/.test(line)).join(" ");
+  const sentences = prose.split(/(?<=[.!?])\s+(?=[A-Z])/).map((part) => part.trim()).filter(Boolean);
+  const ask = sentences.find((sentence) => REQUEST.test(sentence)) ?? sentences[0] ?? title;
+  const extra = sentences.find((sentence) => sentence !== ask && /500\+|info@|\bhow often\b|\bwho owns\b/i.test(sentence));
+  const lead = [extra, ask].filter(Boolean).join(" ").replace(/^(?:separately|additionally|also|in addition),?\s+/i, "");
+  if (bullets.length >= 2) return `${lead}\n${bullets.join("\n")}`;
+  return clipAtBoundary(lead, 500);
+}
+
+function clipAtBoundary(value: string, max: number): string {
+  const flat = value.replace(/\s+/g, " ").trim();
+  if (flat.length <= max) return flat;
+  const cut = flat.slice(0, max);
+  const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("; "));
+  if (end > 80) return cut.slice(0, end + 1).trim();
+  const space = cut.lastIndexOf(" ");
+  if (space > 40) return cut.slice(0, space).trim();
+  return flat;
+}
+
+export function cleanEmailBody(body: string): string {
+  let text = normalizeEmailText(body);
+  text = extractForwardedBody(text);
+  text = stripForwardPreamble(text);
+  text = stripSignature(text);
+  text = stripDisclaimer(text);
+  text = text
+    .replace(/^\s*>.*$/gm, "")
+    .replace(/\n+On .+wrote:\s*\n[\s\S]*$/i, "")
+    .replace(/\n+-----Original Message-----[\s\S]*$/i, "")
+    .replace(/\[cid:[^\]]+\]/gi, "")
+    .replace(/^\s*Proper Hotels\s*\|.*$/gim, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return text;
+}
+
+function normalizeEmailText(value: string): string {
+  return value
+    .replace(/\r\n/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .replace(/\u2011/g, "-")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\s+(From|Date|Sent|To|Cc|Bcc|Subject|Reply-To)\s*:/gi, "\n$1:")
+    .replace(/^(subject:[^\n]*?)\s+(?=(?:hi|hello|hey)\b)/gim, "$1\n\n")
+    .replace(/\s+(Thanks|Thank you|Best|Cheers|Disclaimer)\b/gi, "\n$1")
+    .replace(/\s+-\s+(?=[A-Z0-9])/g, "\n- ")
+    .replace(/(\(Yes\s*\/\s*No\))\s+(?=[A-Z])/gi, "$1\n")
+    .replace(/\s+(?=Separately\b|Additionally\b|In addition\b)/g, "\n\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function stripForwardPreamble(body: string): string {
+  const lines = body.split(/\n/);
+  const start = lines.findIndex((line, index) => {
+    if (!/^from:\s*.+@/i.test(line.trim())) return false;
+    const window = lines.slice(index, index + 8).join("\n");
+    return /(?:^|\n)(?:date|sent|to|cc|subject)\s*:/i.test(window);
+  });
+  if (start < 0) return body;
+  let index = start;
+  while (index < lines.length && /^(from|date|sent|to|cc|bcc|subject|reply-to)\s*:/i.test(lines[index].trim())) index += 1;
+  while (index < lines.length && !lines[index].trim()) index += 1;
+  return lines.slice(index).join("\n").trim();
+}
+
+function stripDisclaimer(body: string): string {
+  return body
+    .replace(/\n+Disclaimer\b[\s\S]*$/i, "")
+    .replace(/\n+The information contained in this communication[\s\S]*$/i, "")
+    .replace(/\n+This email has been scanned for viruses[\s\S]*$/i, "")
+    .trim();
 }
 
 function extractForwardedBody(body: string): string {
@@ -215,7 +429,12 @@ function extractForwardedBody(body: string): string {
 }
 
 function stripSignature(body: string): string {
-  return body.replace(/\n+(?:thanks|thank you|best|cheers),?\s*\n[\s\S]*$/i, "\n").trim();
+  const match = body.search(/\n(?:thanks|thank you|best|cheers),?(?:\s|$)/i);
+  if (match < 0) return body.replace(/\n+(?:thanks|thank you|best|cheers),?\s*\n[\s\S]*$/i, "\n").trim();
+  const tail = body.slice(match);
+  const signoff = /\b(manager|director|president|vice president|svp|disclaimer|proper hotels|\(\d{3}\))|\n[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3}\s*$/i.test(tail);
+  if (!signoff && tail.trim().length > 80) return body;
+  return body.slice(0, match).trim();
 }
 
 function stripBoilerplate(body: string): string {
@@ -226,11 +445,16 @@ function stripBoilerplate(body: string): string {
 }
 
 function firstFrom(text: string): EmailParty | undefined {
-  const match = text.match(/^[\s>]*from:\s*(.+)$/im);
-  if (!match?.[1]) return undefined;
-  const party = parseAddress(match[1]);
-  if (!party.name && !party.email) return undefined;
-  return party;
+  const labeled = [...text.matchAll(/(?:^|\n)\s*from:\s*(.+)$/gim)].map((match) => match[1]?.trim()).filter(Boolean);
+  if (labeled.length === 0) {
+    const inline = text.match(/\bfrom:\s*([^<\n]{0,120}<[^>\s]+@[^>\s]+>)/i);
+    if (inline?.[1]) labeled.push(inline[1].trim());
+  }
+  for (const raw of labeled) {
+    const party = parseAddress(raw);
+    if (party.email || party.name) return party;
+  }
+  return undefined;
 }
 
 function splitTitle(display: string): EmailParty {

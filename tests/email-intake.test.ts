@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { applyAnswers } from "../src/intake/flow.js";
 import { beginEmailIntake, handleEmailSplitAction } from "../src/intake/email/turn.js";
-import { proposeEmailBriefs } from "../src/intake/email/parse.js";
+import { cleanEmailBody, proposeEmailBriefs } from "../src/intake/email/parse.js";
 import { readSlackEmailFile } from "../src/slack/files.js";
 import { handleConfirmAction, handleIncomingMessage } from "../src/slack/handle.js";
 import { dispatchUserMessage } from "../src/slack/dispatch.js";
@@ -11,6 +11,7 @@ import type { Llm } from "../src/agent/run.js";
 import { MemoryStore } from "../src/store/memory.js";
 import { emptyConversation } from "../src/store/types.js";
 import { TAHOE_BODY, TAHOE_CHANNEL, TAHOE_SUBJECT, TAHOE_TS, tahoeSlackEvent } from "./fixtures/tahoe-email.js";
+import { TAHOE_LIVE_BODY, TAHOE_LIVE_CHANNEL, TAHOE_LIVE_SUBJECT, TAHOE_LIVE_TS, tahoeLiveSlackEvent } from "./fixtures/tahoe-live-email.js";
 
 const TODAY = new Date("2026-11-11T20:00:00Z");
 
@@ -58,9 +59,9 @@ describe("forwarded email intake", () => {
       const text = posts[0]?.text ?? "";
       expect(text).toContain("4 separate");
       expect(text).toContain("Jamie Mark");
-      expect(text).toContain("SVP Memberships, Partnerships & PR");
-      expect(text).toContain("rowan.smith@properhospitality.com");
-      expect(text).toContain(TAHOE_SUBJECT);
+      expect(text).toContain("Rowan Smith forwarded");
+      expect(text).not.toContain("SVP Memberships");
+      expect(text).not.toContain("All Properties, All Proper");
       expect(text).toContain("Web → Page Edit");
       expect(text).toContain("Newsletter Send");
       expect(text).toContain("New User Journey");
@@ -77,6 +78,10 @@ describe("forwarded email intake", () => {
       expect(saved?.emailIntake?.proposals).toHaveLength(4);
       expect(saved?.draft.requesterName).toBe("Jamie Mark");
       expect(saved?.draft.requesterEmail).toBe("jamie.mark@properhospitality.com");
+      expect(saved?.draft.emailSubject).toBe(TAHOE_SUBJECT);
+      expect(saved?.emailIntake?.originalRequester).toContain("SVP Memberships, Partnerships & PR");
+      expect(saved?.emailIntake?.forwarder).toContain("rowan.smith@properhospitality.com");
+      expect(saved?.emailIntake?.inferredProperties).toEqual(["LTP"]);
       expect(saved?.draft.attachments?.map((file) => file.slackFileId)).toEqual(["FEMAIL", "FLIST"]);
       expect(saved?.draft.attachments?.every((file) => file.kind === "context")).toBe(true);
 
@@ -127,8 +132,10 @@ describe("forwarded email intake", () => {
       expect(brief).toContain("Brief 1 of 4");
       expect(brief).toContain("Web → Page Edit");
       expect(brief).toContain("Jamie Mark");
-      expect(brief).toContain("Rowan Smith");
-      expect(brief).toContain("*Property*");
+      expect(brief).toContain("Lake Tahoe (LTP)");
+      expect(brief).not.toContain("Rowan Smith");
+      expect(brief).not.toContain("*Property*");
+      expect(brief).not.toContain("All Properties, All Proper");
       expect(brief).not.toMatch(/what kind of file/i);
       expect(JSON.stringify(posts[1]?.blocks)).not.toContain("confirm_intake");
       const state = await store.getConversation(`${TAHOE_CHANNEL}:${TAHOE_TS}`);
@@ -170,6 +177,37 @@ describe("forwarded email intake", () => {
       expect(after?.draft.requestType).toBe("Web");
       expect(after?.draft.taskType).toBe("Page Edit");
       expect(after?.draft.properties).toEqual(["Corporate"]);
+
+      const correcting: Llm = {
+        async complete() {
+          return {
+            content: [{
+              type: "tool_use",
+              id: "toolu_email_2",
+              name: "record_answers",
+              input: {
+                requesterName: "Rowan Smith",
+                requesterEmail: "rowan.smith@properhospitality.com",
+                requestType: "Creative",
+                taskType: "Email",
+              },
+            }],
+          };
+        },
+      };
+      await handleIncomingMessage({ store, slack, llm: correcting, today: TODAY }, {
+        channel: TAHOE_CHANNEL,
+        userId: "UROWAN",
+        text: "Can you also note that the launch is in December",
+        ts: "1762880003.000200",
+        threadTs: TAHOE_TS,
+        isDm: false,
+      });
+      const guarded = await store.getConversation(`${TAHOE_CHANNEL}:${TAHOE_TS}`);
+      expect(guarded?.draft.requesterName).toBe("Jamie Mark");
+      expect(guarded?.draft.requesterEmail).toBe("jamie.mark@properhospitality.com");
+      expect(guarded?.draft.requestType).toBe("Web");
+      expect(guarded?.draft.taskType).toBe("Page Edit");
     });
   });
 
@@ -551,6 +589,108 @@ describe("forwarded email intake", () => {
   });
 });
 
+describe("live Lake Tahoe forward", () => {
+  it("treats Jamie as the requester, splits the asks, and confirms Lake Tahoe", async () => {
+    const flattened = TAHOE_LIVE_BODY.replace(/\s+/g, " ");
+    const fromPretty = proposeEmailBriefs({ subject: TAHOE_LIVE_SUBJECT, bodyText: TAHOE_LIVE_BODY });
+    const fromFlat = proposeEmailBriefs({ subject: TAHOE_LIVE_SUBJECT, bodyText: flattened });
+    expect(fromPretty.map((proposal) => proposal.title)).toEqual(fromFlat.map((proposal) => proposal.title));
+    expect(fromPretty.map((proposal) => `${proposal.requestType} → ${proposal.taskType}`)).toEqual([
+      "Web → Page Edit",
+      "CRM & Paid → Newsletter Send",
+      "CRM & Paid → New User Journey (Subscriber Flows)",
+      "Marketing → Marketing Plan",
+    ]);
+    const cleaned = fromPretty.map((proposal) => proposal.detail).join("\n");
+    expect(cleaned).toContain("Incline Village");
+    expect(cleaned).toContain("500+");
+    expect(cleaned).toContain("info@");
+    expect(cleaned).toContain("how often");
+    expect(cleaned).not.toMatch(/Elena Ruiz|Manager, Sales Operations|From:|Disclaimer|Mimecast|\[cid:/i);
+    expect(cleaned.endsWith("…")).toBe(false);
+    expect(cleanEmailBody(flattened)).not.toMatch(/Elena Ruiz|From: Jamie/);
+
+    await withEmailChannel(async () => {
+      const store = new MemoryStore();
+      const { slack, posts } = recordingSlack();
+      slack.userByEmail = async (email) => {
+        expect(email).toBe("jamie.mark@properhotel.com");
+        return { id: "UJAMIE", name: "Jamie Mark" };
+      };
+      await dispatchUserMessage({
+        event: tahoeLiveSlackEvent(),
+        store,
+        onMessage: async () => {
+          throw new Error("an email must not enter the human intake path");
+        },
+        postError: async () => undefined,
+        onEmail: (email) => beginEmailIntake({ store, slack, today: TODAY }, email),
+        botId: "BINTAKE",
+        botUserId: "UINTAKE",
+      });
+      const text = posts[0]?.text ?? "";
+      expect(text).toContain("<@UJAMIE>");
+      expect(text).toContain("Elena Ruiz forwarded");
+      expect(text).toContain("4 separate");
+      expect(text).toContain("Lake Tahoe (LTP)");
+      expect(text).toContain("Lake Tahoe membership interest form");
+      expect(text).toContain("Membership interest questionnaire");
+      expect(text).toContain("Merge and clean interest contacts");
+      expect(text).toContain("Project update plan");
+      expect(text).toContain("Incline Village");
+      expect(text).toContain("500+");
+      expect(text).toContain("info@");
+      expect(text).toContain("how often");
+      expect(text).toContain("Nothing is filed");
+      expect(text).not.toMatch(/Elena —|Manager, Sales Operations|Disclaimer|Mimecast/);
+      expect(text).not.toContain("All Properties, All Proper");
+      expect(JSON.stringify(posts[0]?.blocks)).toContain("email_split");
+      expect(JSON.stringify(posts[0]?.blocks)).not.toContain("confirm_intake");
+      const saved = await store.getConversation(`${TAHOE_LIVE_CHANNEL}:${TAHOE_LIVE_TS}`);
+      expect(saved?.draft.requesterName).toBe("Jamie Mark");
+      expect(saved?.draft.requesterEmail).toBe("jamie.mark@properhotel.com");
+      expect(saved?.draft.forwardedBy).toContain("Elena Ruiz");
+      expect(saved?.emailIntake?.requesterSlackId).toBe("UJAMIE");
+      expect(saved?.emailIntake?.inferredProperties).toEqual(["LTP"]);
+
+      await handleIncomingMessage({
+        store,
+        slack,
+        llm: { async complete() { throw new Error("yes should accept Lake Tahoe without Claude"); } },
+        today: TODAY,
+      }, {
+        channel: TAHOE_LIVE_CHANNEL,
+        userId: "UELENA",
+        text: "yes",
+        ts: "1794432260.000100",
+        threadTs: TAHOE_LIVE_TS,
+        isDm: false,
+      });
+      await handleIncomingMessage({
+        store,
+        slack,
+        llm: { async complete() { throw new Error("confirming the property must not call Claude"); } },
+        today: TODAY,
+      }, {
+        channel: TAHOE_LIVE_CHANNEL,
+        userId: "UELENA",
+        text: "yes",
+        ts: "1794432261.000100",
+        threadTs: TAHOE_LIVE_TS,
+        isDm: false,
+      });
+      const confirmed = await store.getConversation(`${TAHOE_LIVE_CHANNEL}:${TAHOE_LIVE_TS}`);
+      expect(confirmed?.draft.properties).toEqual(["LTP"]);
+      expect(confirmed?.draft.requesterName).toBe("Jamie Mark");
+      expect(confirmed?.emailIntake?.propertyConfirmed).toBe(true);
+      const followUp = posts.at(-1)?.text ?? "";
+      expect(followUp).toContain("<@UJAMIE>");
+      expect(followUp).not.toContain("Elena —");
+      expect(followUp).not.toContain("All Properties, All Proper");
+    }, TAHOE_LIVE_CHANNEL);
+  });
+});
+
 describe("Slack email file metadata", () => {
   it("maps subject, from, and plain_text from files.info", async () => {
     const fetchImpl = vi.fn(async (url: string | URL) => {
@@ -615,7 +755,7 @@ async function inboundFromEvent() {
   return resolved.email;
 }
 
-function recordingSlack(): { slack: SlackApi; posts: Array<{ text: string; threadTs?: string; blocks?: unknown }>; updates: string[] } {
+function recordingSlack(): { slack: SlackApi & { userByEmail?: SlackApi["userByEmail"] }; posts: Array<{ text: string; threadTs?: string; blocks?: unknown }>; updates: string[] } {
   const posts: Array<{ text: string; threadTs?: string; blocks?: unknown }> = [];
   const updates: string[] = [];
   const slack: SlackApi = {
@@ -636,9 +776,9 @@ function recordingSlack(): { slack: SlackApi; posts: Array<{ text: string; threa
   return { slack, posts, updates };
 }
 
-async function withEmailChannel(run: () => Promise<void>): Promise<void> {
+async function withEmailChannel(run: () => Promise<void>, channel = TAHOE_CHANNEL): Promise<void> {
   const previous = process.env.SLACK_EMAIL_INTAKE_CHANNELS;
-  process.env.SLACK_EMAIL_INTAKE_CHANNELS = TAHOE_CHANNEL;
+  process.env.SLACK_EMAIL_INTAKE_CHANNELS = channel;
   try {
     await run();
   } finally {
