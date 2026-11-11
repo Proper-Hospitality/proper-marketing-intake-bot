@@ -92,6 +92,9 @@ export function proposeEmailBriefs(input: { subject: string; bodyText: string })
       const proposal = classifyAsk(detail, input.subject);
       proposal.detail = detail;
       proposal.summary = summarizeAsk(detail, proposal.title);
+      if (proposal.followUps && proposal.summary) {
+        for (const key of Object.keys(proposal.followUps)) proposal.followUps[key] = proposal.summary;
+      }
       return proposal;
     });
 }
@@ -130,7 +133,7 @@ export function userCorrectsEmailRequester(text: string): boolean {
 }
 
 export function userCorrectsEmailType(text: string): boolean {
-  return /\b(request type|task type|not a web|not web|this is (?:a |an )?(?:web|creative|crm|social|marketing))\b/i.test(text);
+  return /\b(request type|task type|not a web|not web|new page|page edit|this is (?:a |an )?(?:web|creative|crm|social|marketing|new))\b/i.test(text);
 }
 
 export function renderEmailText(input: {

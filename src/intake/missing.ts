@@ -134,7 +134,7 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
     const days = daysUntil(draft.requestedCompletionDate, today);
     if (days < 0) {
       warnings.push(
-        `The requested date ${draft.requestedCompletionDate} is already past. Say if you still want this filed.`,
+        `The due date ${draft.requestedCompletionDate} is already past. Say if you still want this filed.`,
       );
     } else if (days < 7) {
       warnings.push(
@@ -179,15 +179,6 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
       label: "Where it goes live",
       hint: "A URL, channel, or handle.",
     });
-  }
-
-  for (const field of followUps) {
-    if (field.kind !== "date") continue;
-    const value = draft.followUps?.[field.label];
-    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) continue;
-    if (daysUntil(value, today) < 0) {
-      warnings.push(`${field.label} (${value}) is already past.`);
-    }
   }
 
   return { items: presentQuestions(draft, items, followUps), warnings };

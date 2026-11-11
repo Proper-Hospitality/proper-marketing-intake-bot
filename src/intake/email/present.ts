@@ -1,3 +1,4 @@
+import { formatNeedsList } from "../ask-text.js";
 import { formatQuestions, formatSummary, formatTemplateOffer } from "../brief.js";
 import { greet } from "../../slack/mentions.js";
 import { propertyPhrase } from "../catalog.js";
@@ -80,7 +81,9 @@ export function presentEmailStep(
   options?: { intro?: boolean },
 ): EmailReply {
   const preface = stepPreface(state, options?.intro);
-  const property = wantsProperty(outcome) ? formatEmailPropertyConfirm(state) : undefined;
+  const property = wantsProperty(outcome) && (outcome.kind !== "ask" || outcome.missing.items.length <= 1)
+    ? formatEmailPropertyConfirm(state)
+    : undefined;
   if (property) {
     state.lastAskedId = "properties";
     state.lastAskedLabel = "Property";
@@ -91,6 +94,21 @@ export function presentEmailStep(
     if (item) {
       state.lastAskedId = item.id;
       state.lastAskedLabel = item.label;
+    }
+    const chat = state.intakePace === "chat" || outcome.missing.items.length <= 1;
+    if (!chat) {
+      state.lastAskedId = "batch";
+      state.lastAskedLabel = "A few details";
+      const list = formatNeedsList({
+        items: outcome.missing.items,
+        draft: state.draft,
+        opening: (state.answerTrail ?? []).length === 0,
+        duplicates: state.duplicates,
+      });
+      const hinted = state.emailIntake?.inferredProperties?.length === 1 && !state.draft.properties?.length
+        ? `This looks like ${propertyPhrase(state.emailIntake.inferredProperties[0] ?? "")}.\n\n${list}`
+        : list;
+      return { text: joinParts(preface, outcome.preface, hinted) };
     }
     const question = formatQuestions({
       items: item ? [item] : [],

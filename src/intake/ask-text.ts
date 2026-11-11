@@ -152,13 +152,57 @@ function byLabel(label: string, draft: BriefDraft): string | undefined {
   return undefined;
 }
 
+export function shortNeed(item: MissingItem, draft: BriefDraft): string {
+  if (item.id === "timing") return "when this is due, and what happens if it's late";
+  if (item.id === "requestedCompletionDate") return "when this is due";
+  if (item.id === "consequenceOfDelay") return "what happens if it's late";
+  if (item.id === "approver") return "who signs off";
+  if (item.id === "properties") return "which property this is for";
+  if (item.id === "requestName") return "a short name for the request";
+  if (item.id === "requestType") return "what kind of help you need";
+  if (item.id === "taskType") return "what kind of piece this is";
+  if (item.label === "URL" || item.id.endsWith(":URL")) {
+    return draft.taskType === "New Page" ? "where the new page should live" : "the link to the current page";
+  }
+  if (/page change/i.test(item.label)) return "what should change on the page";
+  if (/copy/i.test(item.label)) return "the copy, or the key points";
+  if (/audience/i.test(item.label)) return "who this is for";
+  const words = item.label.replace(/\s*\([^)]*\)/g, "").trim();
+  return `${words.charAt(0).toLowerCase()}${words.slice(1)}`;
+}
+
+export function formatNeedsList(input: {
+  items: MissingItem[];
+  draft: BriefDraft;
+  opening: boolean;
+  duplicates?: Array<{ name: string; url?: string }>;
+}): string {
+  const bullets = input.items.map((item) => `• ${shortNeed(item, input.draft)}`);
+  const similar = (input.duplicates ?? []).slice(0, 2).map((task) => `I see an open task that looks similar: ${task.name}${task.url ? ` — ${task.url}` : ""}. Tell me if this is the same one.`);
+  const kept = input.draft.consequenceOfDelay ? [`If it's late: ${input.draft.consequenceOfDelay}`, ""] : [];
+  if (!input.opening) {
+    return [...kept, "Thanks. I still need:", ...bullets, ...similar].join("\n");
+  }
+  return [
+    ...kept,
+    "Thank you for your request. We have some more information to gather before we can submit it.",
+    "",
+    "We need:",
+    ...bullets,
+    ...similar,
+    "You can answer all of these now, or we can chat back and forth. If you want to chat, let's start with when this is due and what happens if it's late.",
+  ].join("\n");
+}
+
 function pageUrlQuestion(draft: BriefDraft): string {
   const place = placeName(draft) || "this";
   const blob = `${draft.requestName ?? ""} ${draft.taskType ?? ""}`;
   const membership = /membership/i.test(blob);
-  const form = /form/i.test(blob);
   const page = membership ? `${place} membership page` : `${place} page`;
-  const why = form
+  if (draft.taskType === "New Page") {
+    return `Where should the new ${page} live? A URL or a path is enough (for example properhotel.com/...), so the web team knows where to build it.`;
+  }
+  const why = /form/i.test(blob)
     ? "so the web team knows exactly where the new form goes"
     : "so the web team knows exactly which page to change";
   return `Which page should we update? Please send the link to the current ${page} on the website (for example properhotel.com/...), ${why}.`;

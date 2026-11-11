@@ -171,7 +171,7 @@ describe("confirmation gate", () => {
       today: new Date("2026-11-02T12:00:00Z"),
     });
     expect(state.draft.templateUnusedReason).toMatch(/doesn't fit/);
-    expect(reply.text).toContain("What should Weekly happenings say?");
+    expect(reply.text).toContain("We need:");
     expect(reply.confirm).toBeUndefined();
   });
 

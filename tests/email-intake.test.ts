@@ -675,8 +675,7 @@ describe("live Lake Tahoe forward", () => {
       expect(confirmed?.emailIntake?.propertyConfirmed).toBe(true);
       const followUp = posts.at(-1)?.text ?? "";
       expect(followUp).toContain("Perfect, LTP it is.");
-      expect(followUp).toContain("Lake Tahoe membership page");
-      expect(followUp).toContain("properhotel.com/");
+      expect(followUp).toContain("the link to the current page");
       expect(followUp).not.toContain("*URL*");
       expect(followUp).not.toContain("Koral Captain");
       expect(followUp).not.toContain("<@");

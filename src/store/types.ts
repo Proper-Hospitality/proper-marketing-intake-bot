@@ -107,6 +107,8 @@ export interface ConversationState {
   uploadedSlackFileIds?: string[];
   /** Set when this thread started from an inbound email. */
   emailIntake?: EmailIntakeState;
+  /** Batch lists every missing field. Chat asks one question, starting with the due date. */
+  intakePace?: "batch" | "chat";
   updatedAt: string;
 }
 
