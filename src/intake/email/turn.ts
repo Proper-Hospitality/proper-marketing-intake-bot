@@ -1,3 +1,4 @@
+import { searchExistingTasks } from "../asana.js";
 import { rememberAttachment } from "../capture.js";
 import { applyAnswers } from "../flow.js";
 import { confirmBlocks, messageBlocks } from "../../slack/blocks.js";
@@ -13,6 +14,8 @@ export interface EmailTurnDeps {
   store: Store;
   slack: SlackApi;
   today?: Date;
+  asanaToken?: string;
+  fetchImpl?: typeof fetch;
 }
 
 export async function beginEmailIntake(deps: EmailTurnDeps, email: InboundEmail): Promise<void> {
@@ -41,7 +44,7 @@ export async function beginEmailIntake(deps: EmailTurnDeps, email: InboundEmail)
       state.messages.push({ role: "assistant", content: reply.text });
     } else {
       state.emailIntake.mode = "single";
-      reply = activateProposal(state, 0, today);
+      reply = await activateProposal(deps, state, 0, today);
     }
     state.updatedAt = new Date().toISOString();
     await deps.store.saveConversation(state);
@@ -81,7 +84,7 @@ export async function continueEmailConversation(
       });
       return true;
     }
-    const reply = applyEmailChoice(state, choice, today);
+    const reply = await applyEmailChoice(deps, state, choice, today);
     state.updatedAt = new Date().toISOString();
     await deps.store.saveConversation(state);
     await deps.slack.postMessage({
@@ -93,7 +96,7 @@ export async function continueEmailConversation(
     return true;
   }
   if (state.phase === "submitted" && hasUnstartedBrief(email)) {
-    const reply = startNextEmailBrief(state, today);
+    const reply = await startNextEmailBrief(deps, state, today);
     if (!reply) return false;
     state.updatedAt = new Date().toISOString();
     await deps.store.saveConversation(state);
@@ -131,7 +134,7 @@ export async function handleEmailSplitAction(deps: EmailTurnDeps, action: {
     });
     return;
   }
-  const reply = applyEmailChoice(state, action.choice, deps.today ?? new Date());
+  const reply = await applyEmailChoice(deps, state, action.choice, deps.today ?? new Date());
   state.updatedAt = new Date().toISOString();
   await deps.store.saveConversation(state);
   const label = action.choice === "split"
@@ -151,7 +154,7 @@ export async function handleEmailSplitAction(deps: EmailTurnDeps, action: {
   });
 }
 
-export function applyEmailChoice(state: ConversationState, choice: "split" | "one", today: Date): EmailReply {
+export async function applyEmailChoice(deps: EmailTurnDeps, state: ConversationState, choice: "split" | "one", today: Date): Promise<EmailReply> {
   const email = state.emailIntake;
   if (!email) return { text: "I lost the email for this thread." };
   if (choice === "one") {
@@ -160,16 +163,16 @@ export function applyEmailChoice(state: ConversationState, choice: "split" | "on
   } else {
     email.mode = "split";
   }
-  return activateProposal(state, 0, today);
+  return activateProposal(deps, state, 0, today);
 }
 
-export function startNextEmailBrief(state: ConversationState, today = new Date()): EmailReply | undefined {
+export async function startNextEmailBrief(deps: EmailTurnDeps, state: ConversationState, today = new Date()): Promise<EmailReply | undefined> {
   const email = state.emailIntake;
   if (!email || email.mode !== "split") return undefined;
   noteFiled(state);
   const next = (email.activeIndex ?? 0) + 1;
   if (next >= email.proposals.length) return undefined;
-  return activateProposal(state, next, today);
+  return activateProposal(deps, state, next, today);
 }
 
 function intakeFromEmail(email: InboundEmail): EmailIntakeState {
@@ -205,7 +208,20 @@ async function lookupRequester(slack: SlackApi, email: string | undefined): Prom
   }
 }
 
-function activateProposal(state: ConversationState, index: number, today: Date): EmailReply {
+async function noteSimilarTasks(deps: EmailTurnDeps, state: ConversationState): Promise<void> {
+  if (!deps.asanaToken || !state.draft.requestName) return;
+  const found = await searchExistingTasks({
+    token: deps.asanaToken,
+    text: [state.draft.properties?.[0], state.draft.requestName].filter(Boolean).join(" "),
+    fetchImpl: deps.fetchImpl,
+  });
+  const words = state.draft.requestName.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 4);
+  state.duplicates = found
+    .filter((task) => words.some((word) => task.name.toLowerCase().includes(word)))
+    .map((task) => ({ gid: task.gid, name: task.name, url: task.url }));
+}
+
+async function activateProposal(deps: EmailTurnDeps, state: ConversationState, index: number, today: Date): Promise<EmailReply> {
   const email = state.emailIntake;
   if (!email) return { text: "I lost the email for this thread." };
   const proposal = email.proposals[index];
@@ -216,6 +232,7 @@ function activateProposal(state: ConversationState, index: number, today: Date):
   state.draft = seedDraft(email, proposal, true);
   state.messages.push({ role: "user", content: `Brief: ${proposal.title}\n${proposal.detail}` });
   if (state.messages.length > 40) state.messages.splice(0, state.messages.length - 40);
+  await noteSimilarTasks(deps, state);
   const outcome = applyAnswers(state, {}, today);
   const reply = presentEmailStep(state, outcome, today, { intro: true });
   state.messages.push({ role: "assistant", content: reply.text });

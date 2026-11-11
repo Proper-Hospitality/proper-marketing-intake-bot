@@ -47,7 +47,8 @@ describe("Elena's Nov 10 intake decisions", () => {
       llm: scripted,
       today: new Date("2026-11-10T20:00:00Z"),
     });
-    expect(second.text).toContain(LET_MARKETING_RECOMMEND);
+    expect(second.text).toContain("before I can file");
+    expect(second.text).not.toContain(LET_MARKETING_RECOMMEND);
 
     const recorded = await runIntakeTurn({
       state,

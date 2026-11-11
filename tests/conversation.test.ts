@@ -20,9 +20,9 @@ describe("one question at a time", () => {
       }]),
       today: new Date("2026-11-02T12:00:00Z"),
     });
-    expect(first.text).toContain("What should we call this?");
-    expect(first.text).not.toContain("Which property is this for?");
-    expect(first.text).not.toContain("Great, thanks!");
+    expect(first.text).toContain("We need:");
+    expect(first.text).toContain("a short name for the request");
+    expect(first.text).toContain("which property this is for");
 
     const second = await runIntakeTurn({
       state,
@@ -36,10 +36,9 @@ describe("one question at a time", () => {
       }]),
       today: new Date("2026-11-02T12:00:00Z"),
     });
-    expect(second.text).toMatch(/Perfect|Great, thanks!|Sounds good/);
-    expect(second.text).toContain("Which property is this for?");
-    expect(second.text).not.toContain("What should we call this?");
-    expect(state.lastAskedId).toBe("properties");
+    expect(second.text).toContain("which property this is for");
+    expect(second.text).not.toContain("a short name for the request");
+    expect(state.lastAskedId).toBe("batch");
   });
 
   it("records several answers at once, then skips and goes back", async () => {
@@ -64,8 +63,8 @@ describe("one question at a time", () => {
       llm: scripted([{ type: "text", text: "should not be needed" }]),
       today: new Date("2026-11-02T12:00:00Z"),
     });
-    expect(skipped.text).toContain("What should Holiday newsletter say?");
-    expect(state.draft.skipped?.map((entry) => entry.label)).toEqual(["Audience / Distribution Plan"]);
+    expect(skipped.text).toContain("before I can file");
+    expect(state.draft.skipped).toBeUndefined();
 
     state.lastAskedId = "followup:Recommended Copy / Details";
     state.lastAskedLabel = "Recommended Copy / Details";
@@ -89,9 +88,10 @@ describe("one question at a time", () => {
       }]),
       today: new Date("2026-11-02T12:00:00Z"),
     });
-    expect(many.text).toContain("When do you need Holiday newsletter, and what happens if it's late?");
+    expect(many.text).toContain("when this is due");
     expect(many.text).not.toContain("*Final approver*");
     expect(listMissing(state.draft, new Date("2026-11-02T12:00:00Z")).items.map((item) => item.id)).toEqual([
+      "followup:Audience / Distribution Plan",
       "timing",
       "attachmentKind:0",
     ]);
@@ -104,7 +104,7 @@ describe("one question at a time", () => {
       today: new Date("2026-11-02T12:00:00Z"),
     });
     expect(back.text).toContain("Let's change that.");
-    expect(back.text).toContain("What should Holiday newsletter say?");
+    expect(back.text).toContain("the copy, or the key points");
     expect(state.draft.followUps?.["Recommended Copy / Details"]).toBeUndefined();
     expect(state.draft.followUps?.["CTA Link"]).toBe("Members email");
   });

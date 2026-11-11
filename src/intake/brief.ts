@@ -193,7 +193,7 @@ export function formatSummary(input: {
   }
   if (draft.requestType && draft.taskType) {
     for (const field of followUpsFor(draft.requestType, draft.taskType)) {
-      const value = draft.followUps?.[field.label];
+      const value = cleanBriefText(draft.followUps?.[field.label]);
       if (!value) continue;
       lines.push(`${field.label}: ${truncate(value, 500)}`);
     }
@@ -285,6 +285,13 @@ function renderRequesterAnswer(kind: string, value: string): string {
     if (iso) return formatFullDate(iso);
   }
   return trimmed;
+}
+
+function cleanBriefText(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const text = value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  if (!text || /disclaimer|\bfrom:\s|manager, sales operations/i.test(text)) return undefined;
+  return text;
 }
 
 function truncate(value: string, max: number): string {

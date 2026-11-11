@@ -127,6 +127,7 @@ async function handleFreshMessage(deps: {
     slackToken: deps.slackToken,
   });
   await deps.store.saveConversation(state);
+  if (reply.silent) return;
   await deps.slack.postMessage({
     channel: message.channel,
     threadTs: threadAnchor,
@@ -226,7 +227,7 @@ export async function handleConfirmAction(deps: {
       slackThread: slackThreadUrl(action.channel, thread),
       slackToken: deps.slackToken,
     });
-    const next = state.phase === "submitted" ? startNextEmailBrief(state) : undefined;
+    const next = state.phase === "submitted" ? await startNextEmailBrief(deps, state) : undefined;
     if (state.emailIntake) await deps.store.saveConversation(state);
     const lastOfEmail = !next
       && state.emailIntake?.mode === "split"

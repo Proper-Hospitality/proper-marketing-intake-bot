@@ -25,7 +25,6 @@ import {
   isDateQuestion,
   isUnsureAnswer,
   nudgeToFindAnswer,
-  offerMarketingRecommend,
   recordMarketingRecommend,
   stillCantGetIt,
   wantsMarketingRecommend,
@@ -58,7 +57,8 @@ import {
 import { assistantBlocksForReplay, isHistoryRejection, sanitizeStoredHistory } from "./history.js";
 import { buildSystemPrompt } from "./prompt.js";
 import { INTAKE_TOOLS } from "./tools.js";
-import { LEADING_ACK, naturalAck } from "../intake/ask-text.js";
+import { LEADING_ACK, formatNeedsList, naturalAck } from "../intake/ask-text.js";
+import { batchHasAnswers, isTeammateChatter, isVagueAnswer, parseBatchAnswers, saysNewPage, wantsToChat } from "../intake/batch.js";
 import { emailAddressee, formatEmailPropertyConfirm } from "../intake/email/present.js";
 import { interpretPropertyConfirm, userCorrectsEmailRequester, userCorrectsEmailType } from "../intake/email/parse.js";
 import { formatOverdueReport, overdueCountsForNames, parseNameList } from "../tasks/overdue.js";
@@ -81,6 +81,8 @@ export interface Llm {
 
 export interface AgentReply {
   text: string;
+  /** Teammate chatter. Nothing is posted. */
+  silent?: boolean;
   confirm?: { version: number; kind?: "intake" | "complete" };
 }
 
@@ -117,6 +119,20 @@ export async function runIntakeTurn(input: {
   if (input.slackUser.email && !state.draft.requesterEmail) state.draft.requesterEmail = input.slackUser.email;
   captureIncomingFiles(state.draft, input.userText, state.lastAskedId);
 
+  if (isTeammateChatter(input.userText) && state.messages.some((turn) => turn.role === "assistant")) {
+    return { text: "", silent: true };
+  }
+  if (wantsToChat(input.userText) && (state.phase === "collecting" || state.phase === "awaiting_confirm")) {
+    state.intakePace = "chat";
+    const outcome = applyAnswers(state, {}, today);
+    return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
+  }
+  if (saysNewPage(input.userText) && state.draft.requestType === "Web" && state.draft.taskType !== "New Page") {
+    const parsed = parseBatchAnswers(input.userText, state.draft, today);
+    const outcome = applyAnswers(state, { ...parsed, taskType: "New Page" }, today);
+    return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
+  }
+
   let preset: FlowOutcome | undefined;
   if (state.lastAskedId && (state.phase === "collecting" || state.phase === "awaiting_confirm")) {
     if (isBackAnswer(input.userText) && rewindLastAnswer(state)) {
@@ -131,15 +147,30 @@ export async function runIntakeTurn(input: {
       nudges[id] = (nudges[id] ?? 0) + 1;
       state.unsureNudges = nudges;
       const text = nudges[id] === 1
-        ? nudgeToFindAnswer(state.lastAskedLabel)
+        ? `I still need a real answer for ${state.lastAskedLabel}. ${nudgeToFindAnswer(state.lastAskedLabel)}`
         : isDateQuestion(id)
           ? dateStillNeeded(state.lastAskedLabel)
-          : offerMarketingRecommend(state.lastAskedLabel);
+          : "I still need a real answer for that before I can file it.";
       return remember(state, input.userText, { text });
     }
     if (wantsMarketingRecommend(input.userText) && recordMarketingRecommend(state)) {
       const outcome = applyAnswers(state, {}, today);
       return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
+    }
+    if (isVagueAnswer(input.userText) && state.lastAskedId && state.lastAskedLabel) {
+      const id = state.lastAskedId;
+      const nudges = { ...(state.unsureNudges ?? {}) };
+      nudges[id] = (nudges[id] ?? 0) + 1;
+      state.unsureNudges = nudges;
+      const text = nudges[id] === 1
+        ? `That doesn't give the team enough to file. ${state.lastAskedLabel} needs a specific answer.`
+        : "I still need a real answer for that before I can file it.";
+      return remember(state, input.userText, { text });
+    }
+    if (isSkipAnswer(input.userText) && state.lastAskedId && state.lastAskedId !== "batch") {
+      return remember(state, input.userText, {
+        text: "I still need that before I can file it. Skip isn't enough for a required detail.",
+      });
     }
     if (isSkipAnswer(input.userText) && skipAsked(state)) {
       if (state.emailIntake && state.lastAskedId === "properties") state.emailIntake.propertyConfirmed = true;
@@ -299,6 +330,31 @@ export async function runIntakeTurn(input: {
       if (properties && properties.length > 0) state.emailIntake.confirmedProperties = [...properties];
       const outcome = applyAnswers(state, properties && properties.length > 0 ? { properties } : {}, today);
       return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
+    }
+  }
+  if (
+    /^(yes|yep|yeah)[.!]?$/i.test(input.userText.trim())
+    && state.emailIntake
+    && !state.emailIntake.propertyConfirmed
+    && state.emailIntake.inferredProperties?.length === 1
+    && !state.draft.properties?.length
+  ) {
+    const properties = state.emailIntake.inferredProperties;
+    state.emailIntake.propertyConfirmed = true;
+    state.emailIntake.confirmedProperties = [...properties];
+    const outcome = applyAnswers(state, { properties }, today);
+    const reply = renderReply(state, input.slackUser, "", outcome, today);
+    reply.text = `Perfect, ${properties[0]} it is.\n\n${reply.text}`;
+    return remember(state, input.userText, reply);
+  }
+  if (state.lastAskedId && (state.phase === "collecting" || state.phase === "awaiting_confirm") && state.intakePace !== "chat") {
+    const parsed = parseBatchAnswers(input.userText, state.draft, today);
+    if (batchHasAnswers(parsed)) {
+      preset = applyAnswers(state, parsed, today);
+      if (state.emailIntake && state.draft.properties && state.draft.properties.length > 0) {
+        state.emailIntake.propertyConfirmed = true;
+        state.emailIntake.confirmedProperties = [...state.draft.properties];
+      }
     }
   }
 
@@ -611,8 +667,26 @@ function renderReply(
     return { text: formatPropertyQuestion(mentionId, spokenName) };
   }
   if (outcome?.kind === "ask") {
-    const item = outcome.missing.items[0];
+    const items = outcome.missing.items;
     const previous = state.lastAskedId;
+    const chat = state.intakePace === "chat" || items.length <= 1;
+    if (!chat) {
+      if (previous && previous !== "batch") {
+        state.answerTrail = [...(state.answerTrail ?? []), previous].slice(-30);
+      }
+      state.lastAskedId = "batch";
+      state.lastAskedLabel = "A few details";
+      const list = formatNeedsList({
+        items,
+        draft: state.draft,
+        opening: (state.answerTrail ?? []).length === 0,
+        duplicates: state.duplicates,
+      });
+      return { text: outcome.preface ? `${outcome.preface}\n\n${list}` : list };
+    }
+    const item = state.intakePace === "chat"
+      ? items.find((entry) => entry.id === "timing" || entry.id === "requestedCompletionDate") ?? items[0]
+      : items[0];
     if (item) {
       if (previous && previous !== item.id) {
         state.answerTrail = [...(state.answerTrail ?? []), previous].slice(-30);
