@@ -2,7 +2,7 @@ export async function downloadSlackFile(args: {
   token: string;
   fileId: string;
   fetchImpl?: typeof fetch;
-}): Promise<{ name: string; bytes: Uint8Array }> {
+}): Promise<{ name: string; bytes: Uint8Array; permalink?: string; mimetype?: string }> {
   const fetchImpl = args.fetchImpl ?? fetch;
   const infoResponse = await fetchImpl(`https://slack.com/api/files.info?file=${encodeURIComponent(args.fileId)}`, {
     headers: { Authorization: `Bearer ${args.token}` },
@@ -10,17 +10,22 @@ export async function downloadSlackFile(args: {
   const info = await infoResponse.json() as {
     ok?: boolean;
     error?: string;
-    file?: { name?: string; url_private?: string; url_private_download?: string };
+    file?: { name?: string; mimetype?: string; permalink?: string; url_private?: string; url_private_download?: string };
   };
   if (!info.ok || !info.file) throw new Error(info.error || "Slack could not find that file. The bot needs the files:read scope.");
   const url = info.file.url_private_download || info.file.url_private;
   if (!url) throw new Error("Slack did not include a download link for that file.");
-  return readBytes({
+  const downloaded = await readBytes({
     url,
-    name: info.file.name || "photo",
+    name: info.file.name || "attachment",
     token: args.token,
     fetchImpl,
   });
+  return {
+    ...downloaded,
+    permalink: info.file.permalink,
+    mimetype: info.file.mimetype,
+  };
 }
 
 export async function downloadRemoteFile(args: {
@@ -50,7 +55,7 @@ async function readBytes(args: {
   });
   if (!response.ok) throw new Error(`Could not download ${args.name}.`);
   const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.byteLength > 20 * 1024 * 1024) throw new Error(`${args.name} is over 20 MB. Send a smaller photo.`);
+  if (bytes.byteLength > 20 * 1024 * 1024) throw new Error(`${args.name} is over 20 MB. Send a smaller file.`);
   if (bytes.byteLength === 0) throw new Error(`${args.name} was empty.`);
   return { name: args.name, bytes };
 }

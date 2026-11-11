@@ -1,4 +1,7 @@
 import { addTaskComment, searchExistingTasks, userFacingAsanaError } from "../intake/asana.js";
+import { absorbTurnFacts, contradictsCaptured, noteResolvedDate, type TurnAttachment } from "../intake/capture.js";
+import { replyToFiledThread } from "../intake/filed-reply.js";
+import { formatSpokenDate, resolveDateInput } from "../intake/relative-date.js";
 import {
   formatPropertyQuestion,
   formatQuestions,
@@ -87,6 +90,9 @@ export async function runIntakeTurn(input: {
   fetchImpl?: typeof fetch;
   today?: Date;
   design?: DesignDeps;
+  attachments?: TurnAttachment[];
+  readAttachment?: (file: TurnAttachment) => Promise<string | undefined>;
+  slackToken?: string;
   rush?: {
     store: import("../store/types.js").Store;
     channel: string;
@@ -203,6 +209,53 @@ export async function runIntakeTurn(input: {
   if (state.phase === "submitted" && state.taskGid && mentionsActualPrice(input.userText)) {
     return recordPriceOnTask(state, input);
   }
+  if (state.phase === "submitted" && state.taskUrl) {
+    const text = await replyToFiledThread({
+      state,
+      userText: input.userText,
+      attachments: input.attachments,
+      slackToken: input.slackToken,
+      asanaToken: input.asanaToken,
+      fetchImpl: input.fetchImpl,
+    });
+    return remember(state, input.userText, { text });
+  }
+
+  const specsByFileId: Record<string, string> = {};
+  for (const file of input.attachments ?? []) {
+    if (!input.readAttachment) break;
+    try {
+      const specs = await input.readAttachment(file);
+      if (specs?.trim()) specsByFileId[file.slackFileId] = specs.trim();
+    } catch (error) {
+      console.error(JSON.stringify({
+        msg: "attachment_read_failed",
+        fileId: file.slackFileId,
+        error: error instanceof Error ? error.message : "unknown",
+      }));
+    }
+  }
+  absorbTurnFacts({
+    state,
+    userText: input.userText,
+    today,
+    expectingDate: isDateQuestion(state.lastAskedId ?? ""),
+    attachments: input.attachments,
+    specsByFileId,
+  });
+  if (
+    isDateAffirmation(input.userText)
+    && state.dateConfirmFor
+    && state.dateConfirmFor === state.draft.requestedCompletionDate
+    && ["timing", "requestedCompletionDate", "consequenceOfDelay"].includes(state.lastAskedId ?? "")
+  ) {
+    state.dateConfirmShown = true;
+    const outcome = applyAnswers(state, {}, today);
+    const spoken = formatSpokenDate(state.dateConfirmFor);
+    const reply = presentDateConfirm(state, renderReply(state, input.slackUser.id, "", outcome, today));
+    reply.text = `Got it — ${spoken}.\n\n${reply.text.replace(/^Got it\.\n\n/, "")}`;
+    return remember(state, input.userText, reply);
+  }
 
   state.messages = sanitizeStoredHistory(state.messages);
   const previous = state.messages[state.messages.length - 1];
@@ -218,7 +271,7 @@ export async function runIntakeTurn(input: {
     let response: { content: LlmContentBlock[] };
     try {
       response = await input.llm.complete({
-        system: buildSystemPrompt(state, input.slackUser),
+        system: buildSystemPrompt(state, input.slackUser, today),
         messages,
         tools: INTAKE_TOOLS,
       });
@@ -263,12 +316,38 @@ export async function runIntakeTurn(input: {
     if (completion && completion.kind !== "listed") break;
   }
 
-  if (outcome?.kind === "offer_template" && input.design) {
-    const offered = await offerDesignBuild(state, outcome.match, input.design.canva);
-    if (offered) return remember(state, "", { text: offered }, true);
+  if (outcome?.kind === "invalid" && state.draft.requestedCompletionDate && outcome.errors.every((error) => /completion date/i.test(error))) {
+    outcome = applyAnswers(state, {}, today);
+  }
+  if (
+    (!outcome || outcome.kind === "invalid")
+    && state.draft.rushBlock
+    && state.draft.requestedCompletionDate
+    && state.rushExplainedFor !== state.draft.requestedCompletionDate
+  ) {
+    outcome = applyAnswers(state, {}, today);
+    assistantText = "";
+  }
+  let attachmentNote = "";
+  if ((!outcome || outcome.kind === "invalid") && contradictsCaptured(assistantText, state, today)) {
+    if ((state.draft.attachments?.length ?? 0) > 0 && /attachment/i.test(assistantText)) {
+      const names = state.draft.attachments?.map((file) => file.name).join(", ");
+      attachmentNote = `I have ${names}. I'll put ${state.draft.attachments?.length === 1 ? "it" : "them"} on the Asana task when this is filed.`;
+    }
+    outcome = applyAnswers(state, {}, today);
+    assistantText = "";
   }
 
-  const reply = renderReply(state, input.slackUser.id, assistantText, outcome, today, completion);
+  if (outcome?.kind === "offer_template" && input.design) {
+    const offered = await offerDesignBuild(state, outcome.match, input.design.canva);
+    if (offered) {
+      const reply = presentDateConfirm(state, { text: attachmentNote ? `${attachmentNote}\n\n${offered}` : offered });
+      return remember(state, "", reply, true);
+    }
+  }
+
+  const reply = presentDateConfirm(state, renderReply(state, input.slackUser.id, assistantText, outcome, today, completion));
+  if (attachmentNote) reply.text = `${attachmentNote}\n\n${reply.text}`;
   state.messages.push({ role: "assistant", content: reply.text });
   if (state.messages.length > 40) state.messages.splice(0, state.messages.length - 40);
   state.updatedAt = new Date().toISOString();
@@ -304,7 +383,16 @@ async function executeTool(
         },
       };
     }
-    const outcome = applyAnswers(state, toRecord(payload), deps.today);
+    const rawDate = asString(payload.requestedCompletionDate);
+    let outcome = applyAnswers(state, toRecord(payload), deps.today);
+    if (rawDate) noteResolvedDate(state, resolveDateInput(rawDate, deps.today));
+    if (
+      outcome.kind === "invalid"
+      && state.draft.requestedCompletionDate
+      && outcome.errors.every((error) => /completion date/i.test(error))
+    ) {
+      outcome = applyAnswers(state, {}, deps.today);
+    }
     if (outcome.kind === "confirm" && deps.asanaToken && state.draft.requestName) {
       state.duplicates = await searchExistingTasks({
         token: deps.asanaToken,
@@ -455,12 +543,14 @@ function renderReply(
       state.lastAskedId = item.id;
       state.lastAskedLabel = item.label;
     }
+    const captured = capturedHalf(state, item?.id);
     const question = formatQuestions({
       userId,
       items: item ? [item] : [],
       warnings: item && /timing|date|late/i.test(item.id + item.label) ? outcome.missing.warnings : [],
       draft: state.draft,
       acknowledge: Boolean(state.answerTrail?.length),
+      captured,
     });
     return { text: outcome.preface ? `${outcome.preface}\n\n${question}` : question };
   }
@@ -478,10 +568,35 @@ function renderReply(
       confirm: { version: state.confirmVersion },
     };
   }
+  if (state.phase === "submitted" && state.taskUrl) {
+    return { text: `This is already filed: ${state.taskUrl}` };
+  }
   if (assistantText) return { text: assistantText };
   return {
     text: "Tell me what you need from the marketing team, or ask how intake works. Nothing is filed without a confirmation button.",
   };
+}
+
+function capturedHalf(state: ConversationState, itemId: string | undefined): string | undefined {
+  if (itemId === "consequenceOfDelay" && state.draft.requestedCompletionDate && state.dateConfirmShown) {
+    return `Due ${formatSpokenDate(state.draft.requestedCompletionDate)}.`;
+  }
+  if (itemId === "requestedCompletionDate" && state.draft.consequenceOfDelay && !state.draft.requestedCompletionDate) {
+    return `If it's late: ${state.draft.consequenceOfDelay}`;
+  }
+  return undefined;
+}
+
+function presentDateConfirm(state: ConversationState, reply: AgentReply): AgentReply {
+  if (!reply.text || state.phase === "submitted") return reply;
+  if (!state.dateConfirmFor || state.dateConfirmShown) return reply;
+  if (state.dateConfirmFor !== state.draft.requestedCompletionDate) return reply;
+  state.dateConfirmShown = true;
+  return { ...reply, text: `${formatSpokenDate(state.dateConfirmFor)} — right?\n\n${reply.text}` };
+}
+
+function isDateAffirmation(text: string): boolean {
+  return /^(yes|yep|yeah|yup|correct|right|that'?s right|that is right)[.!]?$/i.test(text.trim());
 }
 
 async function recordPriceOnTask(

@@ -5,6 +5,8 @@ import { createAnthropicLlm } from "../agent/anthropic.js";
 import { createCanvaDesignClient } from "../canva/turn.js";
 import { registerCanvaRoutes } from "../canva/routes.js";
 import { slackFromWebClient } from "../slack/api.js";
+import { describeAttachment } from "../intake/describe-attachment.js";
+import { readSlackAttachment } from "../intake/read-attachment.js";
 import { downloadRemoteFile, downloadSlackFile } from "../slack/files.js";
 import { withDelivery, type DeliveryContext } from "../slack/dedupe.js";
 import { handleCancelTaskCompletion, handleConfirmAction, handleConfirmTaskCompletion, handleIncomingMessage, handleReviseAction } from "../slack/handle.js";
@@ -248,6 +250,16 @@ function runtime(client: WebClient) {
     slack: slackFromWebClient(client),
     llm,
     asanaToken: process.env.ASANA_ACCESS_TOKEN,
+    slackToken: token,
+    readAttachment: async (file: { slackFileId: string; name?: string; mimetype?: string }) => {
+      const downloaded = await downloadSlackFile({ token, fileId: file.slackFileId });
+      return readSlackAttachment({
+        name: downloaded.name || file.name || "attachment",
+        mimetype: downloaded.mimetype || file.mimetype,
+        bytes: downloaded.bytes,
+        describe: process.env.ANTHROPIC_API_KEY ? describeAttachment : undefined,
+      });
+    },
     design: {
       canva: createCanvaDesignClient({ store: getStore(), llm }),
       download: (photo: { source: "slack" | "url"; slackFileId?: string; url?: string; name?: string }) => {

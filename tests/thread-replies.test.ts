@@ -37,7 +37,12 @@ describe("channel thread replies during Canva build", () => {
       text: "here's the copy and the photo: SMP winter entertainment promo",
       edited: false,
     });
-    expect(message?.uploads).toEqual([{ source: "slack", slackFileId: "F0CEPQ96LJD", name: "Screenshot.png" }]);
+    expect(message?.uploads).toEqual([{
+      source: "slack",
+      slackFileId: "F0CEPQ96LJD",
+      name: "Screenshot.png",
+      mimetype: "image/png",
+    }]);
     expect(shouldHandleThreadReply({ isDm: false, threadTs: THREAD, hasConversation: true })).toBe(true);
     expect(shouldHandleThreadReply({ isDm: false, threadTs: THREAD, hasConversation: false })).toBe(false);
     expect(shouldHandleThreadReply({ isDm: true, hasConversation: false })).toBe(true);

@@ -32,6 +32,7 @@ interface SlackFile {
   id?: string;
   name?: string | null;
   permalink?: string;
+  mimetype?: string;
 }
 
 export interface SlackMessageShape {
@@ -117,9 +118,17 @@ function fromMessage(
   edited: boolean,
 ): NormalizedSlackMessage | null {
   if (!channel || !source.user || !source.ts) return null;
-  const uploads = (source.files ?? []).flatMap((file) => (
-    file.id ? [{ source: "slack" as const, slackFileId: file.id, name: file.name ?? undefined }] : []
-  ));
+  const uploads = (source.files ?? []).flatMap((file) => {
+    if (!file.id) return [];
+    const upload: NormalizedSlackMessage["uploads"][number] = {
+      source: "slack",
+      slackFileId: file.id,
+      name: file.name ?? undefined,
+    };
+    if (file.permalink) upload.permalink = file.permalink;
+    if (file.mimetype) upload.mimetype = file.mimetype;
+    return [upload];
+  });
   return {
     channel,
     userId: source.user,

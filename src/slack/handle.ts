@@ -28,6 +28,8 @@ export async function handleIncomingMessage(deps: {
   fetchImpl?: typeof fetch;
   today?: Date;
   design?: Omit<DesignDeps, "uploads">;
+  slackToken?: string;
+  readAttachment?: (file: { slackFileId: string; name?: string; permalink?: string; mimetype?: string }) => Promise<string | undefined>;
 }, message: IncomingMessage): Promise<void> {
   if (!message.edited) {
     const once = await deps.store.claimEvent(messageOnceKey(message), 600);
@@ -57,6 +59,8 @@ async function handleFreshMessage(deps: {
   fetchImpl?: typeof fetch;
   today?: Date;
   design?: Omit<DesignDeps, "uploads">;
+  slackToken?: string;
+  readAttachment?: (file: { slackFileId: string; name?: string; permalink?: string; mimetype?: string }) => Promise<string | undefined>;
 }, message: IncomingMessage): Promise<void> {
   const key = conversationKey(message.channel, message.threadTs, message.ts, message.isDm);
   const state = (await deps.store.getConversation(key)) ?? emptyConversation(key);
@@ -80,7 +84,17 @@ async function handleFreshMessage(deps: {
   }
 
   const profile = await deps.slack.userProfile(message.userId);
-  const fileNote = message.files && message.files.length > 0 ? `\nFiles: ${message.files.join(", ")}` : "";
+  const attachments = (message.uploads ?? []).flatMap((file) => (
+    file.slackFileId ? [{
+      slackFileId: file.slackFileId,
+      name: file.name,
+      permalink: file.permalink,
+      mimetype: file.mimetype,
+    }] : []
+  ));
+  const fileNote = attachments.length > 0
+    ? `\nFiles attached (saved on this request): ${attachments.map((file) => file.permalink ? `${file.name ?? file.slackFileId} ${file.permalink}` : (file.name ?? file.slackFileId)).join(", ")}`
+    : "";
   const reply = await runIntakeTurn({
     state,
     userText: `${message.text}${fileNote}`.trim(),
@@ -90,6 +104,9 @@ async function handleFreshMessage(deps: {
     fetchImpl: deps.fetchImpl,
     today: deps.today,
     design: deps.design ? { ...deps.design, uploads: message.uploads ?? [] } : undefined,
+    attachments,
+    readAttachment: deps.readAttachment,
+    slackToken: deps.slackToken,
   });
   await deps.store.saveConversation(state);
   await deps.slack.postMessage({
@@ -109,6 +126,7 @@ export async function handleConfirmAction(deps: {
   slack: SlackApi;
   asanaToken?: string;
   fetchImpl?: typeof fetch;
+  slackToken?: string;
 }, action: {
   version: number;
   channel: string;
@@ -180,6 +198,7 @@ export async function handleConfirmAction(deps: {
       token: deps.asanaToken,
       fetchImpl: deps.fetchImpl,
       slackThread: slackThreadUrl(action.channel, thread),
+      slackToken: deps.slackToken,
     });
     await deps.slack.postMessage({
       channel: action.channel,
