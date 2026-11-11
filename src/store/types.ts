@@ -28,6 +28,8 @@ export interface DesignPhoto {
   slackFileId?: string;
   url?: string;
   name?: string;
+  permalink?: string;
+  mimetype?: string;
 }
 
 /** Pending or finished Canva build for this Slack thread. */
@@ -96,6 +98,11 @@ export interface ConversationState {
   lastAskedLabel?: string;
   /** Field ids already asked, newest last, so the requester can go back. */
   answerTrail?: string[];
+  /** Relative due date we resolved and still want them to glance at. */
+  dateConfirmFor?: string;
+  dateConfirmShown?: boolean;
+  /** Slack file ids already uploaded onto the Asana task. */
+  uploadedSlackFileIds?: string[];
   updatedAt: string;
 }
 

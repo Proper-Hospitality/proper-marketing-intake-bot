@@ -258,6 +258,44 @@ export async function searchExistingTasks(input: {
   }
 }
 
+export async function listTaskAttachmentNames(input: {
+  token: string;
+  taskGid: string;
+  fetchImpl?: typeof fetch;
+}): Promise<string[]> {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const payload = await asanaRequest<{ data?: Array<{ name?: string }> | { name?: string } }>(
+    fetchImpl,
+    input.token,
+    "GET",
+    `/tasks/${input.taskGid}/attachments?opt_fields=name,gid`,
+  );
+  const rows = Array.isArray(payload.data) ? payload.data : [];
+  return rows.map((row) => row.name?.trim() ?? "").filter(Boolean);
+}
+
+export async function uploadTaskAttachment(input: {
+  token: string;
+  taskGid: string;
+  name: string;
+  bytes: Uint8Array;
+  mimetype?: string;
+  fetchImpl?: typeof fetch;
+}): Promise<void> {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const form = new FormData();
+  const type = input.mimetype || "application/octet-stream";
+  form.append("file", new Blob([Buffer.from(input.bytes)], { type }), input.name);
+  const path = `/tasks/${input.taskGid}/attachments`;
+  const response = await fetchImpl(`${ASANA_BASE}${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${input.token}`, Accept: "application/json" },
+    body: form,
+  });
+  const text = await response.text();
+  if (!response.ok) throw new AsanaRequestError("POST", path, response.status, text);
+}
+
 export async function addTaskComment(input: {
   token: string;
   taskGid: string;

@@ -1,6 +1,6 @@
 import { attachmentAssetLines, attachmentBriefLines } from "./attachments.js";
 import { formatRequestTypeChoices, formatTaskTypeChoices } from "./choices.js";
-import { expectedRoutingBucket, formatDisplayDate, formatFullDate, normalizeDate, propertyNames, secondContact } from "./catalog.js";
+import { expectedRoutingBucket, formatDisplayDate, formatFullDate, FORM_URL, normalizeDate, propertyNames, secondContact } from "./catalog.js";
 import { PRICE_PENDING_LINE, type MissingItem } from "./missing.js";
 import { followUpsFor, SUPPORT_QUESTION } from "./question-tree.js";
 import type { TemplateMatchResult } from "./templates.js";
@@ -84,6 +84,7 @@ export function buildDescription(input: {
     "## Approver",
     draft.approver ?? "",
     "",
+    ...submissionLines(draft),
     "———————————————",
     `Drafted from Slack: ${input.slackThread ?? ""}`,
   ].join("\n");
@@ -95,12 +96,15 @@ export function formatQuestions(input: {
   warnings: string[];
   draft: BriefDraft;
   acknowledge?: boolean;
+  /** What was already captured when only half of a combined question remains. */
+  captured?: string;
 }): string {
   const item = input.items[0];
   if (!item) return "";
   const who = input.userId ? `<@${input.userId}>` : "Hi";
   const lines: string[] = [];
   if (input.acknowledge) lines.push("Got it.", "");
+  if (input.captured) lines.push(input.captured, "");
   lines.push(`${who} — *${item.label}*`);
   const choices = choiceList(item.id, input.draft.requestType);
   if (choices) lines.push(choices);
@@ -185,6 +189,8 @@ export function formatSummary(input: {
   }
   if ((draft.assets ?? []).length > 0) lines.push(`Assets: ${(draft.assets ?? []).join(", ")}`);
   for (const line of attachmentAssetLines(draft)) lines.push(`File: ${line}`);
+  const links = (draft.providedLinks ?? []).filter((link) => link !== FORM_URL);
+  if (links.length > 0) lines.push(`Link you provided: ${links.join(", ")}`);
   if (draft.finalCopy) lines.push(`Copy: ${truncate(draft.finalCopy, 500)}`);
   const offer = input.templateOffer;
   if (offer && offer.matches.length > 0) {
@@ -213,6 +219,12 @@ export function formatSummary(input: {
 export function formatTemplateAccepted(result: TemplateMatchResult): string {
   const links = result.matches.map((match) => `${match.name}: ${match.url}`).join("\n");
   return `Use the template and you don't need a task.\n${links}\nIf you later want the team to design it, say so and I'll collect the brief.`;
+}
+
+function submissionLines(draft: BriefDraft): string[] {
+  const links = (draft.providedLinks ?? []).filter((link) => link !== FORM_URL);
+  if (links.length === 0) return [];
+  return ["Submission link:", links.join("\n"), ""];
 }
 
 function choiceList(itemId: string, requestType: BriefDraft["requestType"]): string | undefined {

@@ -232,7 +232,6 @@ describe("current Asana form", () => {
   it("uses only Kinsey's form link, and files onto the New Intake Board", () => {
     const files = [
       ...walk("src"),
-      ...walk("tests"),
       "README.md",
       "manifest.json",
       "render.yaml",

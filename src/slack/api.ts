@@ -1,10 +1,27 @@
 import type { WebClient } from "@slack/web-api";
 
+export interface SlackFileRef {
+  id?: string;
+  name?: string | null;
+  permalink?: string;
+  mimetype?: string;
+}
+
+export interface SlackThreadMessage {
+  ts?: string;
+  user?: string;
+  text: string;
+  botId?: string;
+  files?: SlackFileRef[];
+}
+
 export interface SlackApi {
   postMessage(args: { channel: string; threadTs?: string; text: string; blocks?: unknown[] }): Promise<{ ts?: string }>;
   updateMessage(args: { channel: string; ts: string; text: string; blocks?: unknown[] }): Promise<void>;
   userProfile(userId: string): Promise<{ name?: string; email?: string }>;
-  threadReplies(channel: string, threadTs: string): Promise<Array<{ user?: string; text: string; botId?: string }>>;
+  threadReplies(channel: string, threadTs: string): Promise<SlackThreadMessage[]>;
+  /** One channel message, used when conversations.replies does not include the parent file. */
+  historyMessage?(channel: string, ts: string): Promise<SlackThreadMessage | null>;
   postEphemeral?(args: { channel: string; userId: string; threadTs?: string; text: string; blocks?: unknown[] }): Promise<{ ts?: string }>;
   permalink?(channel: string, messageTs: string): Promise<string | undefined>;
 }
@@ -62,16 +79,44 @@ export function slackFromWebClient(client: WebClient): SlackApi {
     },
     async threadReplies(channel, threadTs) {
       try {
-        const replies = await client.conversations.replies({ channel, ts: threadTs, limit: 30 });
-        return (replies.messages ?? []).map((message) => ({
-          user: message.user,
-          text: message.text ?? "",
-          botId: message.bot_id,
-        }));
+        const replies = await client.conversations.replies({ channel, ts: threadTs, limit: 200 });
+        return (replies.messages ?? []).map(mapThreadMessage);
       } catch (error) {
         console.error(JSON.stringify({ msg: "slack_thread_read_failed", error: error instanceof Error ? error.message : "unknown" }));
         return [];
       }
     },
+    async historyMessage(channel, ts) {
+      try {
+        const history = await client.conversations.history({
+          channel,
+          latest: ts,
+          oldest: ts,
+          inclusive: true,
+          limit: 1,
+        });
+        const message = history.messages?.[0];
+        return message ? mapThreadMessage(message) : null;
+      } catch (error) {
+        console.error(JSON.stringify({ msg: "slack_history_read_failed", error: error instanceof Error ? error.message : "unknown" }));
+        return null;
+      }
+    },
+  };
+}
+
+function mapThreadMessage(message: {
+  ts?: string;
+  user?: string;
+  text?: string;
+  bot_id?: string;
+  files?: Array<{ id?: string; name?: string | null; permalink?: string; mimetype?: string }>;
+}): SlackThreadMessage {
+  return {
+    ts: message.ts,
+    user: message.user,
+    text: message.text ?? "",
+    botId: message.bot_id,
+    files: message.files,
   };
 }

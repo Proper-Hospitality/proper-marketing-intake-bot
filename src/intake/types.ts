@@ -20,7 +20,10 @@ export interface BriefDraft {
   assets?: string[];
   assetsOwner?: string;
   assetsDue?: string;
-  /** Files, uploads, Dropbox links, or website links that belong to this request. */
+  /**
+   * Files for this request. A Slack upload has slackFileId and is uploaded to Asana.
+   * A Dropbox or website link has ref and no Slack id. Kind is Kinsey's four-way classification.
+   */
   attachments?: RequestAttachment[];
   /** The requester is sending files, even if the link has not arrived yet. */
   involvesFiles?: boolean;
@@ -33,6 +36,8 @@ export interface BriefDraft {
   pricePending?: boolean;
   /** Questions the requester skipped with "skip" or "not sure". */
   skipped?: Array<{ id: string; label: string }>;
+  /** Links the requester pasted, other than the marketing intake form. */
+  providedLinks?: string[];
   /** Year the requester asked for, when they named one. Not taken from a file's modified date. */
   collateralYear?: number;
   /** They skipped the year question, so matches stay labeled with each file's own year. */
@@ -53,8 +58,8 @@ export const ATTACHMENT_KINDS = ["menu_or_brochure", "photo", "page_content", "c
 export type AttachmentKind = (typeof ATTACHMENT_KINDS)[number];
 
 export interface RequestAttachment {
-  /** Filename, Slack upload name, Dropbox link, or website link. */
-  ref: string;
+  /** Filename, Dropbox link, or website link. A Slack file also keeps slackFileId. */
+  ref?: string;
   kind?: AttachmentKind;
   /** Clear name when it differs from ref, such as SMP_Calabra_Dinner_Nov2026.pdf. */
   fileName?: string;
@@ -62,6 +67,13 @@ export interface RequestAttachment {
   uploadReady?: boolean;
   /** They could not export an upload-ready PDF. Marketing needs to know. */
   pdfDeferred?: boolean;
+  /** Set for a Slack upload. Used to upload the bytes onto the Asana task once. */
+  slackFileId?: string;
+  name?: string;
+  permalink?: string;
+  mimetype?: string;
+  /** Text read from the file, such as a signage size. */
+  specs?: string;
 }
 
 export interface FollowUp {

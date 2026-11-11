@@ -123,7 +123,7 @@ export function mergeAttachmentInputs(
   for (const input of inputs) {
     const ref = input.ref.trim();
     if (!ref) continue;
-    let found = next.find((item) => normalizeRef(item.ref) === normalizeRef(ref));
+    let found = next.find((item) => matchesRef(item, ref));
     if (!found) {
       found = { ref };
       next.push(found);
@@ -225,7 +225,7 @@ export function deferAttachmentAnswer(draft: BriefDraft, id: string): boolean {
 export function clearAttachmentAnswer(draft: BriefDraft, id: string): boolean {
   if (id === ATTACHMENT_PROVIDE_ID) {
     delete draft.filesDeferred;
-    draft.attachments = (draft.attachments ?? []).filter((item) => item.kind || item.uploadReady || item.pdfDeferred);
+    draft.attachments = (draft.attachments ?? []).filter((item) => item.kind || item.uploadReady || item.pdfDeferred || item.slackFileId);
     return true;
   }
   const kind = id.match(/^attachmentKind:(\d+)$/);
@@ -256,7 +256,7 @@ export function uploadReadyPdfPrompt(draft: BriefDraft, attachment: RequestAttac
     "Upload it here, or paste a Dropbox link or a link to the PDF already on the website.",
     "If you truly can't export the PDF, reply *Let marketing recommend* and I'll flag it so marketing knows.",
   ];
-  if (pdfReadyRef(attachment) && hasClearName(attachment, "") && !isFigmaBuzz(attachment.ref) && !looksCombined(attachment.ref)) {
+  if (pdfReadyRef(attachment) && hasClearName(attachment, "") && !attachmentIsBuzz(attachment) && !attachmentIsCombined(attachment)) {
     lines.splice(1, 0, `If ${displayRef(attachment)} is already that PDF, reply yes.`);
   }
   return lines.join("\n");
@@ -278,10 +278,8 @@ export function attachmentBriefLines(draft: BriefDraft): string[] {
     const n = many ? ` ${index + 1}` : "";
     const kind = attachment.kind ? ATTACHMENT_KIND_LABELS[attachment.kind] : "Not specified";
     lines.push(`Attachment${n} type: ${kind}`);
-    const name = attachment.fileName && normalizeRef(attachment.fileName) !== normalizeRef(attachment.ref)
-      ? `${attachment.fileName} — `
-      : "";
-    lines.push(`Attachment${n}: ${name}${attachment.ref}`);
+    lines.push(`Attachment${n}: ${shownAttachment(attachment)}`);
+    if (attachment.specs) lines.push(`Attachment${n} specs: ${attachment.specs}`);
     if (attachment.pdfDeferred) {
       lines.push(`Attachment${n} note: Not an upload-ready PDF. Flagged for marketing (Let marketing recommend).`);
     }
@@ -292,11 +290,9 @@ export function attachmentBriefLines(draft: BriefDraft): string[] {
 export function attachmentAssetLines(draft: BriefDraft): string[] {
   return (draft.attachments ?? []).map((attachment) => {
     const kind = attachment.kind ? ATTACHMENT_KIND_LABELS[attachment.kind] : "Unspecified type";
-    const name = attachment.fileName && normalizeRef(attachment.fileName) !== normalizeRef(attachment.ref)
-      ? `${attachment.fileName} — `
-      : "";
     const flag = attachment.pdfDeferred ? " — flagged for marketing, not an upload-ready PDF" : "";
-    return `${kind}: ${name}${attachment.ref}${flag}`;
+    const specs = attachment.specs ? `\n${attachment.specs}` : "";
+    return `${kind}: ${shownAttachment(attachment)}${flag}${specs}`;
   });
 }
 
@@ -313,7 +309,7 @@ function applyPdfAnswer(attachment: RequestAttachment, text: string): Attachment
   }
   if (isYes(text) || named) {
     if (named) attachment.fileName = named;
-    if (isFigmaBuzz(attachment.ref) || looksCombined(attachment.ref) || looksCombined(text)) return "need_pdf";
+    if (attachmentIsBuzz(attachment) || attachmentIsCombined(attachment) || looksCombined(text)) return "need_pdf";
     if (!pdfReadyRef(attachment)) return "need_pdf";
     if (!hasClearName(attachment, text)) return "need_pdf";
     attachment.uploadReady = true;
@@ -325,20 +321,51 @@ function applyPdfAnswer(attachment: RequestAttachment, text: string): Attachment
 function pdfSatisfied(attachment: RequestAttachment): boolean {
   if (attachment.pdfDeferred) return true;
   if (!attachment.uploadReady) return false;
-  if (isFigmaBuzz(attachment.ref) || looksCombined(attachment.ref)) return false;
+  if (attachmentIsBuzz(attachment) || attachmentIsCombined(attachment)) return false;
   return pdfReadyRef(attachment) && hasClearName(attachment, "");
 }
 
 function pdfReadyRef(attachment: RequestAttachment): boolean {
-  return isPdfRef(attachment.ref)
-    || isDropbox(attachment.ref)
+  return attachmentFields(attachment).some((value) => isPdfRef(value) || isDropbox(value))
     || Boolean(attachment.fileName && isPdfRef(attachment.fileName));
 }
 
 function hasClearName(attachment: RequestAttachment, text: string): boolean {
-  const candidate = clearFileName(text) || attachment.fileName || fileNameFromRef(attachment.ref);
+  const candidate = clearFileName(text)
+    || attachment.fileName
+    || (attachment.name && /\.pdf$/i.test(attachment.name) ? attachment.name : undefined)
+    || fileNameFromRef(attachment.ref ?? "")
+    || fileNameFromRef(attachment.permalink ?? "");
   if (!candidate) return false;
   return !GENERIC_PDF.test(candidate);
+}
+
+function attachmentIsBuzz(attachment: RequestAttachment): boolean {
+  return attachmentFields(attachment).some((value) => isFigmaBuzz(value));
+}
+
+function attachmentIsCombined(attachment: RequestAttachment): boolean {
+  return attachmentFields(attachment).some((value) => looksCombined(value));
+}
+
+function attachmentFields(attachment: RequestAttachment): string[] {
+  return [attachment.ref, attachment.name, attachment.fileName, attachment.permalink].filter((value): value is string => Boolean(value));
+}
+
+export function attachmentRef(attachment: RequestAttachment): string {
+  return attachment.ref
+    || attachment.permalink
+    || attachment.fileName
+    || attachment.name
+    || (attachment.slackFileId ? `Slack file ${attachment.slackFileId}` : "attachment");
+}
+
+function shownAttachment(attachment: RequestAttachment): string {
+  const ref = attachmentRef(attachment);
+  const name = attachment.fileName || attachment.name;
+  const named = name && normalizeRef(name) !== normalizeRef(ref) ? `${name} — ${ref}` : ref;
+  if (attachment.permalink && !named.includes(attachment.permalink)) return `${named} — ${attachment.permalink}`;
+  return named;
 }
 
 function explicitFileRefs(draft: BriefDraft): string[] {
@@ -395,7 +422,7 @@ function mergeRefs(existing: RequestAttachment[] | undefined, refs: string[]): R
   for (const ref of refs) {
     const clean = trimUrl(ref.trim());
     if (!clean) continue;
-    if (next.some((item) => normalizeRef(item.ref) === normalizeRef(clean))) continue;
+    if (next.some((item) => matchesRef(item, clean))) continue;
     next.push({ ref: clean });
   }
   return next;
@@ -433,7 +460,7 @@ function isYes(text: string): boolean {
 }
 
 function displayRef(attachment: RequestAttachment): string {
-  const value = attachment.fileName || attachment.ref;
+  const value = attachment.fileName || attachment.name || attachmentRef(attachment);
   if (value.length <= 80) return value;
   return `${value.slice(0, 77)}…`;
 }
@@ -454,6 +481,15 @@ function trimUrl(url: string): string {
 
 function normalizeRef(ref: string): string {
   return trimUrl(ref).trim().toLowerCase();
+}
+
+function matchesRef(item: RequestAttachment, ref: string): boolean {
+  const key = normalizeRef(ref);
+  if (!key) return false;
+  for (const value of [item.ref, item.permalink, item.name, item.fileName, item.slackFileId]) {
+    if (value && normalizeRef(value) === key) return true;
+  }
+  return Boolean(item.slackFileId && key.includes(item.slackFileId.toLowerCase()));
 }
 
 function dedupe(values: string[]): string[] {

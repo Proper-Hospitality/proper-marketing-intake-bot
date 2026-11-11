@@ -14,7 +14,10 @@ export const INTAKE_TOOLS = [
           items: { type: "string" },
           description: "Property codes such as SMP, AUP, All Proper.",
         },
-        requestedCompletionDate: { type: "string", description: "YYYY-MM-DD" },
+        requestedCompletionDate: {
+          type: "string",
+          description: "YYYY-MM-DD. Resolve this Friday, tomorrow, next Tuesday, and EOW against today in America/Los_Angeles. Do not pass ASAP.",
+        },
         consequenceOfDelay: { type: "string" },
         requestType: { type: "string", description: "Creative, Web, CRM & Paid, Social, or Marketing." },
         taskType: { type: "string", description: "Exact task type for that request type." },

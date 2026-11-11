@@ -1,4 +1,5 @@
 import { FORM_URL } from "../intake/catalog.js";
+import { rememberAttachment } from "../intake/capture.js";
 import { runIntakeTurn, type DesignDeps, type Llm } from "../agent/run.js";
 import { confirmBlocks, confirmTaskCompletionBlocks, messageBlocks } from "./blocks.js";
 import { slackThreadUrl } from "../intake/brief.js";
@@ -6,6 +7,7 @@ import { submitConfirmedBrief } from "./submit.js";
 import { finishConfirmedCompletion } from "../tasks/complete.js";
 import type { SlackApi } from "./api.js";
 import { messageClaimKey, messageOnceKey } from "./incoming.js";
+import { collectThreadFiles, mergeThreadFiles } from "./thread-files.js";
 import { conversationKey, conversationKeyFromAction, emptyConversation, type Store } from "../store/types.js";
 
 export interface IncomingMessage {
@@ -28,6 +30,8 @@ export async function handleIncomingMessage(deps: {
   fetchImpl?: typeof fetch;
   today?: Date;
   design?: Omit<DesignDeps, "uploads">;
+  slackToken?: string;
+  readAttachment?: (file: { slackFileId: string; name?: string; permalink?: string; mimetype?: string }) => Promise<string | undefined>;
 }, message: IncomingMessage): Promise<void> {
   if (!message.edited) {
     const once = await deps.store.claimEvent(messageOnceKey(message), 600);
@@ -57,6 +61,8 @@ async function handleFreshMessage(deps: {
   fetchImpl?: typeof fetch;
   today?: Date;
   design?: Omit<DesignDeps, "uploads">;
+  slackToken?: string;
+  readAttachment?: (file: { slackFileId: string; name?: string; permalink?: string; mimetype?: string }) => Promise<string | undefined>;
 }, message: IncomingMessage): Promise<void> {
   const key = conversationKey(message.channel, message.threadTs, message.ts, message.isDm);
   const state = (await deps.store.getConversation(key)) ?? emptyConversation(key);
@@ -80,7 +86,20 @@ async function handleFreshMessage(deps: {
   }
 
   const profile = await deps.slack.userProfile(message.userId);
-  const fileNote = message.files && message.files.length > 0 ? `\nFiles: ${message.files.join(", ")}` : "";
+  const parentTs = message.threadTs && message.threadTs !== message.ts ? message.threadTs : (state.threadTs || message.ts);
+  const fromThread = await collectThreadFiles(deps.slack, message.channel, parentTs, message.ts);
+  const currentFiles = (message.uploads ?? []).flatMap((file) => (
+    file.slackFileId ? [{
+      slackFileId: file.slackFileId,
+      name: file.name,
+      permalink: file.permalink,
+      mimetype: file.mimetype,
+    }] : []
+  ));
+  const attachments = mergeThreadFiles(fromThread, currentFiles);
+  const fileNote = attachments.length > 0
+    ? `\nFiles attached (saved on this request): ${attachments.map((file) => file.permalink ? `${file.name ?? file.slackFileId} ${file.permalink}` : (file.name ?? file.slackFileId)).join(", ")}`
+    : "";
   const reply = await runIntakeTurn({
     state,
     userText: `${message.text}${fileNote}`.trim(),
@@ -90,6 +109,9 @@ async function handleFreshMessage(deps: {
     fetchImpl: deps.fetchImpl,
     today: deps.today,
     design: deps.design ? { ...deps.design, uploads: message.uploads ?? [] } : undefined,
+    attachments,
+    readAttachment: deps.readAttachment,
+    slackToken: deps.slackToken,
   });
   await deps.store.saveConversation(state);
   await deps.slack.postMessage({
@@ -109,6 +131,7 @@ export async function handleConfirmAction(deps: {
   slack: SlackApi;
   asanaToken?: string;
   fetchImpl?: typeof fetch;
+  slackToken?: string;
 }, action: {
   version: number;
   channel: string;
@@ -172,6 +195,10 @@ export async function handleConfirmAction(deps: {
       blocks: messageBlocks("Filing this on the New Intake Board."),
     });
     const thread = action.threadTs ?? action.messageTs;
+    if (state.channel && state.threadTs) {
+      const files = await collectThreadFiles(deps.slack, state.channel, state.threadTs);
+      for (const file of files) rememberAttachment(state.draft, file);
+    }
     const result = await submitConfirmedBrief({
       confirmed: true,
       version: action.version,
@@ -180,6 +207,7 @@ export async function handleConfirmAction(deps: {
       token: deps.asanaToken,
       fetchImpl: deps.fetchImpl,
       slackThread: slackThreadUrl(action.channel, thread),
+      slackToken: deps.slackToken,
     });
     await deps.slack.postMessage({
       channel: action.channel,

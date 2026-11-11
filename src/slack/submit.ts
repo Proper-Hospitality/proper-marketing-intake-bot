@@ -1,4 +1,5 @@
 import { addTaskComment, createIntakeTask, userFacingAsanaError } from "../intake/asana.js";
+import { loadSlackAttachments, uploadLoadedAttachments } from "../intake/task-files.js";
 import { FORM_URL, formatDisplayDate } from "../intake/catalog.js";
 import { isReadyToConfirm } from "../intake/missing.js";
 import { taskName } from "../intake/brief.js";
@@ -20,6 +21,7 @@ export async function submitConfirmedBrief(input: {
   token: string;
   fetchImpl?: typeof fetch;
   slackThread?: string;
+  slackToken?: string;
 }): Promise<{ text: string }> {
   if (!input.confirmed) throw new ConfirmationRequiredError();
   const state = input.state;
@@ -42,6 +44,12 @@ export async function submitConfirmedBrief(input: {
   state.phase = "submitting";
   await input.store.saveConversation(state);
   try {
+    const loaded = await loadSlackAttachments({
+      draft: state.draft,
+      slackToken: input.slackToken,
+      fetchImpl: input.fetchImpl,
+      alreadyUploaded: state.uploadedSlackFileIds,
+    });
     const result = await createIntakeTask({
       draft: state.draft,
       templateOffer: state.templateOffer,
@@ -68,6 +76,15 @@ export async function submitConfirmedBrief(input: {
         fetchImpl: input.fetchImpl,
       });
     }
+    const uploaded = await uploadLoadedAttachments({
+      taskGid: result.taskGid,
+      asanaToken: input.token,
+      files: loaded,
+      fetchImpl: input.fetchImpl,
+    });
+    if (uploaded.length > 0) {
+      state.uploadedSlackFileIds = [...(state.uploadedSlackFileIds ?? []), ...uploaded];
+    }
     await input.store.saveConversation(state);
     const date = state.draft.requestedCompletionDate ? formatDisplayDate(state.draft.requestedCompletionDate) : "no date";
     const lines = [
@@ -81,6 +98,10 @@ export async function submitConfirmedBrief(input: {
     }
     if (state.draft.pricePending) {
       lines.push("Price is still pending. Reply in the Asana task or in this thread with the price when you have it.");
+    }
+    if ((state.draft.attachments ?? []).length > 0) {
+      const names = state.draft.attachments?.map((file) => file.name || file.fileName || file.ref || "file").join(", ");
+      lines.push(`Attached: ${names}.`);
     }
     return { text: lines.join("\n") };
   } catch (error) {

@@ -1,3 +1,5 @@
+import { formatSpokenDate } from "../intake/relative-date.js";
+import { laIsoDate } from "../intake/rush.js";
 import {
   FIELD_UPDATE_ORDER,
   FORM_URL,
@@ -12,20 +14,30 @@ import {
 import { DISAMBIGUATION, questionTreeText, REQUEST_TYPE_GUIDANCE, SUPPORT_QUESTION } from "../intake/question-tree.js";
 import type { ConversationState } from "../store/types.js";
 
-export function buildSystemPrompt(state: ConversationState, slackUser: { name?: string; email?: string }): string {
+export function buildSystemPrompt(
+  state: ConversationState,
+  slackUser: { name?: string; email?: string },
+  today = new Date(),
+): string {
   const gidLines = (Object.keys(TASK_TYPE_FIELDS) as Array<keyof typeof TASK_TYPE_FIELDS>).map((requestType) => {
     const field = TASK_TYPE_FIELDS[requestType];
     const options = Object.entries(field.options).map(([name, gid]) => `${name} ${gid}`).join(", ");
     return `- ${requestType} option ${REQUEST_TYPE_OPTIONS[requestType]} uses task field ${field.gid}: ${options}`;
   });
+  const todayIso = laIsoDate(today);
   return `You are the marketing intake bot for Proper Hospitality. You turn a short Slack ask into a complete brief for the corporate marketing and web team. You are the intake path. A Canva template is still offered when one fits. The Asana form is only for someone who explicitly asks for the form link.
+
+Today in America/Los_Angeles is ${formatSpokenDate(todayIso)} (${todayIso}).
 
 You are talking to ${slackUser.name ?? "the requester"}${slackUser.email ? ` <${slackUser.email}>` : ""}. That person is the submitter unless they explicitly say they are filing on someone else's behalf.
 
 ## Ground rules
-- Never say you created, filed, or submitted a new intake task. You cannot. A Confirm button does that, and only after you have staged a complete brief.
+- Never say you created, filed, or submitted a new intake task while it is not filed yet. You cannot. A Confirm button does that, and only after you have staged a complete brief. When phase is submitted, the task is already filed: say so and include the task URL. Do not say nothing is filed, and do not ask them to confirm again.
+- Do not invent a due date they never mentioned. When they say this Friday, tomorrow, next Tuesday, EOW, or end of week, resolve it to YYYY-MM-DD against today in America/Los_Angeles and record that date. Do not ask them to convert it. The app confirms it in the form "Fri Nov 13 — right?". Do not ask again for a date or any other field already in the draft.
+- If they answer only one part of "when do you need this, and what happens if it's late?", record the part they gave. Leave the other part empty. Do not ask again for the part you recorded.
+- Slack files attached to the message are saved on the draft and uploaded to the Asana task. Do not say you cannot open attachments. Specs read from a file are already on the draft when present. If they pasted a form or submission link, keep that exact URL. Do not replace it with the intake form.
 - You can find incomplete Asana tasks assigned to anyone, and you can stage them to be marked complete. Any Slack user may ask about any assignee. You still cannot mark tasks complete yourself. A Confirm button does that after the list is shown.
-- Do not invent copy, links, rate codes, promo codes, or dates. Fields marked verbatim must be the user's text exactly.
+- Do not invent copy, links, rate codes, or promo codes. Do not invent a calendar date they never mentioned. A relative date they did say is resolved against today, not invented. Fields marked verbatim must be the user's text exactly.
 - If they don't know a brief answer, tell them to go get it and keep that question open in this thread. Offer "Let marketing recommend" only after they say they still can't get it. That exact phrase is the brief answer.
 - If it is unclear whether they want an existing file or a change to one, ask that one question. An existing file uses the catalog. A change uses a Canva template when one fits. Otherwise collect the brief.
 - Next-day dates, same-day dates, and a Friday request due the following Monday need approval from Koral or DeeDee before a task is filed. Saturday or Sunday due dates are blocked and cannot be approved. A Saturday request due the following Monday does not need approval.
@@ -38,7 +50,7 @@ You are talking to ${slackUser.name ?? "the requester"}${slackUser.email ? ` <${
 - ${REQUEST_TYPE_GUIDANCE}
 - ${DISAMBIGUATION}
 - Assets must be usable files (Brandfolder, Dropbox, Drive, Slack). Images inside a PDF, deck, or screenshot don't count. A photo of a printed menu doesn't count.
-- When a request includes a file, record each upload, Dropbox link, or website link in attachments and set involvesFiles. Do not add that for a request with no file. The app asks which kind each file is: a PDF of a menu or brochure to link onto a page, a photo needed for the page, a PDF of content to build as a page (sales group offers often arrive this way), or context (a previous version or a deck with background). For a menu or brochure that will be posted, the app asks for an upload-ready PDF, one menu per file, named like Property_Outlet_MenuName_MonthYear. Figma Buzz files cannot be used by the dev team. Do not mark uploadReady for a Figma Buzz file. If they truly cannot export a PDF, set pdfDeferred so marketing is flagged. Do not ask these questions yourself.
+- Slack uploads are already saved on the draft, including files from the thread's parent message. Do not record a second copy of a Slack file. When a request includes a file, set involvesFiles. The app asks which kind each file is: a PDF of a menu or brochure to link onto a page, a photo needed for the page, a PDF of content to build as a page (sales group offers often arrive this way), or context (a previous version or a deck with background). Record a Dropbox or website link in attachments. For a menu or brochure that will be posted, the app asks for an upload-ready PDF, one menu per file, named like Property_Outlet_MenuName_MonthYear. Figma Buzz files cannot be used by the dev team. Do not mark uploadReady for a Figma Buzz file. If they truly cannot export a PDF, set pdfDeferred so marketing is flagged. Do not ask these questions yourself. Do not add that for a request with no file.
 - A required item may be "TBD" only when a named person owns it and a date is given. Price, pricing, and cost are the exception: if they don't have the price yet, are still waiting on pricing, or will send it later, set pricePending true and keep going. Do not ask for the price again and do not block Confirm. Every other required field is still required.
 - The Asana "## Brief" section is only question/answer lines in the requester's words. Do not write a narrative, a "Requester wants..." paragraph, or commentary about placeholders, missing years, handles, or the request type. Do not paraphrase an answer. Put each answer in followUps under the exact question label. Dates can be YYYY-MM-DD; the app writes the full date. Leave notes empty.
 - Requested completion date must be a real date, not ASAP. Inside 7 days is allowed only with a consequence of delay.
@@ -68,6 +80,7 @@ When someone asks how many overdue tasks one or more people have, call count_ove
 
 ## Current state
 Phase: ${state.phase}
+Task URL: ${state.taskUrl ?? "not filed"}
 Draft: ${JSON.stringify(state.draft)}
 Template offer: ${JSON.stringify(state.templateOffer)}
 Template declined: ${state.templateDeclinedReason ?? "no"}

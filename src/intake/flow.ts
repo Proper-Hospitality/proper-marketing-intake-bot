@@ -3,7 +3,6 @@ import {
   canonicalizeProperty,
   canonicalizeRequestType,
   canonicalizeTaskType,
-  normalizeDate,
   taskTypeNames,
 } from "./catalog.js";
 import { dropSkipsThatWereAnswered } from "./conversation.js";
@@ -14,7 +13,7 @@ import { catalogWithoutUpdatingProperties, unmatchedSourceNote } from "./collate
 import type { CollateralOffer } from "./collateral/types.js";
 import { matchTemplates, type TemplateMatchResult } from "./templates.js";
 import { planRoute } from "./routing.js";
-import { classifyRush } from "./rush.js";
+import { assignCompletionDate, resolveDateInput } from "./relative-date.js";
 import type { BriefDraft, RequestType } from "./types.js";
 
 export interface RecordInput {
@@ -156,13 +155,13 @@ function mergeDraft(draft: BriefDraft, input: RecordInput, today: Date): string[
   if (input.pricePending === false) draft.pricePending = false;
 
   if (input.requestedCompletionDate) {
-    const date = normalizeDate(input.requestedCompletionDate);
-    if (!date) errors.push(`Requested completion date "${input.requestedCompletionDate}" is not a real date. Use YYYY-MM-DD.`);
-    else {
-      draft.requestedCompletionDate = date;
-      const rush = classifyRush(date, today);
-      if (rush && draft.rushApprovedFor !== date) draft.rushBlock = rush;
-      else delete draft.rushBlock;
+    const resolved = resolveDateInput(input.requestedCompletionDate, today);
+    if (!resolved) {
+      if (!draft.requestedCompletionDate) {
+        errors.push(`Requested completion date "${input.requestedCompletionDate}" is not a real date. Use YYYY-MM-DD.`);
+      }
+    } else {
+      assignCompletionDate(draft, resolved.iso, today);
     }
   }
 
@@ -222,8 +221,8 @@ function mergeDraft(draft: BriefDraft, input: RecordInput, today: Date): string[
       const dateLike = /date/i.test(label);
       const trimmed = value.trim();
       if (dateLike) {
-        const parsed = normalizeDate(trimmed);
-        draft.followUps[label] = parsed ?? trimmed;
+        const parsed = resolveDateInput(trimmed, today);
+        draft.followUps[label] = parsed?.iso ?? trimmed;
       } else {
         draft.followUps[label] = trimmed;
       }
