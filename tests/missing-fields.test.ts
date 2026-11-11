@@ -65,6 +65,7 @@ function completeEmail(): BriefDraft {
     approver: "DeeDee Brown",
     whereItGoesLive: "Members email",
     assets: ["https://drive.example.com/photo"],
+    attachments: [{ ref: "https://drive.example.com/photo", kind: "photo" }],
     followUps: {
       "Audience / Distribution Plan": "Members",
       "Recommended Copy / Details": "Join us this December.",

@@ -100,7 +100,7 @@ export async function submitConfirmedBrief(input: {
       lines.push("Price is still pending. Reply in the Asana task or in this thread with the price when you have it.");
     }
     if ((state.draft.attachments ?? []).length > 0) {
-      const names = state.draft.attachments?.map((file) => file.name).join(", ");
+      const names = state.draft.attachments?.map((file) => file.name || file.fileName || file.ref || "file").join(", ");
       lines.push(`Attached: ${names}.`);
     }
     return { text: lines.join("\n") };

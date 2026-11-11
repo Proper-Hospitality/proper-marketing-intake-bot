@@ -24,6 +24,7 @@ describe("pending prices", () => {
       approver: "DeeDee Brown",
       whereItGoesLive: "In-room dining",
       assets: ["https://drive.example.com/menu"],
+      attachments: [{ ref: "https://drive.example.com/menu", kind: "menu_or_brochure", uploadReady: true, fileName: "SMP_Calabra_Dinner_Nov2026.pdf" }],
       pricePending: true,
       followUps: {
         [MENU]: "Test burger. Don't have the price yet, will send it later.",
@@ -109,7 +110,9 @@ describe("pending prices", () => {
       },
     });
     const brief = description.split("## Brief\n")[1]?.split("\n\n")[0];
-    expect(brief).toBe(`${MENU}: Test burger $16\nLink to Current Menu: https://example.com/menu`);
+    expect(brief?.startsWith(`${MENU}: Test burger $16\nLink to Current Menu: https://example.com/menu`)).toBe(true);
+    expect(brief).toContain("Attachment type: PDF of a menu or brochure to link onto a page");
+    expect(brief).toContain("SMP_Calabra_Dinner_Nov2026.pdf — https://drive.example.com/menu");
     expect(description).toContain("## Pending from requester\nPrice: TBD (requester will provide)");
     expect(description).toContain(PRICE_PENDING_LINE);
     expect(description).toContain("Canva template offered: 5X7_ProperEventMenu https://www.canva.com/brand/brand-templates/EAG_kd17cpk. Not used: does not fit.");
@@ -173,5 +176,6 @@ function baseMenu(): BriefDraft {
     approver: "DeeDee Brown",
     whereItGoesLive: "In-room dining",
     assets: ["https://drive.example.com/menu"],
+    attachments: [{ ref: "https://drive.example.com/menu", kind: "menu_or_brochure", uploadReady: true, fileName: "SMP_Calabra_Dinner_Nov2026.pdf" }],
   };
 }

@@ -20,6 +20,15 @@ export interface BriefDraft {
   assets?: string[];
   assetsOwner?: string;
   assetsDue?: string;
+  /**
+   * Files for this request. A Slack upload has slackFileId and is uploaded to Asana.
+   * A Dropbox or website link has ref and no Slack id. Kind is Kinsey's four-way classification.
+   */
+  attachments?: RequestAttachment[];
+  /** The requester is sending files, even if the link has not arrived yet. */
+  involvesFiles?: boolean;
+  /** They could not provide the file and flagged it for marketing. */
+  filesDeferred?: boolean;
   templateUnusedReason?: string;
   notes?: string;
   filingOnBehalf?: boolean;
@@ -27,14 +36,6 @@ export interface BriefDraft {
   pricePending?: boolean;
   /** Questions the requester skipped with "skip" or "not sure". */
   skipped?: Array<{ id: string; label: string }>;
-  /** Slack files the requester attached. Uploaded to the Asana task on confirm. */
-  attachments?: Array<{
-    slackFileId: string;
-    name: string;
-    permalink?: string;
-    mimetype?: string;
-    specs?: string;
-  }>;
   /** Links the requester pasted, other than the marketing intake form. */
   providedLinks?: string[];
   /** Year the requester asked for, when they named one. Not taken from a file's modified date. */
@@ -50,6 +51,29 @@ export interface BriefDraft {
   /** Name of the approver. Kept outside the Brief question/answer lines. */
   rushApprovedBy?: string;
   rushApprovalId?: string;
+}
+
+export const ATTACHMENT_KINDS = ["menu_or_brochure", "photo", "page_content", "context"] as const;
+
+export type AttachmentKind = (typeof ATTACHMENT_KINDS)[number];
+
+export interface RequestAttachment {
+  /** Filename, Dropbox link, or website link. A Slack file also keeps slackFileId. */
+  ref?: string;
+  kind?: AttachmentKind;
+  /** Clear name when it differs from ref, such as SMP_Calabra_Dinner_Nov2026.pdf. */
+  fileName?: string;
+  /** Menu or brochure is an upload-ready PDF, one menu in the file. */
+  uploadReady?: boolean;
+  /** They could not export an upload-ready PDF. Marketing needs to know. */
+  pdfDeferred?: boolean;
+  /** Set for a Slack upload. Used to upload the bytes onto the Asana task once. */
+  slackFileId?: string;
+  name?: string;
+  permalink?: string;
+  mimetype?: string;
+  /** Text read from the file, such as a signage size. */
+  specs?: string;
 }
 
 export interface FollowUp {

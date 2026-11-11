@@ -44,7 +44,7 @@ export async function replyToFiledThread(input: {
   ];
   const files = state.draft.attachments ?? [];
   if (files.length > 0) {
-    const names = files.map((file) => file.name).join(", ");
+    const names = files.map((file) => file.name || file.fileName || file.ref || "file").join(", ");
     lines.push(files.length === 1 ? `${names} is included on that task.` : `${names} are included on that task.`);
   } else if (/\battach/i.test(input.userText)) {
     lines.push("I don't have a file from this thread to put on the task.");

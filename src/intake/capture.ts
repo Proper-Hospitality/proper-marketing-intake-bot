@@ -71,14 +71,19 @@ export function absorbTurnFacts(input: {
 export function rememberAttachment(draft: BriefDraft, file: TurnAttachment, specs?: string): void {
   const name = file.name?.trim() || "attachment";
   const list = draft.attachments ?? [];
-  const existing = list.find((item) => item.slackFileId === file.slackFileId);
+  const existing = list.find((item) => item.slackFileId === file.slackFileId)
+    ?? list.find((item) => file.permalink && (item.ref === file.permalink || item.permalink === file.permalink))
+    ?? list.find((item) => name !== "attachment" && (item.ref === name || item.name === name));
   if (existing) {
+    if (!existing.slackFileId) existing.slackFileId = file.slackFileId;
     if (file.permalink && !existing.permalink) existing.permalink = file.permalink;
     if (file.mimetype && !existing.mimetype) existing.mimetype = file.mimetype;
-    if (file.name && existing.name === "attachment") existing.name = name;
+    if (!existing.name || existing.name === "attachment") existing.name = name;
+    if (!existing.ref) existing.ref = file.permalink || name;
     if (specs && !existing.specs) existing.specs = specs.slice(0, 1500);
   } else {
     list.push({
+      ref: file.permalink || name,
       slackFileId: file.slackFileId,
       name,
       permalink: file.permalink,

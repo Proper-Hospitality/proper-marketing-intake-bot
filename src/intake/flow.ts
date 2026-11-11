@@ -1,3 +1,4 @@
+import { mergeAttachmentInputs, type AttachmentInput } from "./attachments.js";
 import {
   canonicalizeProperty,
   canonicalizeRequestType,
@@ -33,6 +34,8 @@ export interface RecordInput {
   assets?: string[];
   assetsOwner?: string;
   assetsDue?: string;
+  attachments?: AttachmentInput[];
+  involvesFiles?: boolean;
   notes?: string;
   filingOnBehalf?: boolean;
   pricePending?: boolean;
@@ -179,6 +182,11 @@ function mergeDraft(draft: BriefDraft, input: RecordInput, today: Date): string[
 
   if (input.assets && input.assets.length > 0) {
     draft.assets = input.assets.map((asset) => asset.trim()).filter(Boolean);
+  }
+  if (input.involvesFiles) draft.involvesFiles = true;
+  if (input.attachments && input.attachments.length > 0) {
+    draft.attachments = mergeAttachmentInputs(draft.attachments, input.attachments);
+    draft.involvesFiles = true;
   }
 
   let requestType: RequestType | undefined = draft.requestType;

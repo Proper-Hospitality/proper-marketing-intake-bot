@@ -6,6 +6,11 @@ export const PROJECT_GID = "1217171684008018";
 export const SECTION_GID = "1217518666052136";
 export const WORKSPACE_GID = "361605662576941";
 
+/**
+ * Current Marketing Intake Form (Kinsey East, Nov 2026).
+ * The bot is the intake path. Share this link only when someone asks for the form,
+ * or when Asana filing itself fails. Do not send people to an older form.
+ */
 export const FORM_URL = "https://form.asana.com/?k=JYO_VqiFFnSlwJs_3XoMIg&d=361605662576941";
 export const BOARD_URL =
   "https://app.asana.com/1/361605662576941/project/1217171684008018/list/1217171463540671";

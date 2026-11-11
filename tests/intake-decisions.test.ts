@@ -224,6 +224,7 @@ function completeDraft() {
     whereItGoesLive: "Email",
     finalCopy: "Join us.",
     assets: ["https://drive.example.com/a"],
+    attachments: [{ ref: "https://drive.example.com/a", kind: "photo" as const }],
     followUps: { "Audience / Distribution Plan": "Members email", "Recommended Copy / Details": "Join us." },
   };
 }

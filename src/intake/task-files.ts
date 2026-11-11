@@ -22,7 +22,7 @@ export async function loadSlackAttachments(input: {
   const skip = new Set(input.alreadyUploaded ?? []);
   const loaded: LoadedAttachment[] = [];
   for (const file of input.draft.attachments ?? []) {
-    if (skip.has(file.slackFileId)) continue;
+    if (!file.slackFileId || skip.has(file.slackFileId)) continue;
     try {
       const downloaded = await downloadSlackFile({
         token: input.slackToken,
@@ -32,9 +32,10 @@ export async function loadSlackAttachments(input: {
       file.name = downloaded.name || file.name;
       file.permalink = downloaded.permalink || file.permalink;
       file.mimetype = downloaded.mimetype || file.mimetype;
+      if (!file.ref) file.ref = file.permalink || file.name;
       loaded.push({
         slackFileId: file.slackFileId,
-        name: downloaded.name || file.name,
+        name: downloaded.name || file.name || "attachment",
         bytes: downloaded.bytes,
         mimetype: downloaded.mimetype || file.mimetype,
         permalink: downloaded.permalink || file.permalink,

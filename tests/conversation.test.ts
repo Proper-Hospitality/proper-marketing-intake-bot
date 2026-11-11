@@ -91,7 +91,10 @@ describe("one question at a time", () => {
     });
     expect(many.text).toContain("When do you need this, and what happens if it's late?");
     expect(many.text).not.toContain("*Final approver*");
-    expect(listMissing(state.draft, new Date("2026-11-02T12:00:00Z")).items.map((item) => item.id)).toEqual(["timing"]);
+    expect(listMissing(state.draft, new Date("2026-11-02T12:00:00Z")).items.map((item) => item.id)).toEqual([
+      "timing",
+      "attachmentKind:0",
+    ]);
 
     const back = await runIntakeTurn({
       state,

@@ -1,3 +1,4 @@
+import { attachmentAssetLines, attachmentBriefLines } from "./attachments.js";
 import { formatRequestTypeChoices, formatTaskTypeChoices } from "./choices.js";
 import { expectedRoutingBucket, formatDisplayDate, formatFullDate, FORM_URL, normalizeDate, propertyNames, secondContact } from "./catalog.js";
 import { PRICE_PENDING_LINE, type MissingItem } from "./missing.js";
@@ -40,10 +41,7 @@ export function buildDescription(input: {
   if (draft.assetsOwner) {
     assetLines.push(`Coming from ${draft.assetsOwner}${draft.assetsDue ? ` by ${draft.assetsDue}` : ""}`);
   }
-  for (const file of draft.attachments ?? []) {
-    assetLines.push(file.permalink ? `${file.name} — ${file.permalink}` : `${file.name} — Slack file ${file.slackFileId}`);
-    if (file.specs) assetLines.push(file.specs);
-  }
+  assetLines.push(...attachmentAssetLines(draft));
 
   const support = draft.requestType ? SUPPORT_QUESTION[draft.requestType] : "What type of support do you need?";
 
@@ -190,10 +188,7 @@ export function formatSummary(input: {
     }
   }
   if ((draft.assets ?? []).length > 0) lines.push(`Assets: ${(draft.assets ?? []).join(", ")}`);
-  const attachments = draft.attachments ?? [];
-  if (attachments.length > 0) {
-    lines.push(`Attachments: ${attachments.map((file) => file.permalink ? `${file.name} ${file.permalink}` : file.name).join(", ")}`);
-  }
+  for (const line of attachmentAssetLines(draft)) lines.push(`File: ${line}`);
   const links = (draft.providedLinks ?? []).filter((link) => link !== FORM_URL);
   if (links.length > 0) lines.push(`Link you provided: ${links.join(", ")}`);
   if (draft.finalCopy) lines.push(`Copy: ${truncate(draft.finalCopy, 500)}`);
@@ -218,13 +213,12 @@ export function formatSummary(input: {
     }
     lines.push("Confirm still creates a new task. Say if you want a note on the existing one instead.");
   }
-  lines.push("", `Prefer the form? ${FORM_URL}`);
   return lines.join("\n");
 }
 
 export function formatTemplateAccepted(result: TemplateMatchResult): string {
   const links = result.matches.map((match) => `${match.name}: ${match.url}`).join("\n");
-  return `Use the template and you don't need a task.\n${links}\nIf you later want the team to design it, say so and I'll collect the brief. Form, if you'd rather fill it yourself: ${FORM_URL}`;
+  return `Use the template and you don't need a task.\n${links}\nIf you later want the team to design it, say so and I'll collect the brief.`;
 }
 
 function submissionLines(draft: BriefDraft): string[] {
@@ -257,6 +251,7 @@ function briefAnswerLines(draft: BriefDraft): string[] {
     if (!value?.trim()) continue;
     lines.push(`${field.label}: ${renderRequesterAnswer(field.kind, value)}`);
   }
+  lines.push(...attachmentBriefLines(draft));
   if (draft.finalCopy?.trim()) lines.push(`Final copy: ${draft.finalCopy.trim()}`);
   if (draft.copyOwner?.trim()) {
     const due = draft.copyDueDate ? normalizeDate(draft.copyDueDate) : undefined;

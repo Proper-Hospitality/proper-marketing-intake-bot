@@ -1,3 +1,4 @@
+import { attachmentMissing, requestHasFiles } from "./attachments.js";
 import { daysUntil, propertyNames, taskTypeNames } from "./catalog.js";
 import { followUpsFor, SUPPORT_QUESTION } from "./question-tree.js";
 import { REQUEST_TYPES, type BriefDraft, type FollowUp, type RequestType } from "./types.js";
@@ -158,7 +159,9 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
     });
   }
 
-  if (!assetsSatisfied(draft, followUps)) {
+  if (requestHasFiles(draft)) {
+    items.push(...attachmentMissing(draft));
+  } else if (!assetsSatisfied(draft, followUps)) {
     items.push({
       id: "assets",
       label: "Assets",
@@ -290,5 +293,8 @@ function destinationSatisfied(draft: BriefDraft, followUps: FollowUp[]): boolean
 
 export function isReadyToConfirm(draft: BriefDraft, today = new Date()): boolean {
   if (draft.rushBlock && draft.rushApprovedFor !== draft.requestedCompletionDate) return false;
-  return listMissing(draft, today).items.length === 0 && Boolean(draft.requestType && draft.taskType);
+  // Attachment kind and PDF questions are asked before Confirm is offered.
+  // A file found on the thread parent at the moment of Confirm is still uploaded.
+  const items = listMissing(draft, today).items.filter((item) => !item.id.startsWith("attachment"));
+  return items.length === 0 && Boolean(draft.requestType && draft.taskType);
 }

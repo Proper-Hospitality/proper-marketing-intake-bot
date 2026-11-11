@@ -1,3 +1,4 @@
+import { clearAttachmentAnswer } from "./attachments.js";
 import { listMissing } from "./missing.js";
 import type { BriefDraft } from "./types.js";
 import type { ConversationState } from "../store/types.js";
@@ -51,6 +52,7 @@ export function dropSkipsThatWereAnswered(draft: BriefDraft): void {
 }
 
 function clearAsked(draft: BriefDraft, id: string): void {
+  if (clearAttachmentAnswer(draft, id)) return;
   if (id === "timing") {
     delete draft.requestedCompletionDate;
     delete draft.consequenceOfDelay;
