@@ -1,0 +1,177 @@
+import { propertyPhrase } from "./catalog.js";
+import type { MissingItem } from "./missing.js";
+import type { BriefDraft } from "./types.js";
+
+/** A short acknowledgement. Not the bare "Got it." */
+export function naturalAck(input: { lastId?: string; draft: BriefDraft }): string {
+  const properties = input.draft.properties ?? [];
+  if (input.lastId === "properties" && properties.length === 1) {
+    return `Perfect, ${properties[0]} it is.`;
+  }
+  if (input.lastId === "properties" && properties.length > 1) {
+    return `Perfect, ${properties.join(" and ")} it is.`;
+  }
+  const variety = ["Great, thanks!", "Perfect.", "Sounds good."];
+  const index = (input.lastId ?? "x").length % variety.length;
+  return variety[index] ?? "Great, thanks!";
+}
+
+export const LEADING_ACK = /^(?:Perfect[^\n]*|Great, thanks!|Sounds good\.)\n\n/;
+
+export function placeName(draft: BriefDraft): string {
+  const code = draft.properties?.[0];
+  if (!code) return "";
+  return propertyPhrase(code).replace(/\s*\([^)]*\)\s*$/, "");
+}
+
+export function fieldQuestion(item: MissingItem, draft: BriefDraft): string {
+  const specific = byId(item, draft) ?? byLabel(item.label, draft);
+  if (specific) return specific;
+  if (/\?\s*$/.test(item.label)) {
+    return `${item.label} A yes or no, or a short answer, is enough so the brief stays specific.`;
+  }
+  return fallback(item, draft);
+}
+
+export function isBareFieldPrompt(text: string, label: string): boolean {
+  const bare = label.trim();
+  return text.split("\n").some((line) => {
+    const trimmed = line.trim();
+    if (trimmed === `*${bare}*`) return true;
+    if (/—\s*\*[^*]+\*\s*$/.test(trimmed)) return true;
+    return trimmed === bare && !bare.endsWith("?");
+  });
+}
+
+export function friendlyRecap(draft: BriefDraft): string {
+  const name = draft.requestName?.trim() || "this request";
+  return `Here's what I have for ${name}. Want me to file this?\nNothing is filed until you click *Confirm*.`;
+}
+
+function byId(item: MissingItem, draft: BriefDraft): string | undefined {
+  const what = requestLabel(draft);
+  const place = placeName(draft);
+  switch (item.id) {
+    case "requesterName":
+      return "Who is this request for? I need their name so the task is filed under the right person.";
+    case "requesterEmail":
+      return "What's the best email for that person? It goes on the task so the team can follow up. For example, first.last@properhotel.com.";
+    case "requestName":
+      return `What should we call this? A short name is enough, and I'll add the property to the title. For example, ${place ? `${place} ` : ""}membership interest form.`;
+    case "properties":
+      return "Which property is this for? A code is perfect, like SMP or LTP. I use it to route the task and to check for a template.";
+    case "requestType":
+      return "What should the team help with? Pick the closest fit so this lands with the right people.";
+    case "taskType":
+      return `What kind of ${draft.requestType ?? "request"} is this? That tells me which details I still need.`;
+    case "timing":
+      return `When do you need ${what}, and what happens if it's late? A real date helps the team plan, and the consequence is what gets a rush prioritized. For example, Dec 4, because invitations go out that week.`;
+    case "requestedCompletionDate":
+      return `When do you need ${what}? A real date, not ASAP. Ideally at least a week out, like Dec 4.`;
+    case "consequenceOfDelay":
+      return `What happens if ${what} is late? One line is enough, so the team knows what slips.`;
+    case "approver":
+      return `Who signs off on ${what}? One person, so the team knows who to check with.`;
+    case "copy":
+      return `What's the final copy for ${what}, or who is writing it and when it's due? Paste it here, or name the owner and the date.`;
+    case "assets":
+      return `Where are the files for ${what}? A Brandfolder, Dropbox, Drive, or Slack link works. A photo of a menu doesn't.`;
+    case "whereItGoesLive":
+      return `Where does ${what} go live? A URL, channel, or handle, so the team knows the destination.`;
+    case "eventWhen":
+      return "When is the event? I need the date plus the start and end time.";
+    default:
+      return undefined;
+  }
+}
+
+function byLabel(label: string, draft: BriefDraft): string | undefined {
+  const what = requestLabel(draft);
+  const place = placeName(draft) || "the property";
+  if (label === "URL") return pageUrlQuestion(draft);
+  if (/page change details/i.test(label)) {
+    return `What should change on the ${place} page? Send the exact copy if you have it, so the web team isn't guessing.`;
+  }
+  if (/page headline/i.test(label)) {
+    return `What's the headline for this ${place} page? Send it exactly as it should appear.`;
+  }
+  if (/page copy/i.test(label)) {
+    return `What's the page copy? Paste the exact text you want on the ${place} page.`;
+  }
+  if (/audience/i.test(label)) {
+    return `Who is ${what} for, and where does it go? For example, the membership interest list, or the weekly newsletter.`;
+  }
+  if (/recommended copy/i.test(label)) {
+    return `What should ${what} say? A draft or the key points is enough, so the team isn't inventing the message.`;
+  }
+  if (/^cta link/i.test(label)) {
+    return `Where should ${what} send people? A URL is best, so the button or link goes to the right place.`;
+  }
+  if (/detailed request/i.test(label)) {
+    return `What do you need the team to do for ${what}? A few sentences on the outcome is enough.`;
+  }
+  if (/detailed change/i.test(label)) {
+    return `What should change? Describe the edit so the team can match it.`;
+  }
+  if (/subject line/i.test(label)) {
+    return "What subject line do you want? Send the exact words if you have them.";
+  }
+  if (/rate code/i.test(label) && !/cancellation/i.test(label)) {
+    return "What's the rate code? Send it exactly as it should appear. Don't invent one if you don't have it.";
+  }
+  if (/promo code/i.test(label)) {
+    return "What's the promo code? Send the exact code, the way a guest would type it.";
+  }
+  if (/offer title/i.test(label)) {
+    return "What's the offer title? Match the Namastay name so the systems line up.";
+  }
+  if (/event name/i.test(label)) {
+    return "What's the event called? Send the exact name you want published.";
+  }
+  if (/event description/i.test(label)) {
+    return "How should the event be described? Paste the exact copy.";
+  }
+  if (/event date/i.test(label)) {
+    return "What date is the event? For example, Dec 12.";
+  }
+  if (/event time/i.test(label)) {
+    return "What time does it start and end? For example, 6pm to 9pm.";
+  }
+  if (/event location/i.test(label)) {
+    return `Where at ${place} does the event happen? A room or outlet name is enough.`;
+  }
+  if (/platform/i.test(label)) {
+    return `Which platform is ${what} on? For example, Google, Meta, or the website.`;
+  }
+  if (label === "Details") {
+    return `What are the details for ${what}? A short note on what should change is enough.`;
+  }
+  if (/goal/i.test(label)) {
+    return `What's the goal for ${what}? For example, more membership signups.`;
+  }
+  return undefined;
+}
+
+function pageUrlQuestion(draft: BriefDraft): string {
+  const place = placeName(draft) || "this";
+  const blob = `${draft.requestName ?? ""} ${draft.taskType ?? ""}`;
+  const membership = /membership/i.test(blob);
+  const form = /form/i.test(blob);
+  const page = membership ? `${place} membership page` : `${place} page`;
+  const why = form
+    ? "so the web team knows exactly where the new form goes"
+    : "so the web team knows exactly which page to change";
+  return `Which page should we update? Please send the link to the current ${page} on the website (for example properhotel.com/...), ${why}.`;
+}
+
+function requestLabel(draft: BriefDraft): string {
+  return draft.requestName?.trim() || "this";
+}
+
+function fallback(item: MissingItem, draft: BriefDraft): string {
+  const what = requestLabel(draft);
+  const place = placeName(draft);
+  const where = place ? ` for ${place}` : "";
+  const name = item.label.replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
+  return `For ${what}${where}, I still need ${name.charAt(0).toLowerCase()}${name.slice(1)}. The team uses that on the brief, so a short answer in your own words is perfect.`;
+}

@@ -104,8 +104,8 @@ describe("request and task type lists", () => {
       warnings: [],
       draft: {},
     });
-    expect(text).toContain("*Your name*");
-    expect(text).not.toContain("*What can we help you with?*");
+    expect(text).toContain("Who is this request for?");
+    expect(text).not.toContain("What should the team help with?");
     expect(text).not.toContain("1. *Your email*");
   });
 
@@ -122,10 +122,10 @@ describe("request and task type lists", () => {
       warnings: [],
       draft,
     });
-    expect(text).toContain("*What can we help you with?*");
+    expect(text).toContain("What should the team help with?");
     expect(text).toContain("• *Creative* — new designs like emails, menus, social graphics");
     expect(text).toContain("Start with Creative for most new design.");
-    expect(text).not.toContain("*Your name*");
+    expect(text).not.toContain("Who is this request for?");
   });
 
   it("lists every task type once a request type is chosen", () => {
@@ -142,7 +142,7 @@ describe("request and task type lists", () => {
       warnings: [],
       draft,
     });
-    expect(text).toContain("*What type of creative support do you need?*");
+    expect(text).toContain("What kind of Creative is this?");
     expect(formatTaskTypeChoices("Creative").split("\n")).toEqual(FORM_TASK_TYPES.Creative.map((name) => `• ${name}`));
     for (const name of FORM_TASK_TYPES.Creative) {
       expect(text).toContain(`• ${name}`);
