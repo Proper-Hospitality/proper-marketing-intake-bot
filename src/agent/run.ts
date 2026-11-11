@@ -121,7 +121,7 @@ export async function runIntakeTurn(input: {
   if (state.lastAskedId && (state.phase === "collecting" || state.phase === "awaiting_confirm")) {
     if (isBackAnswer(input.userText) && rewindLastAnswer(state)) {
       const outcome = applyAnswers(state, {}, today);
-      const reply = renderReply(state, input.slackUser.id, "Let's change that.", outcome, today);
+      const reply = renderReply(state, input.slackUser, "Let's change that.", outcome, today);
       reply.text = `Let's change that.\n\n${reply.text.replace(LEADING_ACK, "")}`;
       return remember(state, input.userText, reply);
     }
@@ -139,19 +139,19 @@ export async function runIntakeTurn(input: {
     }
     if (wantsMarketingRecommend(input.userText) && recordMarketingRecommend(state)) {
       const outcome = applyAnswers(state, {}, today);
-      return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
+      return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
     }
     if (isSkipAnswer(input.userText) && skipAsked(state)) {
       if (state.emailIntake && state.lastAskedId === "properties") state.emailIntake.propertyConfirmed = true;
       if (state.lastAskedId === "collateralYear") state.draft.collateralYearUnspecified = true;
       const outcome = applyAnswers(state, {}, today);
-      return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
+      return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
     }
     if (isAttachmentQuestion(state.lastAskedId)) {
       const result = applyAttachmentAnswer(state.draft, state.lastAskedId, input.userText);
       if (result === "recorded") {
         const outcome = applyAnswers(state, {}, today);
-        return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
+        return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
       }
       if (result === "need_pdf") {
         const index = Number(state.lastAskedId.slice("attachmentPdf:".length));
@@ -169,7 +169,7 @@ export async function runIntakeTurn(input: {
     const outcome = looksLikeUseExisting(input.userText)
       ? acceptCollateral(state)
       : declineCollateral(state, input.userText, today);
-    return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
+    return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
   }
   if (state.lastAskedId === "deliverable" && state.phase === "collecting") {
     const choice = parseDeliverableChoice(input.userText);
@@ -198,7 +198,7 @@ export async function runIntakeTurn(input: {
     if (designTurn.action === "reply") return remember(state, input.userText, { text: designTurn.text });
     if (designTurn.action === "decline") {
       const outcome = declineDesign(state, designTurn.reason, today);
-      return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
+      return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
     }
   }
   if (/^request approval[.!]?$/i.test(input.userText.trim()) && state.draft.rushBlock && state.draft.requestedCompletionDate && input.rush) {
@@ -230,7 +230,7 @@ export async function runIntakeTurn(input: {
   }
   if (preset?.kind === "accepted_template") {
     state.messages.push({ role: "user", content: input.userText });
-    const reply = renderReply(state, input.slackUser.id, "", preset, today);
+    const reply = renderReply(state, input.slackUser, "", preset, today);
     state.messages.push({ role: "assistant", content: reply.text });
     state.updatedAt = new Date().toISOString();
     return reply;
@@ -282,7 +282,7 @@ export async function runIntakeTurn(input: {
     state.dateConfirmShown = true;
     const outcome = applyAnswers(state, {}, today);
     const spoken = formatSpokenDate(state.dateConfirmFor);
-    const reply = presentDateConfirm(state, renderReply(state, input.slackUser.id, "", outcome, today));
+    const reply = presentDateConfirm(state, renderReply(state, input.slackUser, "", outcome, today));
     reply.text = `Perfect, ${spoken}.\n\n${reply.text.replace(LEADING_ACK, "")}`;
     return remember(state, input.userText, reply);
   }
@@ -298,7 +298,7 @@ export async function runIntakeTurn(input: {
       if (decision === "decline") state.emailIntake.inferredProperties = [];
       if (properties && properties.length > 0) state.emailIntake.confirmedProperties = [...properties];
       const outcome = applyAnswers(state, properties && properties.length > 0 ? { properties } : {}, today);
-      return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
+      return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
     }
   }
 
@@ -399,7 +399,7 @@ export async function runIntakeTurn(input: {
     }
   }
 
-  const reply = presentDateConfirm(state, renderReply(state, input.slackUser.id, assistantText, outcome, today, completion));
+  const reply = presentDateConfirm(state, renderReply(state, input.slackUser, assistantText, outcome, today, completion));
   if (attachmentNote) reply.text = `${attachmentNote}\n\n${reply.text}`;
   state.messages.push({ role: "assistant", content: reply.text });
   if (state.messages.length > 40) state.messages.splice(0, state.messages.length - 40);
@@ -558,7 +558,7 @@ async function runTaskSearch(
 
 function renderReply(
   state: ConversationState,
-  userId: string | undefined,
+  speaker: { id?: string; name?: string } | undefined,
   assistantText: string,
   outcome: FlowOutcome | undefined,
   today: Date,
@@ -598,8 +598,9 @@ function renderReply(
     const match = outcome?.kind === "offer_template" ? outcome.match : state.templateOffer;
     if (match) return { text: formatTemplateOffer(match) };
   }
-  const addressed = state.emailIntake ? emailAddressee(state) : { userId };
-  const mentionId = addressed.who ? undefined : addressed.userId;
+  const addressed = state.emailIntake ? emailAddressee(state) : { userId: speaker?.id, who: speaker?.name };
+  const mentionId = addressed.userId ?? speaker?.id;
+  const spokenName = addressed.who ?? speaker?.name;
   if (outcome?.kind === "need_property") {
     const confirm = formatEmailPropertyConfirm(state);
     if (confirm) {
@@ -607,7 +608,7 @@ function renderReply(
       state.lastAskedLabel = "Property";
       return { text: confirm };
     }
-    return { text: formatPropertyQuestion(mentionId, addressed.who) };
+    return { text: formatPropertyQuestion(mentionId, spokenName) };
   }
   if (outcome?.kind === "ask") {
     const item = outcome.missing.items[0];
@@ -628,7 +629,7 @@ function renderReply(
     const emailThread = Boolean(state.emailIntake);
     const question = formatQuestions({
       userId: emailThread ? undefined : mentionId,
-      who: emailThread ? undefined : addressed.who,
+      who: emailThread ? undefined : spokenName,
       items: item ? [item] : [],
       warnings: item && /timing|date|late/i.test(item.id + item.label) ? outcome.missing.warnings : [],
       draft: state.draft,

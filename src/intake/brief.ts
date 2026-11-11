@@ -1,4 +1,5 @@
 import { fieldQuestion, friendlyRecap, naturalAck } from "./ask-text.js";
+import { greet } from "../slack/mentions.js";
 import { attachmentAssetLines, attachmentBriefLines } from "./attachments.js";
 import { formatRequestTypeChoices, formatTaskTypeChoices } from "./choices.js";
 import { expectedRoutingBucket, formatDisplayDate, formatFullDate, FORM_URL, normalizeDate, secondContact } from "./catalog.js";
@@ -115,9 +116,9 @@ export function formatQuestions(input: {
   const lines: string[] = [];
   if (input.acknowledge) lines.push(naturalAck({ lastId: input.ackFor, draft: input.draft }), "");
   if (input.captured) lines.push(input.captured, "");
-  if (!input.acknowledge && input.userId) lines.push(`Hi <@${input.userId}>! ${question}`);
-  else if (!input.acknowledge && input.who) lines.push(`Hi ${input.who}! ${question}`);
-  else lines.push(question);
+  if (!input.acknowledge && (input.userId || input.who)) {
+    lines.push(`${greet({ userId: input.userId, name: input.who })} ${question}`);
+  } else lines.push(question);
   const choices = choiceList(item.id, input.draft.requestType);
   if (choices) lines.push("", choices);
   else if (item.hint && !item.hint.startsWith("One or more of") && item.id !== "properties") lines.push(item.hint);
@@ -132,8 +133,7 @@ export function formatQuestions(input: {
 }
 
 export function formatPropertyQuestion(userId?: string, who?: string): string {
-  const hi = userId ? `Hi <@${userId}>!` : who ? `Hi ${who}!` : "Hi!";
-  return `${hi} Which property is this for? A code like SMP or LTP is perfect. I check for a template before asking for the rest.`;
+  return `${greet({ userId, name: who })} Which property is this for? A code like SMP or LTP is perfect. I check for a template before asking for the rest.`;
 }
 
 export function formatTemplateOffer(result: TemplateMatchResult): string {
