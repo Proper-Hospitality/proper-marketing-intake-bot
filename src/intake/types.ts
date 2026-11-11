@@ -27,6 +27,16 @@ export interface BriefDraft {
   pricePending?: boolean;
   /** Questions the requester skipped with "skip" or "not sure". */
   skipped?: Array<{ id: string; label: string }>;
+  /** Slack files the requester attached. Uploaded to the Asana task on confirm. */
+  attachments?: Array<{
+    slackFileId: string;
+    name: string;
+    permalink?: string;
+    mimetype?: string;
+    specs?: string;
+  }>;
+  /** Links the requester pasted, other than the marketing intake form. */
+  providedLinks?: string[];
   /** Year the requester asked for, when they named one. Not taken from a file's modified date. */
   collateralYear?: number;
   /** They skipped the year question, so matches stay labeled with each file's own year. */
