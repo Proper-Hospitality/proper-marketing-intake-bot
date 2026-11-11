@@ -38,6 +38,8 @@ export interface InboundEmail {
 export interface EmailProposal {
   title: string;
   detail: string;
+  /** One or two sentences for the Slack reply. The full ask stays in detail. */
+  summary?: string;
   requestType?: RequestType;
   taskType?: string;
   followUps?: Record<string, string>;
@@ -53,6 +55,12 @@ export interface EmailIntakeState {
   originalEmail?: string;
   forwarder: string;
   forwarded: boolean;
+  /** Slack member for the original sender, when users.lookupByEmail finds one. */
+  requesterSlackId?: string;
+  /** Property codes read from the email. Confirmed before they are treated as final. */
+  inferredProperties?: string[];
+  propertyConfirmed?: boolean;
+  confirmedProperties?: string[];
   bodyText: string;
   proposals: EmailProposal[];
   mode?: "split" | "single";

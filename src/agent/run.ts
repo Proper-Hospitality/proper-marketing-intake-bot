@@ -58,7 +58,8 @@ import {
 import { assistantBlocksForReplay, isHistoryRejection, sanitizeStoredHistory } from "./history.js";
 import { buildSystemPrompt } from "./prompt.js";
 import { INTAKE_TOOLS } from "./tools.js";
-import { userCorrectsEmailRequester, userCorrectsEmailType } from "../intake/email/parse.js";
+import { emailAddressee, formatEmailPropertyConfirm } from "../intake/email/present.js";
+import { interpretPropertyConfirm, userCorrectsEmailRequester, userCorrectsEmailType } from "../intake/email/parse.js";
 import { formatOverdueReport, overdueCountsForNames, parseNameList } from "../tasks/overdue.js";
 
 export interface LlmContentBlock {
@@ -140,6 +141,7 @@ export async function runIntakeTurn(input: {
       return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
     }
     if (isSkipAnswer(input.userText) && skipAsked(state)) {
+      if (state.emailIntake && state.lastAskedId === "properties") state.emailIntake.propertyConfirmed = true;
       if (state.lastAskedId === "collateralYear") state.draft.collateralYearUnspecified = true;
       const outcome = applyAnswers(state, {}, today);
       return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
@@ -282,6 +284,21 @@ export async function runIntakeTurn(input: {
     const reply = presentDateConfirm(state, renderReply(state, input.slackUser.id, "", outcome, today));
     reply.text = `Got it — ${spoken}.\n\n${reply.text.replace(/^Got it\.\n\n/, "")}`;
     return remember(state, input.userText, reply);
+  }
+  if (awaitingPropertyConfirm(state)) {
+    const decision = interpretPropertyConfirm(input.userText, state.emailIntake?.inferredProperties ?? []);
+    if (decision !== "unclear" && state.emailIntake) {
+      state.emailIntake.propertyConfirmed = true;
+      const properties = decision === "accept"
+        ? state.emailIntake.inferredProperties
+        : decision === "decline"
+          ? undefined
+          : decision.properties;
+      if (decision === "decline") state.emailIntake.inferredProperties = [];
+      if (properties && properties.length > 0) state.emailIntake.confirmedProperties = [...properties];
+      const outcome = applyAnswers(state, properties && properties.length > 0 ? { properties } : {}, today);
+      return remember(state, input.userText, renderReply(state, input.slackUser.id, "", outcome, today));
+    }
   }
 
   state.messages = sanitizeStoredHistory(state.messages);
@@ -431,6 +448,10 @@ async function executeTool(
     }
     const rawDate = asString(payload.requestedCompletionDate);
     let outcome = applyAnswers(state, toRecord(payload), deps.today);
+    if (state.emailIntake && state.draft.properties && state.draft.properties.length > 0) {
+      state.emailIntake.propertyConfirmed = true;
+      state.emailIntake.confirmedProperties = [...state.draft.properties];
+    }
     if (rawDate) noteResolvedDate(state, resolveDateInput(rawDate, deps.today));
     if (
       outcome.kind === "invalid"
@@ -576,8 +597,16 @@ function renderReply(
     const match = outcome?.kind === "offer_template" ? outcome.match : state.templateOffer;
     if (match) return { text: formatTemplateOffer(match) };
   }
+  const addressed = state.emailIntake ? emailAddressee(state) : { userId };
+  const mentionId = addressed.who ? undefined : addressed.userId;
   if (outcome?.kind === "need_property") {
-    return { text: formatPropertyQuestion(userId) };
+    const confirm = formatEmailPropertyConfirm(state);
+    if (confirm) {
+      state.lastAskedId = "properties";
+      state.lastAskedLabel = "Property";
+      return { text: confirm };
+    }
+    return { text: formatPropertyQuestion(mentionId, addressed.who) };
   }
   if (outcome?.kind === "ask") {
     const item = outcome.missing.items[0];
@@ -589,9 +618,12 @@ function renderReply(
       state.lastAskedId = item.id;
       state.lastAskedLabel = item.label;
     }
+    const confirm = item?.id === "properties" ? formatEmailPropertyConfirm(state) : undefined;
+    if (confirm) return { text: outcome.preface ? `${outcome.preface}\n\n${confirm}` : confirm };
     const captured = capturedHalf(state, item?.id);
     const question = formatQuestions({
-      userId,
+      userId: mentionId,
+      who: addressed.who,
       items: item ? [item] : [],
       warnings: item && /timing|date|late/i.test(item.id + item.label) ? outcome.missing.warnings : [],
       draft: state.draft,
@@ -621,6 +653,17 @@ function renderReply(
   return {
     text: "Tell me what you need from the marketing team, or ask how intake works. Nothing is filed without a confirmation button.",
   };
+}
+
+function awaitingPropertyConfirm(state: ConversationState): boolean {
+  const email = state.emailIntake;
+  return Boolean(
+    email
+    && !email.propertyConfirmed
+    && (email.inferredProperties?.length ?? 0) > 0
+    && state.lastAskedId === "properties"
+    && (state.phase === "collecting" || state.phase === "awaiting_confirm"),
+  );
 }
 
 function capturedHalf(state: ConversationState, itemId: string | undefined): string | undefined {

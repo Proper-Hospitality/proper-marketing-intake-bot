@@ -1,4 +1,4 @@
-import { htmlToText, hasRequestContent, isAutomaticEmail, parseAddress, resolveParties } from "./parse.js";
+import { htmlToText, hasRequestContent, isAutomaticEmail, parseAddress, parseSlackEmailDocument, resolveParties } from "./parse.js";
 import type { EmailFileRef, EmailParty, InboundEmail } from "./types.js";
 import type { SlackEmailFileDetails } from "../../slack/files.js";
 
@@ -83,16 +83,17 @@ export async function resolveInboundEmail(event: SlackEmailEvent, options: {
     }
   }
 
-  const subject = (emailFile?.subject || details?.subject || event.attachments?.[0]?.title || event.text || "").trim();
-  const body = htmlToText(
-    emailText(emailFile)
+  const rawBody = emailText(emailFile)
     || details?.plainText
     || event.attachments?.[0]?.text
     || event.attachments?.[0]?.pretext
     || event.text
-    || "",
-  ).slice(0, 20000);
-  const envelope = partyFromSlack(emailFile?.from?.[0] ?? details?.from?.[0]);
+    || "";
+  const document = parseSlackEmailDocument(rawBody);
+  const subject = (emailFile?.subject || details?.subject || document?.subject || event.attachments?.[0]?.title || event.text || "").trim();
+  const body = htmlToText(document?.plainText || rawBody).slice(0, 20000);
+  const envelope = partyFromSlack(emailFile?.from?.[0] ?? details?.from?.[0])
+    ?? (document?.from ? parseAddress(document.from) : undefined);
   const headers = emailFile?.headers ?? details?.headers;
   if (isAutomaticEmail({ subject, body, headers })) return { status: "noise", reason: "automatic" };
   if (!hasRequestContent(subject, body)) return { status: "noise", reason: "empty" };

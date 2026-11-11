@@ -232,6 +232,9 @@ const PROPERTY_NICKNAMES: Record<string, string> = {
   ingleside: "ING",
   "ingleside estate": "ING",
   ltp: "LTP",
+  "lake tahoe proper": "LTP",
+  "lake tahoe": "LTP",
+  tahoe: "LTP",
   dal: "DAL",
   dallas: "DAL",
   min: "MIN",
@@ -250,6 +253,47 @@ export function canonicalizeProperty(input: string): string | undefined {
   if (nick) return nick;
   const code = Object.keys(PROPERTIES).find((name) => name.toLowerCase() === trimmed.toLowerCase());
   return code;
+}
+
+const INFER_SKIP = new Set([
+  "club",
+  "development",
+  "corporate",
+  "collective",
+  "new projects",
+  "new projects/development",
+]);
+
+/** Property codes named by the email or message, longest place names first. */
+export function inferProperties(text: string): string[] {
+  const found: string[] = [];
+  const phrases = Object.entries(PROPERTY_NICKNAMES)
+    .filter(([phrase]) => !INFER_SKIP.has(phrase))
+    .filter(([phrase]) => phrase.includes(" ") || phrase.length >= 5)
+    .sort((a, b) => b[0].length - a[0].length);
+  for (const [phrase, code] of phrases) {
+    const pattern = new RegExp(`(?<![a-z])${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![a-z])`, "i");
+    if (pattern.test(text) && !found.includes(code)) found.push(code);
+  }
+  for (const code of Object.keys(PROPERTIES)) {
+    if (!/^[A-Z]{2,5}$/.test(code)) continue;
+    if (new RegExp(`\\b${code}\\b`).test(text) && !found.includes(code)) found.push(code);
+  }
+  return found;
+}
+
+/** "Lake Tahoe (LTP)" when we know a place name, otherwise the code. */
+export function propertyPhrase(code: string): string {
+  const phrases = Object.entries(PROPERTY_NICKNAMES)
+    .filter(([, value]) => value === code)
+    .map(([phrase]) => phrase)
+    .filter((phrase) => phrase.includes(" "));
+  const named = phrases
+    .filter((phrase) => !phrases.some((other) => other !== phrase && phrase.includes(other)))
+    .sort((a, b) => b.split(" ").length - a.split(" ").length || a.length - b.length)[0];
+  if (!named) return code;
+  const title = named.replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+  return `${title} (${code})`;
 }
 
 const REQUEST_ALIASES: Record<string, RequestType> = {

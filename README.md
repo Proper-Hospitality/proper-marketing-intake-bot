@@ -305,9 +305,9 @@ The Email app message is posted by Slack, not by a person, so it has a bot id. T
 
 ### What the bot does with the email
 
-It reads the subject, the body, and the attachments. On a forward it treats the `From:` line inside the forwarded message as the original requester, and the person who sent the mail to the channel as the forwarder. Both are named on the draft and on the Asana task.
+It reads the subject, the body, and the attachments. On a forward it treats the original sender — the `From:` line inside the forwarded message, including an Outlook forward that has no "Forwarded message" banner — as the requester. The person who sent the mail to the channel is only noted as forwarded by. Questions are addressed to the original sender, and @mention them when that email matches a Slack member. The forwarder's signature, the forward headers, and the disclaimer are left out of the description.
 
-If the email has several distinct asks (a lettered or numbered list), the bot lists a separate brief for each and waits. Reply **yes**, or click **Split into N requests**, to walk through them one at a time. Reply **keep it as one**, or click **Keep as one**, to file a single brief. Each brief then asks for whatever is still missing, the same way a Slack request does: property, due date, approver, and the rest. **Confirm** files that brief only. The original email file and its attachments are uploaded onto each Asana task once. A later confirm does not upload those same files again onto that task.
+If the email has several distinct asks, as a lettered list or as separate requests in the prose, the bot says what it understood and offers to split them. Reply **yes**, or click **Split into N requests**, to walk through them one at a time. Reply **keep it as one**, or click **Keep as one**, to file a single brief. A property named in the email, such as Lake Tahoe (LTP), is filled in and only needs a yes. Each brief then asks for whatever is still missing, one question at a time, the same way a Slack request does. Nothing is filed until **Confirm**. The original email file and its attachments are uploaded onto each Asana task once. A later confirm does not upload those same files again onto that task.
 
 Automatic replies, out-of-office mail, and emails with no request in them are ignored.
 

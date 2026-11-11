@@ -19,6 +19,8 @@ export interface SlackApi {
   postMessage(args: { channel: string; threadTs?: string; text: string; blocks?: unknown[] }): Promise<{ ts?: string }>;
   updateMessage(args: { channel: string; ts: string; text: string; blocks?: unknown[] }): Promise<void>;
   userProfile(userId: string): Promise<{ name?: string; email?: string }>;
+  /** Resolve a requester email to a Slack member. Absent when the workspace has no match. */
+  userByEmail?(email: string): Promise<{ id: string; name?: string } | undefined>;
   threadReplies(channel: string, threadTs: string): Promise<SlackThreadMessage[]>;
   /** One channel message, used when conversations.replies does not include the parent file. */
   historyMessage?(channel: string, ts: string): Promise<SlackThreadMessage | null>;
@@ -56,6 +58,28 @@ export function slackFromWebClient(client: WebClient): SlackApi {
       } catch (error) {
         console.error(JSON.stringify({ msg: "slack_user_lookup_failed", error: error instanceof Error ? error.message : "unknown" }));
         return {};
+      }
+    },
+    async userByEmail(email) {
+      try {
+        const info = await client.users.lookupByEmail({ email });
+        const user = info.user;
+        if (!user?.id) return undefined;
+        return {
+          id: user.id,
+          name: user.profile?.real_name || user.real_name || user.name,
+        };
+      } catch (error) {
+        const code = error && typeof error === "object" && "data" in error
+          ? String((error as { data?: { error?: string } }).data?.error ?? "")
+          : "";
+        if (code !== "users_not_found") {
+          console.error(JSON.stringify({
+            msg: "slack_email_lookup_failed",
+            error: error instanceof Error ? error.message : "unknown",
+          }));
+        }
+        return undefined;
       }
     },
     async postEphemeral(args) {

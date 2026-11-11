@@ -1,4 +1,4 @@
-import { htmlToText } from "../intake/email/parse.js";
+import { htmlToText, parseSlackEmailDocument } from "../intake/email/parse.js";
 
 export async function downloadSlackFile(args: {
   token: string;
@@ -91,11 +91,14 @@ export async function readSlackEmailFile(args: {
         plainText = new TextDecoder().decode(downloaded.bytes);
       }
     }
-    const text = plainText ? htmlToText(plainText).slice(0, 20000) : "";
+    const document = plainText ? parseSlackEmailDocument(plainText) : undefined;
+    const source = document?.plainText || plainText;
+    const text = source ? htmlToText(source).slice(0, 20000) : "";
+    const from = file.from ?? (document?.from ? [{ original: document.from }] : undefined);
     return {
-      subject: file.subject,
+      subject: file.subject || document?.subject,
       plainText: text || undefined,
-      from: file.from,
+      from,
       headers: file.headers,
       attachments: file.attachments,
       name: file.name,

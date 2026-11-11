@@ -125,10 +125,10 @@ export function formatQuestions(input: {
   return lines.join("\n");
 }
 
-export function formatPropertyQuestion(userId?: string): string {
-  const who = userId ? `<@${userId}>` : "Hi";
+export function formatPropertyQuestion(userId?: string, who?: string): string {
+  const name = who ?? (userId ? `<@${userId}>` : "Hi");
   return [
-    `${who} — which property is this for? A property-specific Canva template may fit, so I want to check that before asking for the rest.`,
+    `${name} — which property is this for? A property-specific Canva template may fit, so I want to check that before asking for the rest.`,
     `Reply with one or more of: ${propertyNames().join(", ")}.`,
   ].join("\n");
 }

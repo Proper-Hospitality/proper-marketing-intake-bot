@@ -4,7 +4,8 @@ import { confirmBlocks, emailSplitBlocks, messageBlocks } from "../../slack/bloc
 import { messageOnceKey } from "../../slack/incoming.js";
 import type { SlackApi } from "../../slack/api.js";
 import { conversationKey, conversationKeyFromAction, emptyConversation, type ConversationState, type Store } from "../../store/types.js";
-import { formatParty, parseSplitChoice, proposeEmailBriefs } from "./parse.js";
+import { inferProperties } from "../catalog.js";
+import { cleanEmailBody, formatParty, parseSplitChoice, proposeEmailBriefs } from "./parse.js";
 import { formatSplitProposal, presentEmailStep, type EmailReply } from "./present.js";
 import type { EmailIntakeState, EmailProposal, InboundEmail } from "./types.js";
 
@@ -24,8 +25,12 @@ export async function beginEmailIntake(deps: EmailTurnDeps, email: InboundEmail)
     const state = emptyConversation(key);
     state.channel = email.channel;
     state.threadTs = email.messageTs;
-    if (email.slackUserId) state.slackUserId = email.slackUserId;
     state.emailIntake = intakeFromEmail(email);
+    const requester = await lookupRequester(deps.slack, email.originalSender.email);
+    if (requester?.id) {
+      state.emailIntake.requesterSlackId = requester.id;
+      state.slackUserId = requester.id;
+    }
     let reply: EmailReply;
     const first = state.emailIntake.proposals[0];
     if (state.emailIntake.proposals.length >= 2 && first) {
@@ -168,6 +173,8 @@ export function startNextEmailBrief(state: ConversationState, today = new Date()
 }
 
 function intakeFromEmail(email: InboundEmail): EmailIntakeState {
+  const bodyText = cleanEmailBody(email.bodyText);
+  const proposals = proposeEmailBriefs({ subject: email.subject, bodyText });
   return {
     source: email.source,
     messageTs: email.messageTs,
@@ -177,11 +184,25 @@ function intakeFromEmail(email: InboundEmail): EmailIntakeState {
     originalEmail: email.originalSender.email,
     forwarder: formatParty(email.forwarder),
     forwarded: email.forwarded,
-    bodyText: email.bodyText,
-    proposals: proposeEmailBriefs({ subject: email.subject, bodyText: email.bodyText }),
+    inferredProperties: inferProperties(`${email.subject}\n${bodyText}`),
+    bodyText,
+    proposals,
     filed: [],
     files: email.files,
   };
+}
+
+async function lookupRequester(slack: SlackApi, email: string | undefined): Promise<{ id: string; name?: string } | undefined> {
+  if (!email || !slack.userByEmail) return undefined;
+  try {
+    return await slack.userByEmail(email);
+  } catch (error) {
+    console.error(JSON.stringify({
+      msg: "slack_email_lookup_failed",
+      error: error instanceof Error ? error.message : "unknown",
+    }));
+    return undefined;
+  }
 }
 
 function activateProposal(state: ConversationState, index: number, today: Date): EmailReply {
@@ -196,7 +217,7 @@ function activateProposal(state: ConversationState, index: number, today: Date):
   state.messages.push({ role: "user", content: `Brief: ${proposal.title}\n${proposal.detail}` });
   if (state.messages.length > 40) state.messages.splice(0, state.messages.length - 40);
   const outcome = applyAnswers(state, {}, today);
-  const reply = presentEmailStep(state, outcome, today);
+  const reply = presentEmailStep(state, outcome, today, { intro: true });
   state.messages.push({ role: "assistant", content: reply.text });
   return reply;
 }
@@ -210,6 +231,9 @@ function seedDraft(email: EmailIntakeState, proposal: EmailProposal, useProposal
     emailSubject: email.subject,
     filingOnBehalf: email.forwarded,
   };
+  if (email.propertyConfirmed && email.confirmedProperties && email.confirmedProperties.length > 0) {
+    draft.properties = [...email.confirmedProperties];
+  }
   if (useProposal) {
     draft.requestName = proposal.title;
     draft.requestType = proposal.requestType;
@@ -232,10 +256,12 @@ function seedDraft(email: EmailIntakeState, proposal: EmailProposal, useProposal
 
 function mergeProposals(email: EmailIntakeState): EmailProposal {
   const detail = email.proposals.map((proposal, index) => `${index + 1}. ${proposal.title}\n${proposal.detail}`).join("\n\n");
+  const summary = email.proposals.map((proposal) => proposal.summary || proposal.title).join("\n\n");
   const title = email.subject.replace(/^\s*(?:fw|fwd)\s*:\s*/i, "").trim() || "Forwarded email";
   return {
     title,
     detail,
+    summary,
     requestType: "Marketing",
     taskType: "Marketing Plan",
     followUps: { "Detailed Request": detail },
