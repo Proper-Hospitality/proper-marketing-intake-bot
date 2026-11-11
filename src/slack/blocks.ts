@@ -37,6 +37,33 @@ export function confirmTaskCompletionBlocks(summary: string, version: number): K
   ];
 }
 
+export function emailSplitBlocks(text: string, count: number): KnownBlock[] {
+  const splitLabel = `Split into ${count} requests`;
+  return [
+    ...messageBlocks(text),
+    { type: "divider" },
+    {
+      type: "actions",
+      block_id: "email_split_choice",
+      elements: [
+        {
+          type: "button",
+          style: "primary",
+          text: { type: "plain_text", text: splitLabel.slice(0, 75), emoji: true },
+          action_id: "email_split",
+          value: "split",
+        },
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Keep as one", emoji: true },
+          action_id: "email_keep",
+          value: "keep",
+        },
+      ],
+    },
+  ];
+}
+
 export function confirmBlocks(summary: string, version: number): KnownBlock[] {
   const blocks: KnownBlock[] = [
     {

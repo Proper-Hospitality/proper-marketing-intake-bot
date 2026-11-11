@@ -1,5 +1,6 @@
 import { FORM_URL } from "../intake/catalog.js";
 import { rememberAttachment } from "../intake/capture.js";
+import { continueEmailConversation, startNextEmailBrief } from "../intake/email/turn.js";
 import { runIntakeTurn, type DesignDeps, type Llm } from "../agent/run.js";
 import { confirmBlocks, confirmTaskCompletionBlocks, messageBlocks } from "./blocks.js";
 import { slackThreadUrl } from "../intake/brief.js";
@@ -70,6 +71,9 @@ async function handleFreshMessage(deps: {
   state.slackUserId = message.userId;
   state.threadTs = message.threadTs ?? (message.isDm ? undefined : message.ts);
   const threadAnchor = state.threadTs;
+  if (await continueEmailConversation({ store: deps.store, slack: deps.slack, today: deps.today }, state, message)) {
+    return;
+  }
 
   if (state.messages.length === 0 && message.threadTs) {
     const replies = await deps.slack.threadReplies(message.channel, message.threadTs);
@@ -199,6 +203,10 @@ export async function handleConfirmAction(deps: {
       const files = await collectThreadFiles(deps.slack, state.channel, state.threadTs);
       for (const file of files) rememberAttachment(state.draft, file);
     }
+    for (const file of state.emailIntake?.files ?? []) {
+      const saved = state.draft.attachments?.find((item) => item.slackFileId === file.slackFileId);
+      if (saved && !saved.kind) saved.kind = "context";
+    }
     const result = await submitConfirmedBrief({
       confirmed: true,
       version: action.version,
@@ -209,12 +217,27 @@ export async function handleConfirmAction(deps: {
       slackThread: slackThreadUrl(action.channel, thread),
       slackToken: deps.slackToken,
     });
+    const next = state.phase === "submitted" ? startNextEmailBrief(state) : undefined;
+    if (state.emailIntake) await deps.store.saveConversation(state);
+    const lastOfEmail = !next
+      && state.emailIntake?.mode === "split"
+      && state.emailIntake.filed.length > 1
+      && state.phase === "submitted";
+    const text = lastOfEmail ? `${result.text}\nThat was the last request from this email.` : result.text;
     await deps.slack.postMessage({
       channel: action.channel,
       threadTs: action.threadTs,
-      text: result.text,
-      blocks: messageBlocks(result.text),
+      text,
+      blocks: messageBlocks(text),
     });
+    if (next) {
+      await deps.slack.postMessage({
+        channel: action.channel,
+        threadTs: action.threadTs,
+        text: next.text,
+        blocks: next.confirm ? confirmBlocks(next.text, next.confirm.version) : messageBlocks(next.text),
+      });
+    }
   } finally {
     await deps.store.releaseEvent(lockId);
   }

@@ -58,6 +58,7 @@ import {
 import { assistantBlocksForReplay, isHistoryRejection, sanitizeStoredHistory } from "./history.js";
 import { buildSystemPrompt } from "./prompt.js";
 import { INTAKE_TOOLS } from "./tools.js";
+import { userCorrectsEmailRequester, userCorrectsEmailType } from "../intake/email/parse.js";
 import { formatOverdueReport, overdueCountsForNames, parseNameList } from "../tasks/overdue.js";
 
 export interface LlmContentBlock {
@@ -332,6 +333,7 @@ export async function runIntakeTurn(input: {
         asanaToken: input.asanaToken,
         fetchImpl: input.fetchImpl,
         slackUser: input.slackUser,
+        userText: input.userText,
       });
       if (executed.outcome) outcome = executed.outcome;
       if (executed.completion) completion = executed.completion;
@@ -391,9 +393,20 @@ async function executeTool(
   state: ConversationState,
   name: string,
   rawInput: unknown,
-  deps: { today: Date; asanaToken?: string; fetchImpl?: typeof fetch; slackUser: { name?: string; email?: string } },
+  deps: { today: Date; asanaToken?: string; fetchImpl?: typeof fetch; slackUser: { name?: string; email?: string }; userText?: string },
 ): Promise<{ payload: unknown; outcome?: FlowOutcome; completion?: CompletionView }> {
   const payload = isRecord(rawInput) ? rawInput : {};
+  if (name === "record_answers" && state.emailIntake) {
+    const said = deps.userText ?? "";
+    if (!userCorrectsEmailRequester(said)) {
+      delete payload.requesterName;
+      delete payload.requesterEmail;
+    }
+    if (state.draft.requestType && !userCorrectsEmailType(said)) {
+      delete payload.requestType;
+      delete payload.taskType;
+    }
+  }
   if (name === "accept_template") {
     const outcome = acceptTemplate(state);
     return { payload: outcome, outcome };

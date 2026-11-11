@@ -31,8 +31,18 @@ export function intakeChannelIds(raw = process.env.SLACK_INTAKE_CHANNELS): Set<s
 interface SlackFile {
   id?: string;
   name?: string | null;
+  title?: string | null;
   permalink?: string;
   mimetype?: string;
+  filetype?: string;
+  mode?: string;
+  subject?: string;
+  plain_text?: string;
+  preview_plain_text?: string;
+  preview?: string;
+  from?: Array<{ name?: string; address?: string; original?: string }>;
+  headers?: unknown;
+  attachments?: SlackFile[];
 }
 
 export interface SlackMessageShape {
@@ -42,10 +52,13 @@ export interface SlackMessageShape {
   channel_type?: string;
   user?: string;
   bot_id?: string;
+  username?: string;
   text?: string;
   ts?: string;
   thread_ts?: string;
+  bot_profile?: { name?: string };
   files?: SlackFile[];
+  attachments?: Array<{ title?: string; text?: string; fallback?: string; pretext?: string }>;
   message?: SlackMessageShape;
 }
 

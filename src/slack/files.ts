@@ -1,3 +1,5 @@
+import { htmlToText } from "../intake/email/parse.js";
+
 export async function downloadSlackFile(args: {
   token: string;
   fileId: string;
@@ -26,6 +28,88 @@ export async function downloadSlackFile(args: {
     permalink: info.file.permalink,
     mimetype: info.file.mimetype,
   };
+}
+
+export interface SlackEmailFileDetails {
+  subject?: string;
+  plainText?: string;
+  from?: Array<{ name?: string; address?: string; original?: string }>;
+  headers?: unknown;
+  attachments?: Array<{ id?: string; name?: string | null; mimetype?: string; permalink?: string }>;
+  name?: string;
+  mimetype?: string;
+  permalink?: string;
+}
+
+/**
+ * files.info for a Slack email file. The event often omits plain_text; the
+ * file object from files.info is where subject, from, and the body show up.
+ * Field names follow Slack's email file object. The live Email app payload
+ * was not available to verify.
+ */
+export async function readSlackEmailFile(args: {
+  token: string;
+  fileId: string;
+  fetchImpl?: typeof fetch;
+}): Promise<SlackEmailFileDetails | undefined> {
+  const fetchImpl = args.fetchImpl ?? fetch;
+  try {
+    const infoResponse = await fetchImpl(`https://slack.com/api/files.info?file=${encodeURIComponent(args.fileId)}`, {
+      headers: { Authorization: `Bearer ${args.token}` },
+    });
+    const info = await infoResponse.json() as {
+      ok?: boolean;
+      error?: string;
+      file?: {
+        name?: string;
+        mimetype?: string;
+        permalink?: string;
+        url_private?: string;
+        url_private_download?: string;
+        subject?: string;
+        plain_text?: string;
+        preview_plain_text?: string;
+        preview?: string;
+        from?: Array<{ name?: string; address?: string; original?: string }>;
+        headers?: unknown;
+        attachments?: Array<{ id?: string; name?: string | null; mimetype?: string; permalink?: string }>;
+      };
+    };
+    if (!info.ok || !info.file) return undefined;
+    const file = info.file;
+    let plainText = file.plain_text || file.preview_plain_text || "";
+    if (!plainText) {
+      const url = file.url_private_download || file.url_private;
+      const textual = /text\/|message\/rfc822|html|email/i.test(`${file.mimetype ?? ""} ${file.name ?? ""}`);
+      if (url && textual) {
+        const downloaded = await readBytes({
+          url,
+          name: file.name || "email",
+          token: args.token,
+          fetchImpl,
+        });
+        plainText = new TextDecoder().decode(downloaded.bytes);
+      }
+    }
+    const text = plainText ? htmlToText(plainText).slice(0, 20000) : "";
+    return {
+      subject: file.subject,
+      plainText: text || undefined,
+      from: file.from,
+      headers: file.headers,
+      attachments: file.attachments,
+      name: file.name,
+      mimetype: file.mimetype,
+      permalink: file.permalink,
+    };
+  } catch (error) {
+    console.error(JSON.stringify({
+      msg: "email_file_read_failed",
+      fileId: args.fileId,
+      error: error instanceof Error ? error.message : "unknown",
+    }));
+    return undefined;
+  }
 }
 
 export async function downloadRemoteFile(args: {

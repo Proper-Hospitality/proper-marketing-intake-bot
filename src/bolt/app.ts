@@ -7,7 +7,8 @@ import { registerCanvaRoutes } from "../canva/routes.js";
 import { slackFromWebClient } from "../slack/api.js";
 import { describeAttachment } from "../intake/describe-attachment.js";
 import { readSlackAttachment } from "../intake/read-attachment.js";
-import { downloadRemoteFile, downloadSlackFile } from "../slack/files.js";
+import { downloadRemoteFile, downloadSlackFile, readSlackEmailFile } from "../slack/files.js";
+import { beginEmailIntake, handleEmailSplitAction } from "../intake/email/turn.js";
 import { withDelivery, type DeliveryContext } from "../slack/dedupe.js";
 import { handleCancelTaskCompletion, handleConfirmAction, handleConfirmTaskCompletion, handleIncomingMessage, handleReviseAction } from "../slack/handle.js";
 import { dispatchUserMessage } from "../slack/dispatch.js";
@@ -115,12 +116,18 @@ function registerListeners(bolt: App): void {
       store: getStore(),
       context: deliveryContext(context),
       work: async () => {
-        await dispatchUserMessage({
+        const token = process.env.SLACK_BOT_TOKEN ?? "";
+        const result = await dispatchUserMessage({
           event,
           store: getStore(),
           onMessage: (message) => handleIncomingMessage(runtime(client), message),
           postError: (channel, threadTs, text) => postFailure(client, channel, threadTs, text),
+          onEmail: (email) => beginEmailIntake(runtime(client), email),
+          botId: context.botId,
+          botUserId: context.botUserId,
+          loadEmailFile: (fileId) => readSlackEmailFile({ token, fileId }),
         });
+        if (result === "email") return;
         const normalized = normalizeSlackMessage(event);
         if (!normalized) return;
         try {
@@ -225,6 +232,23 @@ function registerListeners(bolt: App): void {
     });
   }
 
+  for (const actionId of ["email_split", "email_keep"] as const) {
+    bolt.action(actionId, async ({ ack, body, client, context }) => {
+      await ack();
+      const action = readThreadAction(body);
+      if (!action) return;
+      await withDelivery({
+        body,
+        store: getStore(),
+        context: deliveryContext(context),
+        work: () => safeHandle(client, action.channel, action.threadTs, () => handleEmailSplitAction(runtime(client), {
+          ...action,
+          choice: actionId === "email_split" ? "split" : "one",
+        })),
+      });
+    });
+  }
+
   bolt.action("revise_intake", async ({ ack, body, client, context }) => {
     await ack();
     const action = readAction(body);
@@ -304,6 +328,18 @@ function readRushClick(body: unknown): { approvalId: string; userId: string } | 
   const userId = record.user?.id;
   if (!approvalId || !userId) return undefined;
   return { approvalId, userId };
+}
+
+function readThreadAction(body: unknown): { channel: string; messageTs: string; threadTs?: string } | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const record = body as {
+    channel?: { id?: string };
+    message?: { ts?: string; thread_ts?: string };
+  };
+  const channel = record.channel?.id;
+  const messageTs = record.message?.ts;
+  if (!channel || !messageTs) return undefined;
+  return { channel, messageTs, threadTs: record.message?.thread_ts };
 }
 
 function readAction(body: unknown): { version: number; channel: string; messageTs: string; threadTs?: string } | undefined {
