@@ -88,6 +88,7 @@ On the blueprint screen, Render lists these because `render.yaml` marks the secr
 | `SLACK_INTAKE_CHANNELS` | Optional. Comma-separated Slack channel IDs. In these channels every top-level message starts intake. No @mention is required. Leave it blank and only @mentions and direct messages start intake. |
 | `SLACK_EMAIL_INTAKE_CHANNELS` | Optional. Comma-separated Slack channel IDs that receive forwarded email. Leave it blank and email intake is off. See **Email intake** below. |
 | `SLACK_STATUS_CHANNELS` | Optional. Comma-separated Slack channel IDs, such as `C0AV038G751` for `#marketing-crew`. Leave it blank and the bot will not propose Asana status updates. |
+| `SLACK_MENTIONS_ENABLED` | Optional. Leave it unset or `false` and the bot greets people by first name (`Hi Jamie!`) instead of an @mention. Set it to `true` when mentions should come back. |
 | `REDIS_URL` | Filled in by the blueprint from the Key Value service. Leave it alone. |
 
 The same secret names are listed in `.env.example`. That file has no secrets in it. Do not fill it in and commit it.

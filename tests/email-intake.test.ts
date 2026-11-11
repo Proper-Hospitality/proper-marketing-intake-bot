@@ -625,7 +625,8 @@ describe("live Lake Tahoe forward", () => {
         botUserId: "UINTAKE",
       });
       const text = posts[0]?.text ?? "";
-      expect(text).toContain("Hi <@UJAMIE>!");
+      expect(text).toContain("Hi Jamie!");
+      expect(text).not.toMatch(/<@U[A-Z0-9]+>/);
       expect(text).toContain("Elena Ruiz forwarded");
       expect(text).toContain("Lake Tahoe membership page");
       expect(text).toContain("500+");

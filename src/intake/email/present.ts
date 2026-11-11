@@ -1,4 +1,5 @@
 import { formatQuestions, formatSummary, formatTemplateOffer } from "../brief.js";
+import { greet } from "../../slack/mentions.js";
 import { propertyPhrase } from "../catalog.js";
 import { rushExplanation } from "../rush.js";
 import type { FlowOutcome } from "../flow.js";
@@ -131,9 +132,8 @@ export function presentEmailStep(
 
 function greeting(state: ConversationState): string {
   const addressed = emailAddressee(state);
-  if (addressed.userId) return `Hi <@${addressed.userId}>!`;
-  const first = addressName(state.emailIntake?.originalRequester);
-  return first ? `Hi ${first}!` : "Hi!";
+  const name = partyName(state.emailIntake?.originalRequester) ?? addressed.who;
+  return greet({ userId: addressed.userId, name });
 }
 
 function forwardNote(email: EmailIntakeState): string {
