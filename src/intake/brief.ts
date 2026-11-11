@@ -52,6 +52,9 @@ export function buildDescription(input: {
     "Email address:",
     draft.requesterEmail ?? "",
     "",
+    ...(draft.originalRequester ? ["Original requester:", draft.originalRequester, ""] : []),
+    ...(draft.forwardedBy ? ["Forwarded by:", draft.forwardedBy, ""] : []),
+    ...(draft.emailSubject ? ["Email subject:", draft.emailSubject, ""] : []),
     "Request Name:",
     draft.requestName ?? "",
     "",
@@ -98,10 +101,12 @@ export function formatQuestions(input: {
   acknowledge?: boolean;
   /** What was already captured when only half of a combined question remains. */
   captured?: string;
+  /** Replaces the @mention when the person to ask is known by name only. */
+  who?: string;
 }): string {
   const item = input.items[0];
   if (!item) return "";
-  const who = input.userId ? `<@${input.userId}>` : "Hi";
+  const who = input.who ?? (input.userId ? `<@${input.userId}>` : "Hi");
   const lines: string[] = [];
   if (input.acknowledge) lines.push("Got it.", "");
   if (input.captured) lines.push(input.captured, "");
@@ -168,6 +173,9 @@ export function formatSummary(input: {
     `*${taskName(draft)}*`,
     `${draft.requestType} → ${draft.taskType}`,
     `Requester: ${draft.requesterName} (${draft.requesterEmail})`,
+    ...(draft.originalRequester ? [`Original requester: ${draft.originalRequester}`] : []),
+    ...(draft.forwardedBy ? [`Forwarded by: ${draft.forwardedBy}`] : []),
+    ...(draft.emailSubject ? [`Email subject: ${draft.emailSubject}`] : []),
     `Property: ${(draft.properties ?? []).join(", ")}`,
     `Requested: ${draft.requestedCompletionDate ? formatDisplayDate(draft.requestedCompletionDate) : ""}`,
     `If it's late: ${draft.consequenceOfDelay ?? ""}`,

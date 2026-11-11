@@ -1,4 +1,5 @@
 import { addTaskComment, createIntakeTask, userFacingAsanaError } from "../intake/asana.js";
+import { emailFallbackFile } from "../intake/email/attach.js";
 import { loadSlackAttachments, uploadLoadedAttachments } from "../intake/task-files.js";
 import { FORM_URL, formatDisplayDate } from "../intake/catalog.js";
 import { isReadyToConfirm } from "../intake/missing.js";
@@ -50,6 +51,12 @@ export async function submitConfirmedBrief(input: {
       fetchImpl: input.fetchImpl,
       alreadyUploaded: state.uploadedSlackFileIds,
     });
+    const emailText = emailFallbackFile(
+      state,
+      loaded.map((file) => file.slackFileId),
+      state.uploadedSlackFileIds ?? [],
+    );
+    const filesToUpload = emailText ? [...loaded, emailText] : loaded;
     const result = await createIntakeTask({
       draft: state.draft,
       templateOffer: state.templateOffer,
@@ -79,7 +86,7 @@ export async function submitConfirmedBrief(input: {
     const uploaded = await uploadLoadedAttachments({
       taskGid: result.taskGid,
       asanaToken: input.token,
-      files: loaded,
+      files: filesToUpload,
       fetchImpl: input.fetchImpl,
     });
     if (uploaded.length > 0) {

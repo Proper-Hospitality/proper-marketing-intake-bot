@@ -31,6 +31,10 @@ export interface BriefDraft {
   filesDeferred?: boolean;
   templateUnusedReason?: string;
   notes?: string;
+  /** Set when this brief was drafted from a forwarded email. */
+  originalRequester?: string;
+  forwardedBy?: string;
+  emailSubject?: string;
   filingOnBehalf?: boolean;
   /** Price, pricing, or cost is not ready. Other required answers are still required. */
   pricePending?: boolean;

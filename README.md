@@ -86,6 +86,7 @@ On the blueprint screen, Render lists these because `render.yaml` marks the secr
 | `CANVA_CLIENT_ID` | Canva developer integration. Optional until you want the bot to build designs. Leave it blank and the bot only sends template links. |
 | `CANVA_CLIENT_SECRET` | Canva developer integration. Same as above. Starts with `cnvca`. |
 | `SLACK_INTAKE_CHANNELS` | Optional. Comma-separated Slack channel IDs. In these channels every top-level message starts intake. No @mention is required. Leave it blank and only @mentions and direct messages start intake. |
+| `SLACK_EMAIL_INTAKE_CHANNELS` | Optional. Comma-separated Slack channel IDs that receive forwarded email. Leave it blank and email intake is off. See **Email intake** below. |
 | `SLACK_STATUS_CHANNELS` | Optional. Comma-separated Slack channel IDs, such as `C0AV038G751` for `#marketing-crew`. Leave it blank and the bot will not propose Asana status updates. |
 | `REDIS_URL` | Filled in by the blueprint from the Key Value service. Leave it alone. |
 
@@ -261,6 +262,56 @@ To find an ID, open the channel in Slack, click the channel name, and copy the I
 If someone @mentions the bot in that channel as well, the bot handles the message once.
 
 An intake channel does not also propose Asana status updates. Those stay on `SLACK_STATUS_CHANNELS`, and only when the message is clearly a status update, such as something going live or a new due date. You can put a channel in both lists. A design request still starts intake only. A line like "the SMP menu is live" can also offer an Asana update.
+
+## Email intake
+
+People can forward a marketing request to a Slack channel email address. The bot reads that email and starts the same brief in a thread on the message. Nothing is filed in Asana until someone clicks **Confirm** in that thread. Due-date rules are unchanged: a same-day date, a next-day date, or a Friday request due the following Monday still needs Koral or DeeDee to approve, and a Saturday or Sunday due date is still blocked.
+
+This uses Slack's **Send emails to this channel** feature. It does not add a mailbox or a new webhook. The code that starts a brief takes a normalized email, so a shared mailbox can be added later without a second intake path. That mailbox path is not built.
+
+### Create the channel email address
+
+Use a channel the bot is already in, or create one, for example `#marketing-intake-email`. Invite the bot with `/invite @Marketing Intake`.
+
+1. In Slack on a computer, open the channel.
+2. Click the channel name in the header.
+3. Open the **About** tab (or **Integrations**, depending on the Slack version).
+4. Select **Send emails to this channel**.
+5. Click **Get Email Address**.
+6. Copy the address. Anyone can forward mail to it. Slack posts each email in the channel.
+7. Copy the channel ID from the bottom of the channel details.
+8. On the Render service, set:
+
+```text
+SLACK_EMAIL_INTAKE_CHANNELS=C0123456789
+```
+
+Add more channel IDs separated by commas. This list is separate from `SLACK_INTAKE_CHANNELS`. A channel can be in both. Human messages in an email-only channel do not start intake. Only an email posted there does.
+
+Slack's help article is [Send emails to Slack](https://slack.com/help/articles/206819278-Send-emails-to-Slack). Owners can turn off the ability to create a channel email address. If **Send emails to this channel** is missing, ask a workspace owner.
+
+### Slack app settings
+
+No new bot scope is required. `files:read` is already in `manifest.json`. That scope is what lets the bot call `files.info` and download the email file. If the app was installed before `files:read` was on the manifest, open **Install App** and click **Reinstall to Workspace**.
+
+No new event subscription is required. The Email app post is a normal channel message, so these bot events from step 5 have to be on:
+
+- `message.channels` for a public channel
+- `message.groups` for a private channel
+
+`app_mention` does not fire for an email. The bot also has to be in the channel.
+
+The Email app message is posted by Slack, not by a person, so it has a bot id. The bot ignores other bots. It does not ignore an email file in a channel listed in `SLACK_EMAIL_INTAKE_CHANNELS`. It still ignores its own messages, so a reply in the thread does not start another email.
+
+### What the bot does with the email
+
+It reads the subject, the body, and the attachments. On a forward it treats the `From:` line inside the forwarded message as the original requester, and the person who sent the mail to the channel as the forwarder. Both are named on the draft and on the Asana task.
+
+If the email has several distinct asks (a lettered or numbered list), the bot lists a separate brief for each and waits. Reply **yes**, or click **Split into N requests**, to walk through them one at a time. Reply **keep it as one**, or click **Keep as one**, to file a single brief. Each brief then asks for whatever is still missing, the same way a Slack request does: property, due date, approver, and the rest. **Confirm** files that brief only. The original email file and its attachments are uploaded onto each Asana task once. A later confirm does not upload those same files again onto that task.
+
+Automatic replies, out-of-office mail, and emails with no request in them are ignored.
+
+The exact JSON Slack sends for an Email app message was not available to verify against a live workspace. The bot accepts an email file (`filetype` or `mode` of `email`, with `from`, `subject`, `plain_text`, and `headers`) on the event or from `files.info`, including attachments nested on that file or listed beside it. It also accepts a bot message whose username is Email. If a workspace's payload is different, `files.info` is the fallback for the file id.
 
 ## Status updates from Slack
 

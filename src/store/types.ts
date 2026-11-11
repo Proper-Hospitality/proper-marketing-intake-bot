@@ -1,9 +1,11 @@
 import type { CollateralOffer } from "../intake/collateral/types.js";
+import type { EmailIntakeState } from "../intake/email/types.js";
 import type { BriefDraft } from "../intake/types.js";
 import type { TemplateMatchResult } from "../intake/templates.js";
 
 export type Phase =
   | "collecting"
+  | "awaiting_email_split"
   | "template_offered"
   | "collateral_offered"
   | "collateral_accepted"
@@ -103,6 +105,8 @@ export interface ConversationState {
   dateConfirmShown?: boolean;
   /** Slack file ids already uploaded onto the Asana task. */
   uploadedSlackFileIds?: string[];
+  /** Set when this thread started from an inbound email. */
+  emailIntake?: EmailIntakeState;
   updatedAt: string;
 }
 
