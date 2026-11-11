@@ -67,5 +67,41 @@ export function rushExplanation(reason: RushReason, dueIso: string): string {
     : reason === "same_day"
       ? `${dueIso} is the same day.`
       : `${dueIso} is the next day.`;
-  return `${why} That needs approval before a task can be filed. Reply *Request approval* and I'll ask Koral Captain and DeeDee Brown. Or send a later date.`;
+  return `${why} That needs approval before a task can be filed. Press *Request approval*, or reply with that, and I'll ask DeeDee Brown and Koral Captain. Or send a later date.`;
+}
+
+/** Slack mrkdwn and a trailing punctuation mark, so "*Request approval*" still matches. */
+export function plainSlackText(text: string): string {
+  return text
+    .replace(/[*_~`]/g, "")
+    .replace(/<@[A-Z0-9]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * The requester wants the rush sent to DeeDee and Koral.
+ * Matches "Request Approval", "*Request approval*", "please request approval",
+ * "yes ask them", "ask them", and "you said you would ask them?".
+ */
+export function wantsRushApproval(text: string): boolean {
+  const plain = plainSlackText(text).replace(/[.!?]+$/g, "").trim();
+  if (!plain || plain.length > 160) return false;
+  if (/\brequest(?:ing)?\s+approval\b/i.test(plain)) return true;
+  if (/\byou said you would ask\b/i.test(plain)) return true;
+  if (/\b(?:please\s+)?(?:yes\s+)?ask\s+(?:them|koral|deedee|dee dee)\b/i.test(plain)) return true;
+  if (/\b(?:go ahead and ask|ask for approval)\b/i.test(plain)) return true;
+  return false;
+}
+
+export function rushAskedText(mentionsOn: boolean): string {
+  const names = "DeeDee Brown and Koral Captain";
+  if (mentionsOn) {
+    return `I've asked ${names} to approve. I'll file it as soon as one approves.`;
+  }
+  return `I've asked ${names} to approve. Each of them gets a direct message from me with Approve and Decline, since mentions are off. I'll file it as soon as one approves.`;
+}
+
+export function rushAlreadyAskedText(): string {
+  return "I've already asked DeeDee Brown and Koral Captain to approve. I'll file it as soon as one approves.";
 }

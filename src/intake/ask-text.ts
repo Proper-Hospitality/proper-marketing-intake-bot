@@ -99,7 +99,7 @@ function byLabel(label: string, draft: BriefDraft): string | undefined {
     return `What's the page copy? Paste the exact text you want on the ${place} page.`;
   }
   if (/audience/i.test(label)) {
-    return `Who is ${what} for, and where does it go? For example, the membership interest list, or the weekly newsletter.`;
+    return `Who is ${what} for, and where does it go? For example, ${audienceExample(draft)}.`;
   }
   if (/recommended copy/i.test(label)) {
     return `What should ${what} say? A draft or the key points is enough, so the team isn't inventing the message.`;
@@ -192,6 +192,23 @@ export function formatNeedsList(input: {
     ...similar,
     "You can answer all of these now, or we can chat back and forth. If you want to chat, let's start with when this is due and what happens if it's late.",
   ].join("\n");
+}
+
+function audienceExample(draft: BriefDraft): string {
+  const blob = `${draft.taskType ?? ""} ${draft.requestName ?? ""} ${draft.whereItGoesLive ?? ""}`;
+  if (/email|sms|newsletter/i.test(draft.taskType ?? "")) {
+    return "the membership interest list, or the weekly newsletter";
+  }
+  if (/social/i.test(draft.taskType ?? "")) {
+    return "the Instagram feed, a story, or a specific channel";
+  }
+  if (/homepage|web page|landing/i.test(blob)) {
+    return "the homepage, a landing page, or a specific spot on the page";
+  }
+  if (/ad|digital|signage|print|collateral|menu/i.test(blob)) {
+    return "the homepage, an in-room screen, or a printed piece";
+  }
+  return "where guests will see it";
 }
 
 function pageUrlQuestion(draft: BriefDraft): string {
