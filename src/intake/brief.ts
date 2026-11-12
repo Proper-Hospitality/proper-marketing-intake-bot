@@ -11,6 +11,11 @@ import type { BriefDraft } from "./types.js";
 
 export { taskName };
 
+/** The person who reviews in Slack. The routing group is not a stand-in for them. */
+export function approvalSignOff(draft: { approver?: string; requesterName?: string }): string {
+  return draft.approver?.trim() || draft.requesterName?.trim() || "Approver to be confirmed";
+}
+
 export function slackThreadUrl(channel: string, threadTs: string): string {
   const parent = threadTs.replace(".", "");
   return `https://slack.com/archives/${channel}/p${parent}`;
@@ -88,7 +93,7 @@ export function buildDescription(input: {
     draft.approver ?? "",
     "",
     "Sign-off:",
-    routingSignOff(draft.properties ?? []).signOff,
+    approvalSignOff(draft),
     ...(draft.alsoNotify?.length ? ["", `Also notify: ${draft.alsoNotify.join(", ")}`] : []),
     "",
     ...submissionLines(draft),
@@ -194,7 +199,7 @@ export function formatSummary(input: {
   } else if (signOff.bucket === "Mixed") {
     lines.push("Properties span more than one routing bucket. The board will sort that out.");
   }
-  lines.push(`Sign-off: ${signOff.signOff}`);
+  lines.push(`Sign-off: ${approvalSignOff(draft)}`);
   if (draft.requestType && draft.taskType) {
     const printed = new Set<string>();
     for (const field of followUpsFor(draft.requestType, draft.taskType)) {

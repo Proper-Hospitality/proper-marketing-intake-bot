@@ -21,7 +21,7 @@ describe("batched intake", () => {
     };
     const items = listMissing(draft, TODAY).items;
     const text = formatNeedsList({ items, draft, opening: true });
-    expect(text).toContain("Thank you for your request");
+    expect(text).toContain("Here's what's still needed before this can be filed.");
     expect(text).toContain("We need:");
     expect(text).toContain("• the link to the current page");
     expect(text).toContain("when this needs to be live");

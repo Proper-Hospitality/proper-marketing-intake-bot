@@ -71,6 +71,7 @@ import { batchHasAnswers, isTeammateChatter, isVagueAnswer, parseBatchAnswers, s
 import { emailAddressee, formatEmailPropertyConfirm } from "../intake/email/present.js";
 import { interpretPropertyConfirm, userCorrectsEmailRequester, userCorrectsEmailType } from "../intake/email/parse.js";
 import { formatOverdueReport, overdueCountsForNames, parseNameList } from "../tasks/overdue.js";
+import { parseApproverChoice } from "../review/loop.js";
 
 export interface LlmContentBlock {
   type: string;
@@ -122,6 +123,7 @@ export async function runIntakeTurn(input: {
     threadTs?: string;
     postDm: (userId: string, text: string, blocks: import("@slack/types").KnownBlock[]) => Promise<void>;
   };
+  findSlackUser?: (name: string) => Promise<{ id: string; name?: string } | undefined>;
 }): Promise<AgentReply> {
   const today = input.today ?? new Date();
   const state = input.state;
@@ -144,6 +146,28 @@ export async function runIntakeTurn(input: {
   }
 
   let preset: FlowOutcome | undefined;
+  if (state.lastAskedId === "approver" && (state.phase === "collecting" || state.phase === "awaiting_confirm")) {
+    const choice = parseApproverChoice(input.userText, input.slackUser);
+    if (choice) {
+      let slackId = choice.slackId;
+      let name = choice.name;
+      if (choice.source === "named" && !slackId && input.findSlackUser) {
+        const found = await input.findSlackUser(choice.name);
+        if (!found?.id) {
+          return remember(state, input.userText, {
+            text: `I couldn't find ${choice.name} in Slack, so I can't send them the review. Mention them, or say me.`,
+          });
+        }
+        slackId = found.id;
+        if (found.name) name = found.name;
+      }
+      state.draft.approver = name;
+      state.draft.approverSlackId = slackId;
+      state.draft.approverSource = choice.source;
+      const outcome = applyAnswers(state, {}, today);
+      return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
+    }
+  }
   if (state.lastAskedId && (state.phase === "collecting" || state.phase === "awaiting_confirm")) {
     if (isBackAnswer(input.userText) && rewindLastAnswer(state)) {
       const outcome = applyAnswers(state, {}, today);

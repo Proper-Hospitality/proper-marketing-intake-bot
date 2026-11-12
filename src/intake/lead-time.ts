@@ -2,7 +2,13 @@ import { daysUntil } from "./catalog.js";
 import { addCalendarDays, laIsoDate, weekdayIndex } from "./rush.js";
 import type { BriefDraft } from "./types.js";
 
-/** Working-day lead times Elena approved. Other task types keep the 7-day check. */
+/**
+ * Working-day lead times Elena approved. Creative, Social, and CRM & Paid stay
+ * on the 7-day check.
+ * TODO: Ask Creative, Jack, and Social what their requests depend on.
+ * Elizabeth guessed Jack and Social wait until Creative is done. Do not build
+ * that chain until those teams answer.
+ */
 const NAMED_WORKING_DAYS: Record<string, number> = {
   "New Page": 10,
   Offers: 5,

@@ -13,6 +13,9 @@ export interface BriefDraft {
   taskType?: string;
   followUps?: Record<string, string>;
   approver?: string;
+  /** Slack member id for the review DM. Not the person who did the work. */
+  approverSlackId?: string;
+  approverSource?: "requester" | "named" | "configured";
   whereItGoesLive?: string;
   finalCopy?: string;
   copyOwner?: string;

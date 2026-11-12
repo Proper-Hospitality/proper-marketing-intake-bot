@@ -80,7 +80,7 @@ function byId(item: MissingItem, draft: BriefDraft): string | undefined {
     case "consequenceOfDelay":
       return `What happens if ${what} is late? One line is enough, so the team knows what slips.`;
     case "approver":
-      return `Who signs off on ${what}? One person, so the team knows who to check with.`;
+      return `Are you the approver for ${what}, or should someone else sign off? Say me, or give their name.`;
     case "copy":
       return `What's the final copy for ${what}, or who is writing it and when it's due? Paste it here, or name the owner and the date.`;
     case "assets":
@@ -174,7 +174,7 @@ export function shortNeed(item: MissingItem, draft: BriefDraft): string {
   if (item.label === "Rate or promo codes in transactional emails") return "whether rate or promo codes in transactional emails are affected";
   if (item.label === "Offer copy, rules, and photo") return "whether the copy, rules and regulations, and a photo are attached";
   if (item.id === "consequenceOfDelay") return "what happens if it's late";
-  if (item.id === "approver") return "who signs off";
+  if (item.id === "approver") return "whether you're the approver, or the name of someone else";
   if (item.id === "properties") return "which property this is for";
   if (item.id === "requestName") return "a short name for the request";
   if (item.id === "requestType") return "what kind of help you need";
@@ -221,7 +221,7 @@ export function formatNeedsList(input: {
   }
   return [
     ...kept,
-    "Thank you for your request. We have some more information to gather before we can submit it.",
+    "Here's what's still needed before this can be filed.",
     "",
     ...heardBlock,
     ...leadBlock,

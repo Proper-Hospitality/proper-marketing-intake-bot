@@ -1,4 +1,5 @@
 import type { WebClient } from "@slack/web-api";
+import { matchSlackMember, type SlackMember } from "./users.js";
 
 export interface SlackFileRef {
   id?: string;
@@ -23,6 +24,8 @@ export interface SlackApi {
   userProfile(userId: string): Promise<{ name?: string; email?: string }>;
   /** Resolve a requester email to a Slack member. Absent when the workspace has no match. */
   userByEmail?(email: string): Promise<{ id: string; name?: string } | undefined>;
+  /** Exact Slack display name. Undefined when nobody matches, or more than one person does. */
+  findUserByName?(name: string): Promise<{ id: string; name?: string } | undefined>;
   threadReplies(channel: string, threadTs: string): Promise<SlackThreadMessage[]>;
   /** One channel message, used when conversations.replies does not include the parent file. */
   historyMessage?(channel: string, ts: string): Promise<SlackThreadMessage | null>;
@@ -93,6 +96,22 @@ export function slackFromWebClient(client: WebClient): SlackApi {
             error: error instanceof Error ? error.message : "unknown",
           }));
         }
+        return undefined;
+      }
+    },
+    async findUserByName(name) {
+      try {
+        const members: SlackMember[] = [];
+        let cursor: string | undefined;
+        for (let page = 0; page < 8; page += 1) {
+          const result = await client.users.list({ limit: 200, cursor });
+          members.push(...(result.members ?? []) as SlackMember[]);
+          cursor = result.response_metadata?.next_cursor || undefined;
+          if (!cursor) break;
+        }
+        return matchSlackMember(name, members);
+      } catch (error) {
+        console.error(JSON.stringify({ msg: "slack_name_lookup_failed", error: error instanceof Error ? error.message : "unknown" }));
         return undefined;
       }
     },
