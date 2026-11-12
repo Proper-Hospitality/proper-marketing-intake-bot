@@ -150,7 +150,7 @@ Do this in a private channel, not in a channel the whole company is watching.
 6. If a Canva template fits and Canva is connected, the bot offers to build the design and asks for the final copy and the photos in that same thread. Upload the photos or paste links. If you don't have them, it tells you to find them or check with your marketing manager and reply in that thread. It then sends a Canva edit link. A change request in the thread makes a new design and says it is a fresh version. If Canva is not connected, or the template cannot be filled, it sends the template link and the copy instead. Reply that you want the team to design it if you want the normal brief.
 7. When the brief is complete, the bot posts a summary with a green **Confirm** button and a **Make changes** button. Nothing is created in Asana before Confirm.
 8. Click **Confirm**. The reply should include an Asana link on New Intake Board. Open it and check:
-   - The task name looks like `SMP, Holiday newsletter` (property code, then the request name).
+   - The task name looks like `SMP | Email | Holiday Newsletter` (property code, task type, short name). The pattern lives in `src/intake/task-name.ts`.
    - Request Type, the matching Task Type, and Property are filled in.
    - Status in Que becomes **New Request** and Estimated time is filled in. The board's own rules do that. The bot does not type those by hand. If they stay empty, the bot says so in the thread. Tell Elena; don't try to set them in the task to "fix" it.
 9. Also send the bot a direct message. It should answer there without an @mention.

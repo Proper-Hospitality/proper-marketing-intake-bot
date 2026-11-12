@@ -82,7 +82,7 @@ describe("intake field order", () => {
     );
     expect(body.data.projects).toEqual([PROJECT_GID]);
     expect(body.data.memberships).toEqual([{ project: PROJECT_GID, section: SECTION_GID }]);
-    expect(body.data.name).toBe("SMP, Holiday newsletter");
+    expect(body.data.name).toBe("SMP | Email | Holiday Newsletter");
     const fieldGids = Object.keys(body.data.custom_fields);
     expect(fieldGids).not.toContain(REQUEST_TYPE_FIELD_GID);
     expect(fieldGids).not.toContain(PROPERTY_FIELD_GID);
@@ -94,7 +94,7 @@ describe("intake field order", () => {
   });
 
   it("names the task the way the form does and keeps the brief layout", () => {
-    expect(taskName({ properties: ["AUP", "SFP"], requestName: "Q1 group offer" })).toBe("AUP, SFP, Q1 group offer");
+    expect(taskName({ properties: ["AUP", "SFP"], requestType: "Marketing", taskType: "Offers", requestName: "Q1 group offer" })).toBe("AUP, SFP | Offers | Q1 Group Offer");
     const notes = buildDescription({
       draft: {
         requesterName: "Elena Ruiz",

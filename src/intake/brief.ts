@@ -6,12 +6,10 @@ import { formatDisplayDate, formatFullDate, FORM_URL, normalizeDate, routingSign
 import { PRICE_PENDING_LINE, type MissingItem } from "./missing.js";
 import { followUpsFor, SUPPORT_QUESTION } from "./question-tree.js";
 import type { TemplateMatchResult } from "./templates.js";
+import { taskName } from "./task-name.js";
 import type { BriefDraft } from "./types.js";
 
-export function taskName(draft: BriefDraft): string {
-  const properties = (draft.properties ?? []).join(", ");
-  return `${properties}, ${draft.requestName ?? ""}`.trim();
-}
+export { taskName };
 
 export function slackThreadUrl(channel: string, threadTs: string): string {
   const parent = threadTs.replace(".", "");
@@ -177,7 +175,8 @@ export function formatSummary(input: {
   const lines = [
     friendlyRecap(draft),
     "",
-    `*${taskName(draft)}*`,
+    `Task name: *${taskName(draft)}*`,
+    "Tell me if this name should change.",
     `${draft.requestType} → ${draft.taskType}`,
     `Requester: ${draft.requesterName} (${draft.requesterEmail})`,
     ...(draft.originalRequester ? [`Original requester: ${draft.originalRequester}`] : []),

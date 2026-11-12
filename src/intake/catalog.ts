@@ -176,19 +176,13 @@ export const ROUTING_BUCKET_OPTION_GIDS: Record<string, string> = {
 /** Shown in the confirmation. Names are not filled in until the bucket mapping is confirmed. */
 export function routingSignOff(properties: string[]): { bucket?: string; signOff: string } {
   const bucket = expectedRoutingBucket(properties);
-  if (bucket === "Proper & By Proper") {
-    return { bucket, signOff: "Proper & By Proper approver (name still to be confirmed)" };
-  }
-  if (bucket === "Collective") {
-    return { bucket, signOff: "Collective approver (name still to be confirmed)" };
-  }
-  if (bucket === "New Projects") {
-    return { bucket, signOff: "New Projects approver (name still to be confirmed)" };
+  if (bucket === "Proper & By Proper" || bucket === "Collective" || bucket === "New Projects") {
+    return { bucket, signOff: `${bucket} approver to be confirmed` };
   }
   if (bucket === "Mixed") {
-    return { bucket, signOff: "More than one group, so the approver is still to be confirmed" };
+    return { bucket, signOff: "Approver to be confirmed" };
   }
-  return { signOff: "Approver group still to be confirmed" };
+  return { signOff: "Approver to be confirmed" };
 }
 
 /**

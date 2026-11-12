@@ -140,7 +140,7 @@ describe("Elena's intake flow", () => {
     expect(ROUTING_BUCKET_OPTION_GIDS.Collective).toBe("");
     const proper = routingSignOff(["SFP"]);
     expect(proper.bucket).toBe("Proper & By Proper");
-    expect(proper.signOff).toContain("still to be confirmed");
+    expect(proper.signOff).toBe("Proper & By Proper approver to be confirmed");
     expect(proper.signOff).not.toMatch(/DeeDee|Koral/);
     const summary = formatSummary({
       draft: {
@@ -158,7 +158,9 @@ describe("Elena's intake flow", () => {
       duplicates: [],
     });
     expect(summary).toContain("Routing bucket: Collective");
-    expect(summary).toContain("Collective approver (name still to be confirmed)");
+    expect(summary).toContain("Collective approver to be confirmed");
+    expect(summary).toContain("Task name:");
+    expect(summary).not.toMatch(/Sign-off:.*DeeDee|Sign-off:.*Koral/);
     const notes = buildDescription({
       draft: {
         requesterName: "Kinsey East",
