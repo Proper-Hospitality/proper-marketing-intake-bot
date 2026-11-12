@@ -9,10 +9,14 @@ import type { CollateralAsset } from "./types.js";
  * 2026-11-05. DO NOT USE is not in this list. The OBB proposal is
  * candidate-only and is not offered.
  *
- * SFP: four Slack attachments from #sfp-sales. Three PDFs have no bytes.
- * Their Slack links are source candidates, not opened documents. The fact
- * sheet filename says 2025. Charmaine's floor plan jpg was described from
- * the image. Its year is unknown.
+ * SFP: Slack attachments from #sfp-sales. Isabel Manchester posted the
+ * current 2026 banquet menus on 2026-11-12 (breakfast/lunch/breaks and
+ * reception/dinner/bar). Those two are the menus to offer. The earlier
+ * Banquet Menu.pdf is an unread lead and is superseded. The fact sheet
+ * and M&E brochure PDFs still have no bytes. Their Slack links are source
+ * candidates, not opened documents. The fact sheet filename says 2025.
+ * Charmaine's floor plan jpg was described from the image. Its year is
+ * unknown.
  *
  * HJLA/HJWLA and DTLA: eight current files from the user-downloaded extract.
  * Elena confirmed those current files are 2026 (user_confirmation). The
@@ -389,19 +393,53 @@ export const COLLATERAL_CATALOG: CollateralAsset[] = [
   {
     id: "sfp:slack:F0CFDRBFM89",
     title: "Banquet Menu.pdf",
-    summary: "San Francisco Proper banquet menu PDF shared by sales (no folder available)",
+    summary: "Earlier San Francisco Proper banquet menu PDF. Superseded by the Nov 12, 2026 breakfast/lunch and reception/dinner menus. Not offered as the current file.",
     kind: "menu",
     appliesTo: ["SFP"],
     years: { kind: "unknown" },
     yearProvenance: "unknown",
-    provenanceNote: "No year in filename; PDF binary not text-extractable via Slack tool this turn",
+    provenanceNote: "Superseded by sfp:slack:F0CH3FQTMN1 and sfp:slack:F0CH8JVU30A. No year in the old filename. PDF was not read.",
     sourceUrl: "https://properhospitalitycorp.slack.com/archives/C0B5SM35G07/p1793916259580339",
     sourceKind: "slack",
     retrieval: "metadata_only",
     tier: "candidate",
     contentRead: false,
-    outdated: false,
+    outdated: true,
     active: false,
+  },
+  {
+    id: "sfp:slack:F0CH3FQTMN1",
+    title: "SFP_Breakfast-Lunch-Breaks_Menus_1110 (1).pdf",
+    summary: "San Francisco Proper 2026 banquet menu for breakfast, lunch, and breaks. Isabel Manchester posted it in #sfp-sales on Nov 12, 2026 as a current B&C menu.",
+    kind: "menu",
+    appliesTo: ["SFP"],
+    years: { kind: "year", year: 2026 },
+    yearProvenance: "reported_by_source",
+    provenanceNote: "Isabel Manchester, #sfp-sales, 2026-11-12 10:44 AM PT. Slack file F0CH3FQTMN1. Filename date 1110. The 2026 year was reported with the post, not read from the PDF. Not the HJLA/DTLA confirmation.",
+    sourceUrl: "https://properhospitalitycorp.slack.com/archives/C0B5SM35G07/p1794509075711399",
+    sourceKind: "slack",
+    retrieval: "metadata_only",
+    tier: "verified",
+    contentRead: false,
+    outdated: false,
+    active: true,
+  },
+  {
+    id: "sfp:slack:F0CH8JVU30A",
+    title: "SFP_Reception-Dinner-Bar_Menus_1112.pdf",
+    summary: "San Francisco Proper 2026 banquet menu for reception, dinner, and bar. Isabel Manchester posted it in #sfp-sales on Nov 12, 2026 as a current B&C menu.",
+    kind: "menu",
+    appliesTo: ["SFP"],
+    years: { kind: "year", year: 2026 },
+    yearProvenance: "reported_by_source",
+    provenanceNote: "Isabel Manchester, #sfp-sales, 2026-11-12 10:44 AM PT. Slack file F0CH8JVU30A. Filename date 1112. The 2026 year was reported with the post, not read from the PDF. Not the HJLA/DTLA confirmation.",
+    sourceUrl: "https://properhospitalitycorp.slack.com/archives/C0B5SM35G07/p1794509075711399",
+    sourceKind: "slack",
+    retrieval: "metadata_only",
+    tier: "verified",
+    contentRead: false,
+    outdated: false,
+    active: true,
   },
   {
     id: "sfp:slack:F0CEWHBAATH",

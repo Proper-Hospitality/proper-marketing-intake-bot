@@ -13,8 +13,8 @@ const TODAY = new Date("2026-11-05T12:00:00Z");
 
 describe("existing collateral catalog", () => {
   it("keeps each SMP and SFP file's own year and does not borrow the HJLA/DTLA confirmation", () => {
-    expect(COLLATERAL_CATALOG).toHaveLength(54);
-    expect(COLLATERAL_CATALOG.filter((asset) => asset.active)).toHaveLength(45);
+    expect(COLLATERAL_CATALOG).toHaveLength(56);
+    expect(COLLATERAL_CATALOG.filter((asset) => asset.active)).toHaveLength(47);
     expect(COLLATERAL_CATALOG.filter((asset) => asset.contentRead)).toHaveLength(26);
     expect(COLLATERAL_CATALOG.filter((asset) => asset.tier === "candidate")).toHaveLength(4);
     expect(COLLATERAL_CATALOG.filter((asset) => asset.tier === "pointer")).toHaveLength(2);
@@ -53,7 +53,31 @@ describe("existing collateral catalog", () => {
       tier: "candidate",
       retrieval: "metadata_only",
     });
-    expect(sfpMenu).toMatchObject({ contentRead: false, years: { kind: "unknown" }, tier: "candidate" });
+    expect(sfpMenu).toMatchObject({
+      contentRead: false,
+      years: { kind: "unknown" },
+      tier: "candidate",
+      outdated: true,
+      active: false,
+    });
+    const sfpBreakfast = COLLATERAL_CATALOG.find((asset) => asset.id === "sfp:slack:F0CH3FQTMN1");
+    const sfpReception = COLLATERAL_CATALOG.find((asset) => asset.id === "sfp:slack:F0CH8JVU30A");
+    expect(sfpBreakfast).toMatchObject({
+      appliesTo: ["SFP"],
+      kind: "menu",
+      active: true,
+      outdated: false,
+      years: { kind: "year", year: 2026 },
+      yearProvenance: "reported_by_source",
+      sourceUrl: "https://properhospitalitycorp.slack.com/archives/C0B5SM35G07/p1794509075711399",
+    });
+    expect(sfpReception).toMatchObject({
+      appliesTo: ["SFP"],
+      kind: "menu",
+      active: true,
+      years: { kind: "year", year: 2026 },
+      sourceUrl: "https://properhospitalitycorp.slack.com/archives/C0B5SM35G07/p1794509075711399",
+    });
   });
 
   it("matches property, type, and year, and leaves unknown years unknown", () => {
@@ -102,13 +126,19 @@ describe("existing collateral catalog", () => {
       text: "banquet menu",
       requestedYear: 2026,
     });
-    expect(sfpPdf.offer?.current).toEqual([]);
+    expect(sfpPdf.offer?.current.map((asset) => asset.id).sort()).toEqual([
+      "sfp:slack:F0CH3FQTMN1",
+      "sfp:slack:F0CH8JVU30A",
+    ]);
     expect(sfpPdf.offer?.unknownYear).toEqual([]);
     expect(sfpPdf.offer?.candidates.map((asset) => asset.title)).toEqual(["Banquet Menu.pdf"]);
-    expect(sfpPdf.offer?.candidates[0]?.contentRead).toBe(false);
-    expect(formatCollateralOffer(sfpPdf.offer!)).toContain("No verified file is in the catalog");
-    expect(formatCollateralOffer(sfpPdf.offer!)).toContain("The file was not downloaded or read.");
-    expect(formatCollateralOffer(sfpPdf.offer!)).not.toContain("Covers 2026");
+    expect(sfpPdf.offer?.candidates[0]?.outdated).toBe(true);
+    const sfpText = formatCollateralOffer(sfpPdf.offer!);
+    expect(sfpText).toContain("Covers 2026");
+    expect(sfpText).toContain("SFP_Breakfast-Lunch-Breaks_Menus_1110 (1).pdf");
+    expect(sfpText).toContain("SFP_Reception-Dinner-Bar_Menus_1112.pdf");
+    expect(sfpText).toContain("https://properhospitalitycorp.slack.com/archives/C0B5SM35G07/p1794509075711399");
+    expect(sfpText).toContain("The filename year is older than the year you asked for.");
 
     const urls = [
       ...(menus2027.offer?.current ?? []),
@@ -457,7 +487,7 @@ describe("existing collateral catalog", () => {
 
   it("tells where sales docs live when no catalog file matches, and does not invent one", () => {
     expect(PROPERTY_SALES_SOURCES).toHaveLength(10);
-    expect(COLLATERAL_CATALOG).toHaveLength(54);
+    expect(COLLATERAL_CATALOG).toHaveLength(56);
     const declined = {
       templateDeclinedReason: "The team should design it",
       templateDeclinedFor: "Creative|Sales Collateral",
@@ -873,11 +903,10 @@ describe("existing collateral in the intake", () => {
         today: TODAY,
       })
       : sfpTurn;
-    expect(sfpOffer.text).toContain("Banquet Menu.pdf");
-    expect(sfpOffer.text).toContain("No verified file is in the catalog");
-    expect(sfpOffer.text).toContain("The file was not downloaded or read.");
-    expect(sfpOffer.text).toContain("year not on the file");
-    expect(sfpOffer.text).not.toContain("Covers 2026");
+    expect(sfpOffer.text).toContain("SFP_Breakfast-Lunch-Breaks_Menus_1110 (1).pdf");
+    expect(sfpOffer.text).toContain("SFP_Reception-Dinner-Bar_Menus_1112.pdf");
+    expect(sfpOffer.text).toContain("https://properhospitalitycorp.slack.com/archives/C0B5SM35G07/p1794509075711399");
+    expect(sfpOffer.text).not.toContain("No verified file is in the catalog");
   });
 });
 
