@@ -78,6 +78,10 @@ export function isFigmaBuzz(value: string): boolean {
   return /figma\s*buzz|figma\.com\/buzz|\.buzz(?:$|[?#\s])/i.test(value);
 }
 
+export function isFigmaLink(value: string): boolean {
+  return isFigmaBuzz(value) || /figma\.com/i.test(value);
+}
+
 export function isDropbox(value: string): boolean {
   return /https?:\/\/(?:www\.)?dropbox\.com\//i.test(value);
 }
@@ -142,10 +146,13 @@ export function attachmentMissing(draft: BriefDraft): Array<{ id: string; label:
   const attachments = viewAttachments(draft);
   if (attachments.length === 0) {
     if (draft.filesDeferred) return [];
+    const menu = draft.taskType === "Menu Upload" || draft.taskType === "Menu (F&B, Spa)";
     return [{
       id: ATTACHMENT_PROVIDE_ID,
-      label: "Upload or link for this file",
-      hint: ATTACHMENT_PROVIDE_HINT,
+      label: menu ? "Ready-to-upload PDF" : "Upload or link for this file",
+      hint: menu
+        ? "Send a ready-to-upload PDF, one menu per file, named like Property_Outlet_MenuName_MonthYear. Upload it here, or paste a Dropbox link or a link to the PDF already on the website. The dev team can't open a Figma or Figma Buzz link."
+        : ATTACHMENT_PROVIDE_HINT,
     }];
   }
   const items: Array<{ id: string; label: string; hint?: string }> = [];
@@ -252,7 +259,7 @@ export function uploadReadyPdfPrompt(draft: BriefDraft, attachment: RequestAttac
   const lines = [
     `*${displayRef(attachment)}* needs to be posted as a menu or brochure.`,
     `Send an upload-ready PDF, one menu per file, named clearly like ${example} (${MENU_PDF_PATTERN}).`,
-    "The dev team can't use Figma Buzz files, so export a PDF first. If the file has two menus side by side, cut it down to one menu and give it a clear name.",
+    "The dev team can't open a Figma or Figma Buzz link, so export a PDF first. If the file has two menus side by side, cut it down to one menu and give it a clear name.",
     "Upload it here, or paste a Dropbox link or a link to the PDF already on the website.",
     "If you truly can't export the PDF, reply *Let marketing recommend* and I'll flag it so marketing knows.",
   ];

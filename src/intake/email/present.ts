@@ -104,6 +104,7 @@ export function presentEmailStep(
         items: outcome.missing.items,
         draft: state.draft,
         opening: (state.answerTrail ?? []).length === 0,
+        today: _today,
         duplicates: state.duplicates,
       });
       const hinted = state.emailIntake?.inferredProperties?.length === 1 && !state.draft.properties?.length
@@ -146,6 +147,7 @@ export function presentEmailStep(
       items: missing.items,
       draft: state.draft,
       opening: (state.answerTrail ?? []).length === 0,
+      today: _today,
       duplicates: state.duplicates,
     });
     return { text: joinParts(preface, notice, list) };

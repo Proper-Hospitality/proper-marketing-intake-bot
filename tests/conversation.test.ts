@@ -88,11 +88,11 @@ describe("one question at a time", () => {
       }]),
       today: new Date("2026-11-02T12:00:00Z"),
     });
-    expect(many.text).toContain("when this is due");
+    expect(many.text).toContain("when this needs to be live");
     expect(many.text).not.toContain("*Final approver*");
     expect(listMissing(state.draft, new Date("2026-11-02T12:00:00Z")).items.map((item) => item.id)).toEqual([
       "followup:Audience / Distribution Plan",
-      "timing",
+      "requestedCompletionDate",
       "attachmentKind:0",
     ]);
 

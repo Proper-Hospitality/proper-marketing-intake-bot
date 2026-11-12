@@ -24,7 +24,7 @@ describe("batched intake", () => {
     expect(text).toContain("Thank you for your request");
     expect(text).toContain("We need:");
     expect(text).toContain("• the link to the current page");
-    expect(text).toContain("when this is due, and what happens if it's late");
+    expect(text).toContain("when this needs to be live");
     expect(text).toContain("answer all of these now");
     expect(text).not.toContain("*URL*");
     expect(shortNeed(items.find((item) => item.label === "URL") ?? items[0], draft)).toBe("the link to the current page");

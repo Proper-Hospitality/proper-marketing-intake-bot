@@ -293,6 +293,7 @@ function menuUploadDraft(): BriefDraft {
     approver: "DeeDee Brown",
     whereItGoesLive: "https://www.properhotel.com/santa-monica/dining",
     followUps: { Details: "Replace the dinner menu." },
+    designNeeded: false,
   };
 }
 

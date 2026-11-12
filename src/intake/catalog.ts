@@ -161,8 +161,29 @@ export const PROPERTIES: Record<string, string> = {
   "New Projects/Development": "1219974242435102",
 };
 
-/** Informational only. The board automations set Routing Bucket. This bot does not. */
+/**
+ * Routing Bucket field. Option ids are placeholders until the enum gids are confirmed.
+ * An empty id is not sent to Asana.
+ */
 export const ROUTING_BUCKET_FIELD_GID = "1217171490189079";
+
+export const ROUTING_BUCKET_OPTION_GIDS: Record<string, string> = {
+  "Proper & By Proper": "",
+  Collective: "",
+  "New Projects": "",
+};
+
+/** Shown in the confirmation. Names are not filled in until the bucket mapping is confirmed. */
+export function routingSignOff(properties: string[]): { bucket?: string; signOff: string } {
+  const bucket = expectedRoutingBucket(properties);
+  if (bucket === "Proper & By Proper" || bucket === "Collective" || bucket === "New Projects") {
+    return { bucket, signOff: `${bucket} approver to be confirmed` };
+  }
+  if (bucket === "Mixed") {
+    return { bucket, signOff: "Approver to be confirmed" };
+  }
+  return { signOff: "Approver to be confirmed" };
+}
 
 /**
  * Who to name when someone doesn't have an answer.

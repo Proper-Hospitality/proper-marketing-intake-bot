@@ -1,5 +1,6 @@
 import { attachmentMissing, requestHasFiles } from "./attachments.js";
 import { daysUntil, propertyNames, taskTypeNames } from "./catalog.js";
+import { leadTimeFor, leadTimeIsTight, leadTimeSentence } from "./lead-time.js";
 import { followUpsFor, SUPPORT_QUESTION } from "./question-tree.js";
 import { REQUEST_TYPES, type BriefDraft, type FollowUp, type RequestType } from "./types.js";
 
@@ -120,15 +121,17 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
   const followUps = followUpsFor(draft.requestType, draft.taskType);
   for (const field of followUps) {
     if (!field.required) continue;
+    if (skipExactCopy(draft, field)) continue;
     if (followUpAnswerCounts(field, draft.followUps?.[field.label], Boolean(draft.pricePending))) continue;
     items.push(missingFollowUp(field, Boolean(draft.pricePending)));
   }
 
+  const lead = leadTimeFor(draft);
   if (!draft.requestedCompletionDate) {
     items.push({
       id: "requestedCompletionDate",
-      label: "Requested completion date",
-      hint: "A real date, not ASAP. Ideally at least 7 days out.",
+      label: "When this needs to be live",
+      hint: `${lead.phrase}. A real date, not ASAP.`,
     });
   } else {
     const days = daysUntil(draft.requestedCompletionDate, today);
@@ -136,20 +139,21 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
       warnings.push(
         `The due date ${draft.requestedCompletionDate} is already past. Say if you still want this filed.`,
       );
-    } else if (days < 7) {
-      warnings.push(
-        `${draft.requestedCompletionDate} is inside the 7-day lead time (${days} day${days === 1 ? "" : "s"} out). Consequence of delay is what gets it prioritized.`,
-      );
+    } else if (leadTimeIsTight(draft, today)) {
+      const sentence = leadTimeSentence(draft, today);
+      if (sentence) warnings.push(sentence);
     }
   }
 
-  if (!isFilled(draft.consequenceOfDelay)) {
+  if (leadTimeIsTight(draft, today) && !isFilled(draft.consequenceOfDelay)) {
     items.push({
       id: "consequenceOfDelay",
-      label: "Consequence of delay",
-      hint: "One line on what is lost if this is late.",
+      label: "What happens if it's late",
+      hint: "One line on what is lost if this misses the lead time.",
     });
   }
+
+  for (const extra of webAndOfferQuestions(draft)) items.push(extra);
 
   if (!copySatisfied(draft, followUps)) {
     items.push({
@@ -181,7 +185,106 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
     });
   }
 
-  return { items: presentQuestions(draft, items, followUps), warnings };
+  const visible = presentQuestions(draft, items, followUps);
+  return { items: draft.requestType === "Web" ? orderWebQuestions(visible) : visible, warnings };
+}
+
+const WEB_BRIEF_TYPES = new Set(["New Page", "Page Edit", "Happenings", "Menu Upload"]);
+
+const OFFER_FIELDS = [
+  "When the old offer comes down",
+  "What replaces it in ads or evergreen campaigns",
+  "Rate or promo codes in transactional emails",
+  "Offer copy, rules, and photo",
+] as const;
+
+export function offerInvolved(draft: BriefDraft): boolean {
+  if (draft.taskType === "Offers") return true;
+  const blob = [draft.requestName, draft.notes, draft.taskType].filter(Boolean).join("\n");
+  return /\boffer swap\b|\bold offer\b|\breplace(?:s|d)? (?:the |an )?offer\b|\bpromo code\b|\brate code\b/i.test(blob);
+}
+
+function webAndOfferQuestions(draft: BriefDraft): MissingItem[] {
+  const items: MissingItem[] = [];
+  if (draft.requestType === "Web" && draft.taskType && WEB_BRIEF_TYPES.has(draft.taskType)) {
+    if (draft.copyReady === undefined && !webCopySatisfied(draft)) {
+      items.push({
+        id: "copyReady",
+        label: "Is the copy ready?",
+        hint: "If yes, paste it. If not, say who is writing it and by when.",
+      });
+    } else if (draft.copyReady === false && (!isFilled(draft.copyOwner) || !isFilled(draft.copyDueDate))) {
+      items.push({
+        id: "copyPlan",
+        label: "Who is writing the copy, and by when",
+        hint: "Name the person and the date.",
+      });
+    }
+    if (draft.designNeeded === undefined && !copyOnlyChange(draft)) {
+      items.push({
+        id: "designNeeded",
+        label: "Is design needed?",
+        hint: "Yes if a designer should make it. No if the web team can use the existing layout.",
+      });
+    }
+    if ((draft.taskType === "New Page" || draft.taskType === "Page Edit") && !isFilled(draft.followUps?.["What it replaces and where it sits"])) {
+      items.push({
+        id: "followup:What it replaces and where it sits",
+        label: "What it replaces and where it sits",
+        hint: "What comes down, and where this sits on the page. Say none if it is brand new.",
+      });
+    }
+  }
+  if (offerInvolved(draft)) {
+    for (const label of OFFER_FIELDS) {
+      if (isFilled(draft.followUps?.[label])) continue;
+      items.push({ id: `followup:${label}`, label, hint: "A short answer is enough. No is a real answer." });
+    }
+  }
+  return items;
+}
+
+function skipExactCopy(draft: BriefDraft, field: FollowUp): boolean {
+  if (draft.requestType !== "Web" || !draft.taskType || !WEB_BRIEF_TYPES.has(draft.taskType)) return false;
+  if (!field.satisfies?.includes("copy")) return false;
+  return draft.copyReady !== true;
+}
+
+function webCopySatisfied(draft: BriefDraft): boolean {
+  if (draft.copyReady === true) return false;
+  return isFilled(draft.finalCopy) || isFilled(draft.followUps?.["Page Copy (Exact)"])
+    || isFilled(draft.followUps?.["Page Change Details (exact copy provided, if required)"])
+    || isFilled(draft.followUps?.["Event Description (Exact)"])
+    || isFilled(draft.followUps?.["Details"]);
+}
+
+function copyOnlyChange(draft: BriefDraft): boolean {
+  if (draft.taskType !== "Page Edit") return false;
+  const blob = `${draft.requestName ?? ""} ${draft.notes ?? ""} ${draft.followUps?.["Page Change Details (exact copy provided, if required)"] ?? ""}`;
+  return /\b(just|only) (the )?(copy|text|wording)\b|\bcopy only\b|\bchange the (copy|text|wording)\b/i.test(blob)
+    && !/\b(design|layout|banner|figma)\b/i.test(blob);
+}
+
+function orderWebQuestions(items: MissingItem[]): MissingItem[] {
+  const rank = (item: MissingItem): number => {
+    if (item.id === "requesterName") return 0;
+    if (item.id === "requesterEmail") return 1;
+    if (item.id === "taskType" || item.id === "requestType") return 2;
+    if (item.id === "properties") return 3;
+    if (item.id === "requestName") return 4;
+    if (item.id === "copyReady" || item.id === "copyPlan" || item.id === "copy") return 5;
+    if (item.id === "designNeeded") return 6;
+    if (item.id === "requestedCompletionDate" || item.id === "timing") return 7;
+    if (item.id === "consequenceOfDelay") return 8;
+    if (item.id.endsWith(":URL")) return 9;
+    if (/page change|headline|page copy|event /i.test(item.label)) return 10;
+    if (item.label === "What it replaces and where it sits") return 11;
+    if (OFFER_FIELDS.includes(item.label as typeof OFFER_FIELDS[number])) return 12;
+    if (item.id === "menuPdf" || item.id === "assets" || item.id.startsWith("attachment")) return 13;
+    if (item.id === "approver") return 14;
+    return 10;
+  };
+  return [...items].sort((a, b) => rank(a) - rank(b));
 }
 
 function presentQuestions(draft: BriefDraft, items: MissingItem[], followUps: FollowUp[]): MissingItem[] {

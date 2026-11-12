@@ -7,6 +7,9 @@ import {
   REQUEST_TYPE_FIELD_GID,
   REQUESTER_EMAIL_GID,
   REQUESTER_NAME_GID,
+  expectedRoutingBucket,
+  ROUTING_BUCKET_FIELD_GID,
+  ROUTING_BUCKET_OPTION_GIDS,
   SECTION_GID,
   TASK_TYPE_FIELDS,
   WORKSPACE_GID,
@@ -211,6 +214,13 @@ export async function createIntakeTask(input: {
     applied = index + 1;
     await input.onProgress?.({ taskGid, fieldsApplied: applied });
   }
+  const bucket = expectedRoutingBucket(input.draft.properties ?? []);
+  const bucketOption = bucket ? ROUTING_BUCKET_OPTION_GIDS[bucket] : "";
+  if (bucketOption) {
+    await asanaRequest(fetchImpl, input.token, "PUT", `/tasks/${taskGid}`, {
+      data: { custom_fields: { [ROUTING_BUCKET_FIELD_GID]: bucketOption } },
+    });
+  }
   const attempts = input.readAttempts ?? 3;
   const sleep = input.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
   let task = await readTask(fetchImpl, input.token, taskGid);
@@ -294,6 +304,19 @@ export async function uploadTaskAttachment(input: {
   });
   const text = await response.text();
   if (!response.ok) throw new AsanaRequestError("POST", path, response.status, text);
+}
+
+export async function addTaskFollowers(input: {
+  token: string;
+  taskGid: string;
+  followers: string[];
+  fetchImpl?: typeof fetch;
+}): Promise<void> {
+  if (input.followers.length === 0) return;
+  const fetchImpl = input.fetchImpl ?? fetch;
+  await asanaRequest(fetchImpl, input.token, "POST", `/tasks/${input.taskGid}/addFollowers`, {
+    data: { followers: input.followers },
+  });
 }
 
 export async function addTaskComment(input: {

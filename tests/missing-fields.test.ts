@@ -13,9 +13,9 @@ describe("missing fields", () => {
     expect(labels).toContain("Request name");
     expect(labels).toContain("Audience / Distribution Plan");
     expect(labels).toContain("Recommended Copy / Details");
-    expect(labels).toContain("When do you need this, and what happens if it's late?");
+    expect(labels).toContain("When this needs to be live");
     expect(labels).not.toContain("Requested completion date");
-    expect(labels).not.toContain("Consequence of delay");
+    expect(labels).not.toContain("What happens if it's late");
     expect(labels).toContain("Photo Link");
     expect(labels).not.toContain("Assets");
     expect(labels).toContain("Final approver");
