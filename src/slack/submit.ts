@@ -1,10 +1,11 @@
 import { addTaskComment, addTaskFollowers, createIntakeTask, userFacingAsanaError } from "../intake/asana.js";
 import { searchWorkspaceUsers } from "../tasks/complete.js";
+import { taskName } from "../intake/task-name.js";
+import { saveReviewParty } from "../review/store.js";
 import { emailFallbackFile } from "../intake/email/attach.js";
 import { loadSlackAttachments, uploadLoadedAttachments } from "../intake/task-files.js";
 import { FORM_URL, formatDisplayDate } from "../intake/catalog.js";
 import { isReadyToConfirm } from "../intake/missing.js";
-import { taskName } from "../intake/brief.js";
 import type { ConversationState } from "../store/types.js";
 import type { Store } from "../store/types.js";
 
@@ -112,6 +113,16 @@ export async function submitConfirmedBrief(input: {
     state.taskGid = result.taskGid;
     state.taskUrl = result.permalinkUrl;
     state.fieldsApplied = 3;
+    if (state.draft.approver && state.draft.approverSlackId) {
+      await saveReviewParty(input.store, {
+        taskGid: result.taskGid,
+        taskName: taskName(state.draft),
+        taskUrl: result.permalinkUrl,
+        property: state.draft.properties?.[0] ?? "",
+        approverName: state.draft.approver,
+        approverSlackId: state.draft.approverSlackId,
+      });
+    }
     await addNamedFollowers({
       token: input.token,
       taskGid: result.taskGid,

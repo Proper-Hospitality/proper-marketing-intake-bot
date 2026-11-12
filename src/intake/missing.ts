@@ -1,6 +1,7 @@
 import { attachmentMissing, requestHasFiles } from "./attachments.js";
 import { daysUntil, propertyNames, taskTypeNames } from "./catalog.js";
 import { leadTimeFor, leadTimeIsTight, leadTimeSentence } from "./lead-time.js";
+import { configuredReviewer } from "../review/config.js";
 import { followUpsFor, SUPPORT_QUESTION } from "./question-tree.js";
 import { REQUEST_TYPES, type BriefDraft, type FollowUp, type RequestType } from "./types.js";
 
@@ -72,6 +73,7 @@ export function isFilled(value: string | undefined): boolean {
 }
 
 export function listMissing(draft: BriefDraft, today = new Date()): MissingReport {
+  applyConfiguredApprover(draft);
   const items: MissingItem[] = [];
   const warnings: string[] = [];
 
@@ -174,7 +176,11 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
   }
 
   if (!isFilled(draft.approver)) {
-    items.push({ id: "approver", label: "Final approver", hint: "One named person who signs off." });
+    items.push({
+      id: "approver",
+      label: "Final approver",
+      hint: "Say me if you'll approve it, or give the name of someone else.",
+    });
   }
 
   if (!destinationSatisfied(draft, followUps)) {
@@ -187,6 +193,16 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
 
   const visible = presentQuestions(draft, items, followUps);
   return { items: draft.requestType === "Web" ? orderWebQuestions(visible) : visible, warnings };
+}
+
+function applyConfiguredApprover(draft: BriefDraft): void {
+  if (draft.approverSource === "named" || draft.approverSource === "requester") return;
+  if (draft.approver && draft.approverSource !== "configured") return;
+  const reviewer = configuredReviewer(draft.taskType);
+  if (!reviewer) return;
+  draft.approver = reviewer.name;
+  draft.approverSlackId = reviewer.slackId;
+  draft.approverSource = "configured";
 }
 
 const WEB_BRIEF_TYPES = new Set(["New Page", "Page Edit", "Happenings", "Menu Upload"]);

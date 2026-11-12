@@ -10,6 +10,7 @@ import type { SlackApi } from "./api.js";
 import { messageClaimKey, messageOnceKey } from "./incoming.js";
 import { collectThreadFiles, mergeThreadFiles } from "./thread-files.js";
 import { conversationKey, conversationKeyFromAction, emptyConversation, type Store } from "../store/types.js";
+import { handleReviewMessage } from "../review/turn.js";
 
 export interface IncomingMessage {
   channel: string;
@@ -47,6 +48,21 @@ export async function handleIncomingMessage(deps: {
   const fresh = await deps.store.claimEvent(messageClaim, 600);
   if (!fresh) return;
   try {
+    if (message.isDm && deps.asanaToken) {
+      const reviewed = await handleReviewMessage({
+        store: deps.store,
+        userId: message.userId,
+        text: message.text,
+        asanaToken: deps.asanaToken,
+        fetchImpl: deps.fetchImpl,
+        today: deps.today,
+        postDm: async (userId, text) => {
+          if (!deps.slack.postDm) return;
+          await deps.slack.postDm({ userId, text });
+        },
+      });
+      if (reviewed) return;
+    }
     await handleFreshMessage(deps, message);
   } catch (error) {
     await deps.store.releaseEvent(messageClaim);

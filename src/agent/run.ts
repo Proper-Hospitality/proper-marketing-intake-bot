@@ -71,6 +71,7 @@ import { batchHasAnswers, isTeammateChatter, isVagueAnswer, parseBatchAnswers, s
 import { emailAddressee, formatEmailPropertyConfirm } from "../intake/email/present.js";
 import { interpretPropertyConfirm, userCorrectsEmailRequester, userCorrectsEmailType } from "../intake/email/parse.js";
 import { formatOverdueReport, overdueCountsForNames, parseNameList } from "../tasks/overdue.js";
+import { parseApproverChoice } from "../review/loop.js";
 
 export interface LlmContentBlock {
   type: string;
@@ -144,6 +145,16 @@ export async function runIntakeTurn(input: {
   }
 
   let preset: FlowOutcome | undefined;
+  if (state.lastAskedId === "approver" && (state.phase === "collecting" || state.phase === "awaiting_confirm")) {
+    const choice = parseApproverChoice(input.userText, input.slackUser);
+    if (choice) {
+      state.draft.approver = choice.name;
+      state.draft.approverSlackId = choice.slackId;
+      state.draft.approverSource = choice.source;
+      const outcome = applyAnswers(state, {}, today);
+      return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
+    }
+  }
   if (state.lastAskedId && (state.phase === "collecting" || state.phase === "awaiting_confirm")) {
     if (isBackAnswer(input.userText) && rewindLastAnswer(state)) {
       const outcome = applyAnswers(state, {}, today);

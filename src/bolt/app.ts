@@ -72,6 +72,15 @@ export async function start(): Promise<void> {
   }
   const { bolt } = createBoltApp();
   await bolt.start({ port, host: "0.0.0.0" });
+  const { startReviewPoll } = await import("../review/poll.js");
+  const slack = slackFromWebClient(bolt.client);
+  startReviewPoll({
+    token: process.env.ASANA_ACCESS_TOKEN,
+    store: getStore(),
+    postDm: async (userId, text, blocks) => {
+      await slack.postDm?.({ userId, text, blocks });
+    },
+  });
   console.log(JSON.stringify({ msg: "listening", port, host: "0.0.0.0", slackPath: SLACK_EVENTS_PATH, healthPath: HEALTH_PATH }));
 }
 
@@ -225,6 +234,26 @@ function registerListeners(bolt: App): void {
       }),
     });
   });
+
+  for (const actionId of ["review_approve", "review_changes"] as const) {
+    bolt.action(actionId, async ({ ack, body, client }) => {
+      await ack();
+      const click = readRushClick(body);
+      if (!click) return;
+      const { handleReviewButton } = await import("../review/turn.js");
+      const slack = slackFromWebClient(client);
+      await handleReviewButton({
+        store: getStore(),
+        userId: click.userId,
+        taskGid: click.approvalId,
+        choice: actionId === "review_approve" ? "approve" : "changes",
+        asanaToken: process.env.ASANA_ACCESS_TOKEN,
+        postDm: async (userId, text) => {
+          await slack.postDm?.({ userId, text });
+        },
+      });
+    });
+  }
 
   for (const actionId of ["rush_approve", "rush_decline"] as const) {
     bolt.action(actionId, async ({ ack, body, client, context }) => {
