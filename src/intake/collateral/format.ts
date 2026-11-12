@@ -10,7 +10,7 @@ function verifiedNote(asset: CollateralAsset, note: string): string {
       : " Matched from the title and type. The design body was not copied into this catalog.";
   const provenance = asset.yearProvenance === "elena_current_export_nov_10_2026"
     ? " Current per Elena (exported Nov 10, 2026, relayed via her assistant). No year is printed on the file."
-    : asset.yearProvenance === "reported_by_source"
+    : asset.id === "aps:slack:F0BFYMJEK5K"
       ? " Jul 2026 as reported by the source, not printed on the menu."
       : "";
   return `• ${asset.title} (${yearLabel(asset.years)}). ${note}${asset.summary}${provenance}${unread}\n  ${asset.sourceUrl}`;
