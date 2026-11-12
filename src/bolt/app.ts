@@ -203,6 +203,29 @@ function registerListeners(bolt: App): void {
     });
   });
 
+  bolt.action("rush_request", async ({ ack, body, client, context }) => {
+    await ack();
+    const action = readThreadAction(body);
+    const userId = readRushClick(body)?.userId;
+    if (!action || !userId) return;
+    await withDelivery({
+      body,
+      store: getStore(),
+      context: deliveryContext(context),
+      work: () => safeHandle(client, action.channel, action.threadTs, async () => {
+        const { handleIncomingMessage } = await import("../slack/handle.js");
+        await handleIncomingMessage(runtime(client), {
+          channel: action.channel,
+          userId,
+          text: "Request approval",
+          ts: action.messageTs,
+          threadTs: action.threadTs,
+          isDm: false,
+        });
+      }),
+    });
+  });
+
   for (const actionId of ["rush_approve", "rush_decline"] as const) {
     bolt.action(actionId, async ({ ack, body, client, context }) => {
       await ack();

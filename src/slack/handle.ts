@@ -125,6 +125,15 @@ async function handleFreshMessage(deps: {
     attachments,
     readAttachment: deps.readAttachment,
     slackToken: deps.slackToken,
+    rush: {
+      store: deps.store,
+      channel: message.channel,
+      threadTs: threadAnchor,
+      postDm: async (userId, text, blocks) => {
+        if (!deps.slack.postDm) throw new Error("This Slack client cannot send a direct message.");
+        await deps.slack.postDm({ userId, text, blocks });
+      },
+    },
   });
   await deps.store.saveConversation(state);
   if (reply.silent) return;
@@ -136,7 +145,7 @@ async function handleFreshMessage(deps: {
       ? reply.confirm.kind === "complete"
         ? confirmTaskCompletionBlocks(reply.text, reply.confirm.version)
         : confirmBlocks(reply.text, reply.confirm.version)
-      : messageBlocks(reply.text),
+      : reply.blocks ?? messageBlocks(reply.text),
   });
 }
 
@@ -199,6 +208,16 @@ export async function handleConfirmAction(deps: {
         threadTs: action.threadTs,
         text: "That confirm button is out of date. Ask for a fresh summary and use the new Confirm button.",
         blocks: messageBlocks("That confirm button is out of date. Ask for a fresh summary and use the new Confirm button."),
+      });
+      return;
+    }
+    if (state.draft.rushBlock && state.draft.rushApprovedFor !== state.draft.requestedCompletionDate) {
+      const text = "That date needs approval from DeeDee Brown or Koral Captain before I can file it. Nothing was created.";
+      await deps.slack.postMessage({
+        channel: action.channel,
+        threadTs: action.threadTs,
+        text,
+        blocks: messageBlocks(text),
       });
       return;
     }

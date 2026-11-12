@@ -1,4 +1,5 @@
 import { formatNeedsList } from "../ask-text.js";
+import { listMissing } from "../missing.js";
 import { formatQuestions, formatSummary, formatTemplateOffer } from "../brief.js";
 import { greet } from "../../slack/mentions.js";
 import { propertyPhrase } from "../catalog.js";
@@ -134,7 +135,20 @@ export function presentEmailStep(
     };
   }
   if (outcome.kind === "rush_required") {
-    return { text: joinParts(preface, rushExplanation(outcome.reason, outcome.date)) };
+    const notice = rushExplanation(outcome.reason, outcome.date);
+    const missing = listMissing(state.draft, _today);
+    if (state.intakePace === "chat" || missing.items.length <= 1) {
+      return { text: joinParts(preface, notice) };
+    }
+    state.lastAskedId = "batch";
+    state.lastAskedLabel = "A few details";
+    const list = formatNeedsList({
+      items: missing.items,
+      draft: state.draft,
+      opening: (state.answerTrail ?? []).length === 0,
+      duplicates: state.duplicates,
+    });
+    return { text: joinParts(preface, notice, list) };
   }
   if (outcome.kind === "need_property") {
     return { text: joinParts(preface, "Which property is this for? A code like SMP or LTP is perfect. I check for a template before asking for the rest.") };

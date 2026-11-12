@@ -17,6 +17,8 @@ export interface SlackThreadMessage {
 
 export interface SlackApi {
   postMessage(args: { channel: string; threadTs?: string; text: string; blocks?: unknown[] }): Promise<{ ts?: string }>;
+  /** Direct message, used to send rush approval buttons to DeeDee and Koral. */
+  postDm?(args: { userId: string; text: string; blocks?: unknown[] }): Promise<void>;
   updateMessage(args: { channel: string; ts: string; text: string; blocks?: unknown[] }): Promise<void>;
   userProfile(userId: string): Promise<{ name?: string; email?: string }>;
   /** Resolve a requester email to a Slack member. Absent when the workspace has no match. */
@@ -38,6 +40,18 @@ export function slackFromWebClient(client: WebClient): SlackApi {
         blocks: args.blocks as never,
       });
       return { ts: result.ts };
+    },
+    async postDm(args) {
+      const opened = await client.conversations.open({ users: args.userId });
+      const channel = opened.channel && typeof opened.channel === "object" && "id" in opened.channel
+        ? opened.channel.id
+        : undefined;
+      if (!channel) throw new Error(`Could not open a direct message with ${args.userId}.`);
+      await client.chat.postMessage({
+        channel,
+        text: args.text.slice(0, 4000),
+        blocks: args.blocks as never,
+      });
     },
     async updateMessage(args) {
       await client.chat.update({

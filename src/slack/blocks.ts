@@ -1,5 +1,24 @@
 import type { KnownBlock } from "@slack/types";
 
+export function rushRequestBlocks(text: string): KnownBlock[] {
+  return [
+    ...messageBlocks(text),
+    {
+      type: "actions",
+      block_id: "rush_request_approval",
+      elements: [
+        {
+          type: "button",
+          style: "primary",
+          text: { type: "plain_text", text: "Request approval", emoji: true },
+          action_id: "rush_request",
+          value: "request",
+        },
+      ],
+    },
+  ];
+}
+
 export function messageBlocks(text: string): KnownBlock[] {
   return chunk(text).map((part) => ({
     type: "section",

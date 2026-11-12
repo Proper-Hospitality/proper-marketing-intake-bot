@@ -9,7 +9,7 @@ import {
 import { addTaskComment, searchExistingTasks, userFacingAsanaError } from "../intake/asana.js";
 import { absorbTurnFacts, contradictsCaptured, noteResolvedDate, type TurnAttachment } from "../intake/capture.js";
 import { replyToFiledThread } from "../intake/filed-reply.js";
-import { formatSpokenDate, resolveDateInput } from "../intake/relative-date.js";
+import { extractDueDate, formatSpokenDate, messageSuppliesDate, resolveDateInput } from "../intake/relative-date.js";
 import {
   formatPropertyQuestion,
   formatQuestions,
@@ -30,7 +30,16 @@ import {
   wantsMarketingRecommend,
 } from "../intake/recommend.js";
 import { DELIVERABLE_QUESTION, parseDeliverableChoice } from "../intake/routing.js";
-import { rushAllowsApproval, rushExplanation } from "../intake/rush.js";
+import { mentionsEnabled } from "../slack/mentions.js";
+import { rushRequestBlocks } from "../slack/blocks.js";
+import { loadRushApproval, startRushApproval } from "../intake/rush-approval.js";
+import {
+  rushAllowsApproval,
+  rushAlreadyAskedText,
+  rushAskedText,
+  rushExplanation,
+  wantsRushApproval,
+} from "../intake/rush.js";
 import { COLLATERAL_YEAR_QUESTION, formatCollateralOffer } from "../intake/collateral/format.js";
 import { yearInText } from "../intake/collateral/match.js";
 import {
@@ -83,6 +92,7 @@ export interface AgentReply {
   text: string;
   /** Teammate chatter. Nothing is posted. */
   silent?: boolean;
+  blocks?: import("@slack/types").KnownBlock[];
   confirm?: { version: number; kind?: "intake" | "complete" };
 }
 
@@ -232,27 +242,40 @@ export async function runIntakeTurn(input: {
       return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
     }
   }
-  if (/^request approval[.!]?$/i.test(input.userText.trim()) && state.draft.rushBlock && state.draft.requestedCompletionDate && input.rush) {
+  if (wantsRushApproval(input.userText) && state.draft.rushBlock && state.draft.requestedCompletionDate) {
     if (!rushAllowsApproval(state.draft.rushBlock)) {
       return remember(state, input.userText, {
         text: rushExplanation(state.draft.rushBlock, state.draft.requestedCompletionDate),
       });
     }
-    const { startRushApproval } = await import("../intake/rush-approval.js");
-    await startRushApproval({
-      state,
-      store: input.rush.store,
-      date: state.draft.requestedCompletionDate,
-      reason: state.draft.rushBlock,
-      summary: `${state.draft.requesterName ?? "Someone"} needs ${state.draft.requestName ?? "a request"} for ${(state.draft.properties ?? []).join(", ")} by ${state.draft.requestedCompletionDate}.`,
-      channel: input.rush.channel,
-      threadTs: input.rush.threadTs,
-      postDm: input.rush.postDm,
-    });
+    if (!input.rush) {
+      return remember(state, input.userText, {
+        text: "I still need to ask DeeDee Brown and Koral Captain, and this turn has no way to message them. Nothing was filed.",
+      });
+    }
+    const pendingId = state.draft.rushApprovalId;
+    const pending = pendingId ? await loadRushApproval(input.rush.store, pendingId) : null;
+    let notice = rushAlreadyAskedText();
+    if (pending?.status !== "pending") {
+      await startRushApproval({
+        state,
+        store: input.rush.store,
+        date: state.draft.requestedCompletionDate,
+        reason: state.draft.rushBlock,
+        summary: `${state.draft.requesterName ?? "Someone"} needs ${state.draft.requestName ?? "a request"} for ${(state.draft.properties ?? []).join(", ") || "a property"} by ${state.draft.requestedCompletionDate}.`,
+        channel: input.rush.channel,
+        threadTs: input.rush.threadTs,
+        postDm: input.rush.postDm,
+      });
+      notice = rushAskedText(mentionsEnabled());
+    }
+    state.rushExplainedFor = state.draft.requestedCompletionDate;
     await input.rush.store.saveConversation(state);
-    return remember(state, input.userText, {
-      text: "I asked Koral Captain and DeeDee Brown to approve this date. Nothing is filed until one of them approves.",
-    });
+    const outcome = applyAnswers(state, {}, today);
+    const reply = renderReply(state, input.slackUser, "", outcome, today);
+    reply.text = `${notice}\n\n${reply.text}`;
+    reply.blocks = undefined;
+    return remember(state, input.userText, reply);
   }
   if (state.phase === "template_offered" && looksLikeAccept(input.userText)) {
     preset = acceptTemplate(state);
@@ -503,6 +526,13 @@ async function executeTool(
         },
       };
     }
+    const said = deps.userText ?? "";
+    if (state.draft.requestedCompletionDate && !messageSuppliesDate(said)) {
+      delete payload.requestedCompletionDate;
+    } else if (messageSuppliesDate(said)) {
+      const fromUser = extractDueDate(said, deps.today, { expectingDate: true });
+      if (fromUser) payload.requestedCompletionDate = fromUser.iso;
+    }
     const rawDate = asString(payload.requestedCompletionDate);
     let outcome = applyAnswers(state, toRecord(payload), deps.today);
     if (state.emailIntake && state.draft.properties && state.draft.properties.length > 0) {
@@ -641,7 +671,23 @@ function renderReply(
     return { text: DELIVERABLE_QUESTION };
   }
   if (outcome?.kind === "rush_required") {
-    return { text: rushExplanation(outcome.reason, outcome.date) };
+    const notice = rushExplanation(outcome.reason, outcome.date);
+    const missing = listMissing(state.draft, today);
+    const batched = state.intakePace !== "chat" && missing.items.length > 1;
+    if (batched) {
+      state.lastAskedId = "batch";
+      state.lastAskedLabel = "A few details";
+    }
+    const list = batched
+      ? formatNeedsList({
+        items: missing.items,
+        draft: state.draft,
+        opening: (state.answerTrail ?? []).length === 0,
+        duplicates: state.duplicates,
+      })
+      : undefined;
+    const text = list ? `${notice}\n\n${list}` : notice;
+    return { text, blocks: rushAllowsApproval(outcome.reason) ? rushRequestBlocks(text) : undefined };
   }
   if (outcome?.kind === "ask_collateral_year") {
     state.answerTrail = [...(state.answerTrail ?? []), state.lastAskedId].filter((id): id is string => Boolean(id)).slice(-30);

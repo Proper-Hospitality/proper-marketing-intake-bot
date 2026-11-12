@@ -44,6 +44,12 @@ interface Candidate {
  * "next Tuesday" means that weekday in the following week (weeks start Sunday).
  * EOW is the Friday of the current week, or the next Friday if that day has passed.
  */
+/** A message that actually names a due date, not a question about the approval. */
+export function messageSuppliesDate(text: string): boolean {
+  const plain = text.replace(/[*_~`]/g, " ");
+  return /\b(?:today|tomorrow|eow|end of(?: the)? week|due\b|deadline|\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s+\d{1,2})?\b|(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/i.test(plain);
+}
+
 export function extractDueDate(
   text: string,
   now: Date,

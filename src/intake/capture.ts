@@ -3,6 +3,7 @@ import { listMissing } from "./missing.js";
 import {
   assignCompletionDate,
   extractDueDate,
+  messageSuppliesDate,
   type ResolvedDate,
 } from "./relative-date.js";
 import type { BriefDraft } from "./types.js";
@@ -47,8 +48,13 @@ export function absorbTurnFacts(input: {
   const consequence = extractConsequence(input.userText);
   if (consequence && !draft.consequenceOfDelay) draft.consequenceOfDelay = consequence;
 
-  const fromCurrent = extractDueDate(input.userText, today, { expectingDate: input.expectingDate });
-  if (fromCurrent) {
+  rememberDesignFacts(draft, input.userText);
+  const suppliesDate = messageSuppliesDate(input.userText);
+  const maySetDate = !draft.requestedCompletionDate || (input.expectingDate && suppliesDate);
+  const fromCurrent = maySetDate
+    ? extractDueDate(input.userText, today, { expectingDate: input.expectingDate || suppliesDate })
+    : undefined;
+  if (fromCurrent && maySetDate) {
     assignCompletionDate(draft, fromCurrent.iso, today);
     noteResolvedDate(state, fromCurrent);
   } else if (!draft.requestedCompletionDate) {
@@ -142,6 +148,43 @@ export function contradictsCaptured(text: string, state: ConversationState, toda
     return true;
   }
   return false;
+}
+
+/** Homepage spot, the words it should say, and files they already linked. */
+export function rememberDesignFacts(draft: BriefDraft, text: string): void {
+  const placement = inferPlacement(text);
+  if (placement) {
+    const audience = draft.followUps?.["Audience / Distribution Plan"];
+    if (!audience) {
+      draft.followUps = { ...(draft.followUps ?? {}), "Audience / Distribution Plan": placement };
+    }
+    if (!draft.whereItGoesLive) draft.whereItGoesLive = placement;
+  }
+  const said = text.match(/\bshould say\s+["“']?([^"”'\n.]+)["”']?/i);
+  const copy = said?.[1]?.trim();
+  if (copy && !draft.followUps?.["Recommended Copy / Details"] && !draft.finalCopy) {
+    draft.followUps = { ...(draft.followUps ?? {}), "Recommended Copy / Details": copy };
+    draft.finalCopy = copy;
+  }
+  const files = extractLinks(text).filter((link) => /drive\.google|dropbox|brandfolder|box\.com/i.test(link));
+  if (files.length > 0) {
+    const assets = [...(draft.assets ?? [])];
+    for (const link of files) {
+      if (!assets.includes(link)) assets.push(link);
+    }
+    draft.assets = assets;
+    if (!draft.followUps?.["Photo Link"]) {
+      draft.followUps = { ...(draft.followUps ?? {}), "Photo Link": files[0] };
+    }
+  }
+}
+
+export function inferPlacement(text: string): string | undefined {
+  if (!/\bhomepage\b/i.test(text)) return undefined;
+  const spot = text.match(/\b(first|second|third|\d(?:st|nd|rd|th))\s+homepage\s+spot\b/i);
+  if (spot?.[1]) return `the homepage, ${spot[1].toLowerCase()} spot`;
+  if (/\bspot\b/i.test(text)) return "the homepage";
+  return "the homepage";
 }
 
 function rememberLinks(draft: BriefDraft, text: string): void {
