@@ -141,6 +141,9 @@ async function handleFreshMessage(deps: {
     attachments,
     readAttachment: deps.readAttachment,
     slackToken: deps.slackToken,
+    findSlackUser: deps.slack.findUserByName
+      ? (name) => deps.slack.findUserByName!(name)
+      : undefined,
     rush: {
       store: deps.store,
       channel: message.channel,

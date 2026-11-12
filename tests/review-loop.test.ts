@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { approvalSignOff } from "../src/intake/brief.js";
 import { listMissing } from "../src/intake/missing.js";
+import { matchSlackMember } from "../src/slack/users.js";
 import { configuredReviewer } from "../src/review/config.js";
 import { applyReviewReply, parseApproverChoice, readyForReview, type ReviewSession, type ReviewTask } from "../src/review/loop.js";
 import { pollReviews } from "../src/review/poll.js";
@@ -80,7 +82,27 @@ describe("requester review in Slack", () => {
     expect(menu.items.map((item) => item.id)).not.toContain("approver");
     expect(configuredReviewer("Menu Upload")?.name).toBe("Elizabeth Van Bergen");
     expect(configuredReviewer("Menu Upload")?.slackId).toBe("U0CBTQ82WHW");
+    expect(configuredReviewer("SEO")?.name).toBe("Elizabeth Van Bergen");
+    expect(configuredReviewer("Bug Fix")?.name).toBe("Elizabeth Van Bergen");
+    expect(configuredReviewer("Tracking")?.name).toBe("Elizabeth Van Bergen");
     expect(configuredReviewer("New Page")).toBeUndefined();
+    expect(configuredReviewer("Offers")).toBeUndefined();
+    expect(configuredReviewer("Email")).toBeUndefined();
+    expect(parseApproverChoice("<@UALEX|Alex Guest>", { id: "UJAMIE", name: "Jamie Mark" })).toEqual({
+      name: "Alex Guest",
+      slackId: "UALEX",
+      source: "named",
+    });
+    expect(matchSlackMember("Alex Guest", [
+      { id: "UALEX", real_name: "Alex Guest" },
+      { id: "UBOT", is_bot: true, real_name: "Alex Guest" },
+    ])).toEqual({ id: "UALEX", name: "Alex Guest" });
+    expect(matchSlackMember("Alex Guest", [
+      { id: "U1", real_name: "Alex Guest" },
+      { id: "U2", real_name: "Alex Guest" },
+    ])).toBeUndefined();
+    expect(approvalSignOff({ approver: "Alex Guest", requesterName: "Jamie Mark" })).toBe("Alex Guest");
+    expect(approvalSignOff({ requesterName: "Jamie Mark" })).toBe("Jamie Mark");
   });
 
   it("DMs the approver only when the task is in Review and has a link", async () => {

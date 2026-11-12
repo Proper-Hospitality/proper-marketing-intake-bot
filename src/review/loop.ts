@@ -161,11 +161,24 @@ export function parseApproverChoice(
   requester: { id?: string; name?: string },
 ): { name: string; slackId?: string; source: "requester" | "named" } | undefined {
   const trimmed = text.trim();
+  const mention = trimmed.match(/<@([A-Z0-9]+)(?:\|([^>]+))?>/);
+  if (mention?.[1]) {
+    const mentioned = (mention[2] || "").replace(/[.,]+$/, "").trim();
+    if (requester.id && mention[1] === requester.id && requester.name) {
+      return { name: requester.name, slackId: requester.id, source: "requester" };
+    }
+    return { name: mentioned || "Someone", slackId: mention[1], source: "named" };
+  }
   if (/^(me|i am|i'm|i’ll|i will|yes|i'?ll sign off|i am the approver)\b/i.test(trimmed)) {
     if (!requester.name) return undefined;
     return { name: requester.name, slackId: requester.id, source: "requester" };
   }
-  const named = trimmed.match(/^([A-Z][\w.'-]+(?:\s+[A-Z][\w.'-]+){0,2})\s*$/);
-  if (!named?.[1]) return undefined;
-  return { name: named[1].replace(/[.,]+$/, ""), source: "named" };
+  const explicit = trimmed.match(/\b(?:approver is|should be|someone else[:,]?)\s+([A-Z][\w.'-]+(?:\s+[A-Z][\w.'-]+){0,2})/);
+  const whole = trimmed.match(/^([A-Z][\w.'-]+(?:\s+[A-Z][\w.'-]+){0,2})\s*$/);
+  const picked = (explicit?.[1] || whole?.[1] || "").replace(/[.,]+$/, "").trim();
+  if (!picked) return undefined;
+  if (requester.name && picked.toLowerCase() === requester.name.toLowerCase()) {
+    return { name: requester.name, slackId: requester.id, source: "requester" };
+  }
+  return { name: picked, source: "named" };
 }

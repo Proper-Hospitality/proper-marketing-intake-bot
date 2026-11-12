@@ -158,7 +158,8 @@ describe("Elena's intake flow", () => {
       duplicates: [],
     });
     expect(summary).toContain("Routing bucket: Collective");
-    expect(summary).toContain("Collective approver to be confirmed");
+    expect(summary).toContain("Sign-off: Kinsey East");
+    expect(summary).not.toContain("approver to be confirmed");
     expect(summary).toContain("Task name:");
     expect(summary).not.toMatch(/Sign-off:.*DeeDee|Sign-off:.*Koral/);
     const notes = buildDescription({

@@ -9,7 +9,15 @@ export interface ConfiguredReviewer {
   taskTypes: string[];
 }
 
-const DEFAULT_TYPES = ["SEO", "Bug Fix", "Menu Upload"];
+const DEFAULT_TYPES = [
+  "SEO",
+  "Bug Fix",
+  "Menu Upload",
+  "Tracking",
+  "Integrations",
+  "GMB Updates",
+  "Affiliate Import",
+];
 
 export function configuredReviewer(taskType: string | undefined, env: NodeJS.ProcessEnv = process.env): ConfiguredReviewer | undefined {
   if (!taskType) return undefined;
