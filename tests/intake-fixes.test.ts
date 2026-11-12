@@ -100,7 +100,7 @@ describe("relative due dates", () => {
     expect(state.draft.consequenceOfDelay).toMatch(/miss out on the opportunity/);
     expect(state.draft.requestedCompletionDate).toBeUndefined();
     expect(reply.text).toContain("If it's late: We miss out on the opportunity.");
-    expect(reply.text).toContain("when this is due");
+    expect(reply.text).toContain("when this needs to be live");
     expect(reply.text).not.toContain("When do you need this, and what happens if it's late?");
   });
 

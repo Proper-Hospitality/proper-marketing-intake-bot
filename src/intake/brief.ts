@@ -2,7 +2,7 @@ import { fieldQuestion, friendlyRecap, naturalAck } from "./ask-text.js";
 import { greet } from "../slack/mentions.js";
 import { attachmentAssetLines, attachmentBriefLines } from "./attachments.js";
 import { formatRequestTypeChoices, formatTaskTypeChoices } from "./choices.js";
-import { expectedRoutingBucket, formatDisplayDate, formatFullDate, FORM_URL, normalizeDate, secondContact } from "./catalog.js";
+import { formatDisplayDate, formatFullDate, FORM_URL, normalizeDate, routingSignOff, secondContact } from "./catalog.js";
 import { PRICE_PENDING_LINE, type MissingItem } from "./missing.js";
 import { followUpsFor, SUPPORT_QUESTION } from "./question-tree.js";
 import type { TemplateMatchResult } from "./templates.js";
@@ -88,6 +88,10 @@ export function buildDescription(input: {
     "",
     "## Approver",
     draft.approver ?? "",
+    "",
+    "Sign-off:",
+    routingSignOff(draft.properties ?? []).signOff,
+    ...(draft.alsoNotify?.length ? ["", `Also notify: ${draft.alsoNotify.join(", ")}`] : []),
     "",
     ...submissionLines(draft),
     "———————————————",
@@ -185,19 +189,33 @@ export function formatSummary(input: {
     `Approver: ${draft.approver ?? ""}`,
     `Goes live: ${draft.whereItGoesLive ?? followUpDestination(draft) ?? ""}`,
   ];
-  const bucket = expectedRoutingBucket(draft.properties ?? []);
-  if (bucket && bucket !== "Mixed") {
-    lines.push(`Routing bucket (set by the board, not by me): ${bucket}`);
-  } else if (bucket === "Mixed") {
+  const signOff = routingSignOff(draft.properties ?? []);
+  if (signOff.bucket && signOff.bucket !== "Mixed") {
+    lines.push(`Routing bucket: ${signOff.bucket}`);
+  } else if (signOff.bucket === "Mixed") {
     lines.push("Properties span more than one routing bucket. The board will sort that out.");
   }
+  lines.push(`Sign-off: ${signOff.signOff}`);
   if (draft.requestType && draft.taskType) {
+    const printed = new Set<string>();
     for (const field of followUpsFor(draft.requestType, draft.taskType)) {
+      printed.add(field.label);
       const value = cleanBriefText(draft.followUps?.[field.label]);
       if (!value) continue;
       lines.push(`${field.label}: ${truncate(value, 500)}`);
     }
+    for (const [label, value] of Object.entries(draft.followUps ?? {})) {
+      if (printed.has(label)) continue;
+      const clean = cleanBriefText(value);
+      if (clean) lines.push(`${label}: ${truncate(clean, 500)}`);
+    }
   }
+  if (draft.copyReady === false && draft.copyOwner) {
+    lines.push(`Copy writer: ${draft.copyOwner}${draft.copyDueDate ? ` by ${draft.copyDueDate}` : ""}`);
+  }
+  if (draft.designNeeded === true) lines.push("Design needed: yes");
+  if (draft.designNeeded === false) lines.push("Design needed: no");
+  if ((draft.alsoNotify ?? []).length > 0) lines.push(`Also notify: ${draft.alsoNotify?.join(", ")}`);
   if ((draft.assets ?? []).length > 0) lines.push(`Assets: ${(draft.assets ?? []).join(", ")}`);
   for (const line of attachmentAssetLines(draft)) lines.push(`File: ${line}`);
   const links = (draft.providedLinks ?? []).filter((link) => link !== FORM_URL);
@@ -257,11 +275,19 @@ function followUpDestination(draft: BriefDraft): string | undefined {
 function briefAnswerLines(draft: BriefDraft): string[] {
   if (!draft.requestType || !draft.taskType) return [];
   const lines: string[] = [];
+  const printed = new Set<string>();
   for (const field of followUpsFor(draft.requestType, draft.taskType)) {
+    printed.add(field.label);
     const value = draft.followUps?.[field.label];
     if (!value?.trim()) continue;
     lines.push(`${field.label}: ${renderRequesterAnswer(field.kind, value)}`);
   }
+  for (const [label, value] of Object.entries(draft.followUps ?? {})) {
+    if (printed.has(label) || !value?.trim()) continue;
+    lines.push(`${label}: ${value.trim()}`);
+  }
+  if (draft.designNeeded === true) lines.push("Design needed: yes");
+  if (draft.designNeeded === false) lines.push("Design needed: no");
   lines.push(...attachmentBriefLines(draft));
   if (draft.finalCopy?.trim()) lines.push(`Final copy: ${draft.finalCopy.trim()}`);
   if (draft.copyOwner?.trim()) {

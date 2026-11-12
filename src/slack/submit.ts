@@ -1,4 +1,5 @@
-import { addTaskComment, createIntakeTask, userFacingAsanaError } from "../intake/asana.js";
+import { addTaskComment, addTaskFollowers, createIntakeTask, userFacingAsanaError } from "../intake/asana.js";
+import { searchWorkspaceUsers } from "../tasks/complete.js";
 import { emailFallbackFile } from "../intake/email/attach.js";
 import { loadSlackAttachments, uploadLoadedAttachments } from "../intake/task-files.js";
 import { FORM_URL, formatDisplayDate } from "../intake/catalog.js";
@@ -6,6 +7,42 @@ import { isReadyToConfirm } from "../intake/missing.js";
 import { taskName } from "../intake/brief.js";
 import type { ConversationState } from "../store/types.js";
 import type { Store } from "../store/types.js";
+
+async function addNamedFollowers(input: {
+  token: string;
+  taskGid: string;
+  names: string[];
+  fetchImpl?: typeof fetch;
+}): Promise<void> {
+  if (input.names.length === 0) return;
+  try {
+    const followers: string[] = [];
+    for (const name of input.names) {
+      if (name.includes("@")) {
+        followers.push(name);
+        continue;
+      }
+      const people = await searchWorkspaceUsers({
+        token: input.token,
+        query: name,
+        fetchImpl: input.fetchImpl,
+      });
+      const match = people.find((person) => person.name.toLowerCase() === name.toLowerCase())
+        ?? (people.length === 1 ? people[0] : undefined);
+      if (match) followers.push(match.gid);
+    }
+    if (followers.length > 0) {
+      await addTaskFollowers({
+        token: input.token,
+        taskGid: input.taskGid,
+        followers,
+        fetchImpl: input.fetchImpl,
+      });
+    }
+  } catch (error) {
+    console.error(JSON.stringify({ msg: "follower_add_failed", error: userFacingAsanaError(error) }));
+  }
+}
 
 export class ConfirmationRequiredError extends Error {
   constructor() {
@@ -75,6 +112,12 @@ export async function submitConfirmedBrief(input: {
     state.taskGid = result.taskGid;
     state.taskUrl = result.permalinkUrl;
     state.fieldsApplied = 3;
+    await addNamedFollowers({
+      token: input.token,
+      taskGid: result.taskGid,
+      names: state.draft.alsoNotify ?? [],
+      fetchImpl: input.fetchImpl,
+    });
     if (state.draft.rushApprovedBy) {
       await addTaskComment({
         token: input.token,

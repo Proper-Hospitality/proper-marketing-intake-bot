@@ -1,4 +1,5 @@
-import { FORM_URL } from "./catalog.js";
+import { isFigmaLink } from "./attachments.js";
+import { FORM_URL, inferProperties } from "./catalog.js";
 import { listMissing } from "./missing.js";
 import {
   assignCompletionDate,
@@ -41,6 +42,7 @@ export function absorbTurnFacts(input: {
   const { state, today } = input;
   const draft = state.draft;
   rememberLinks(draft, input.userText);
+  rememberRequestFacts(draft, input.userText);
   const size = extractAssetSize(input.userText);
   if (size && !draft.followUps?.["Asset Size"]) {
     draft.followUps = { ...(draft.followUps ?? {}), "Asset Size": size };
@@ -185,6 +187,86 @@ export function inferPlacement(text: string): string | undefined {
   if (spot?.[1]) return `the homepage, ${spot[1].toLowerCase()} spot`;
   if (/\bspot\b/i.test(text)) return "the homepage";
   return "the homepage";
+}
+
+export function rememberRequestFacts(draft: BriefDraft, text: string): void {
+  if (!draft.properties?.length) {
+    const properties = inferProperties(text);
+    if (properties.length > 0) draft.properties = properties;
+  }
+  if (!draft.requestType || !draft.taskType) inferWebTask(draft, text);
+  if (draft.requestType === "Web" && (draft.taskType === "Page Edit" || draft.taskType === "New Page")) {
+    const link = extractLinks(text).find((item) => !isFigmaLink(item));
+    if (link && !draft.followUps?.URL) {
+      draft.followUps = { ...(draft.followUps ?? {}), URL: link };
+      if (!draft.whereItGoesLive) draft.whereItGoesLive = link;
+    }
+  }
+  if (draft.copyReady === undefined) {
+    if (/\bcopy (is not|isn't) ready\b|\bno copy yet\b|\bstill writing the copy\b/i.test(text)) draft.copyReady = false;
+    else if (/\bcopy is ready\b|\bhere's the copy\b|\bhere is the copy\b/i.test(text)) draft.copyReady = true;
+  }
+  if (draft.copyReady === false) {
+    const writer = text.match(/\b([A-Z][\w.'-]+(?:\s+[A-Z][\w.'-]+)?)\s+is writing\b/);
+    if (writer?.[1] && !draft.copyOwner) draft.copyOwner = writer[1];
+  }
+  if (draft.designNeeded === undefined) {
+    if (/\b(no design|existing layout|copy only|just the copy|just copy)\b/i.test(text)) draft.designNeeded = false;
+    else if (/\b(need design|needs design|design is needed)\b/i.test(text)) draft.designNeeded = true;
+  }
+  const replaces = text.match(/\breplaces?\s+([^.\n]+)/i);
+  const spot = text.match(/\b(\d(?:st|nd|rd|th)|first|second|third)\s+(?:homepage\s+)?spot\b/i);
+  const placement = [replaces?.[1]?.trim(), spot ? `${spot[1]} spot` : undefined].filter(Boolean).join(". ");
+  if (placement && !draft.followUps?.["What it replaces and where it sits"]) {
+    draft.followUps = { ...(draft.followUps ?? {}), "What it replaces and where it sits": placement };
+  }
+  const notify = text.match(/\b(?:also notify|loop in|updates to)\s+([A-Z][\w.'-]+(?:\s+[A-Z][\w.'-]+)?)/i);
+  if (notify?.[1]) {
+    const name = notify[1].replace(/[.,]+$/, "");
+    const names = draft.alsoNotify ?? [];
+    if (!names.includes(name)) draft.alsoNotify = [...names, name];
+  }
+  rememberOfferFacts(draft, text);
+}
+
+function inferWebTask(draft: BriefDraft, text: string): void {
+  if (/\bnew page\b|\blanding page\b/i.test(text)) {
+    draft.requestType = draft.requestType ?? "Web";
+    draft.taskType = draft.taskType ?? "New Page";
+    return;
+  }
+  if (/\bpage edit\b|\bedit the page\b|\bupdate the (page|homepage)\b/i.test(text)) {
+    draft.requestType = draft.requestType ?? "Web";
+    draft.taskType = draft.taskType ?? "Page Edit";
+    return;
+  }
+  if (/\bhappening/i.test(text)) {
+    draft.requestType = draft.requestType ?? "Web";
+    draft.taskType = draft.taskType ?? "Happenings";
+    return;
+  }
+  if (/\bmenu upload\b/i.test(text)) {
+    draft.requestType = draft.requestType ?? "Web";
+    draft.taskType = draft.taskType ?? "Menu Upload";
+  }
+}
+
+function rememberOfferFacts(draft: BriefDraft, text: string): void {
+  if (!/\boffer\b|promo code|rate code/i.test(text) && draft.taskType !== "Offers") return;
+  const followUps = { ...(draft.followUps ?? {}) };
+  const down = text.match(/[^.!\n]*(?:comes down|turned off|take down)[^.!\n]*/i)?.[0]?.trim();
+  if (down && !followUps["When the old offer comes down"]) followUps["When the old offer comes down"] = down;
+  const ads = text.match(/[^.!\n]*(?:evergreen|replaces? it in (?:the )?ads)[^.!\n]*/i)?.[0]?.trim();
+  if (ads && !followUps["What replaces it in ads or evergreen campaigns"]) {
+    followUps["What replaces it in ads or evergreen campaigns"] = ads;
+  }
+  if (/\btransactional emails?\b/i.test(text) && !followUps["Rate or promo codes in transactional emails"]) {
+    followUps["Rate or promo codes in transactional emails"] = /\b(no|not|aren't|are not|unaffected)\b/i.test(text) ? "No" : "Yes";
+  }
+  if (/\brules (?:and|&) regulations\b/i.test(text) && /\bphoto\b/i.test(text) && !followUps["Offer copy, rules, and photo"]) {
+    followUps["Offer copy, rules, and photo"] = "Copy, rules and regulations, and a photo are attached.";
+  }
+  draft.followUps = followUps;
 }
 
 function rememberLinks(draft: BriefDraft, text: string): void {

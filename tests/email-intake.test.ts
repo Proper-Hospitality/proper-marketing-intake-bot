@@ -452,6 +452,11 @@ describe("forwarded email intake", () => {
       if (!state) throw new Error("missing conversation");
       const rushed = applyAnswers(state, { requestedCompletionDate: "2026-11-12" }, TODAY);
       expect(rushed.kind).toBe("rush_required");
+      state.draft.designNeeded = false;
+      state.draft.followUps = {
+        ...(state.draft.followUps ?? {}),
+        "What it replaces and where it sits": "The current membership form on that page",
+      };
       const ready = applyAnswers(state, {
         properties: ["Corporate"],
         requestedCompletionDate: "2026-12-01",

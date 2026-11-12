@@ -1,4 +1,5 @@
 import { propertyPhrase } from "./catalog.js";
+import { leadTimeFor, leadTimeSentence } from "./lead-time.js";
 import type { MissingItem } from "./missing.js";
 import type { BriefDraft } from "./types.js";
 
@@ -67,7 +68,15 @@ function byId(item: MissingItem, draft: BriefDraft): string | undefined {
     case "timing":
       return `When do you need ${what}, and what happens if it's late? A real date helps the team plan, and the consequence is what gets a rush prioritized. For example, Dec 4, because invitations go out that week.`;
     case "requestedCompletionDate":
-      return `When do you need ${what}? A real date, not ASAP. Ideally at least a week out, like Dec 4.`;
+      return `When do you need ${what} live? ${leadTimeFor(draft).phrase}. A real date, not ASAP.`;
+    case "copyReady":
+      return `Is the copy for ${what} ready? If yes, paste it. If not, who is writing it and by when?`;
+    case "copyPlan":
+      return `Who is writing the copy for ${what}, and when will it be ready?`;
+    case "designNeeded":
+      return `Do you need design for ${what}, or can the web team build it from the existing layout?`;
+    case "menuPdf":
+      return item.hint ?? "Send a ready-to-upload PDF, one menu per file. The dev team can't open a Figma or Figma Buzz link.";
     case "consequenceOfDelay":
       return `What happens if ${what} is late? One line is enough, so the team knows what slips.`;
     case "approver":
@@ -154,7 +163,16 @@ function byLabel(label: string, draft: BriefDraft): string | undefined {
 
 export function shortNeed(item: MissingItem, draft: BriefDraft): string {
   if (item.id === "timing") return "when this is due, and what happens if it's late";
-  if (item.id === "requestedCompletionDate") return "when this is due";
+  if (item.id === "requestedCompletionDate") return `when this needs to be live (${leadTimeFor(draft).phrase.charAt(0).toLowerCase()}${leadTimeFor(draft).phrase.slice(1)})`;
+  if (item.id === "copyReady") return "whether the copy is ready (paste it, or who is writing it and by when)";
+  if (item.id === "copyPlan") return "who is writing the copy, and by when";
+  if (item.id === "designNeeded") return "whether design is needed";
+  if (item.id === "menuPdf") return "a ready-to-upload PDF (the dev team can't open Figma or Figma Buzz)";
+  if (item.label === "What it replaces and where it sits") return "what this replaces, and where it sits on the page";
+  if (item.label === "When the old offer comes down") return "when the old offer comes down";
+  if (item.label === "What replaces it in ads or evergreen campaigns") return "what replaces it in ads or evergreen campaigns";
+  if (item.label === "Rate or promo codes in transactional emails") return "whether rate or promo codes in transactional emails are affected";
+  if (item.label === "Offer copy, rules, and photo") return "whether the copy, rules and regulations, and a photo are attached";
   if (item.id === "consequenceOfDelay") return "what happens if it's late";
   if (item.id === "approver") return "who signs off";
   if (item.id === "properties") return "which property this is for";
@@ -171,26 +189,46 @@ export function shortNeed(item: MissingItem, draft: BriefDraft): string {
   return `${words.charAt(0).toLowerCase()}${words.slice(1)}`;
 }
 
+export function knownFacts(draft: BriefDraft): string[] {
+  const lines: string[] = [];
+  if (draft.properties?.length) lines.push(`Hotel: ${draft.properties.join(", ")}`);
+  if (draft.taskType) lines.push(`This looks like ${draft.taskType}`);
+  if (draft.requestName) lines.push(`Name: ${draft.requestName}`);
+  if (draft.requestedCompletionDate) lines.push(`Due ${draft.requestedCompletionDate}`);
+  if (draft.copyReady === true) lines.push("Copy is ready");
+  if (draft.copyReady === false) lines.push("Copy is not ready yet");
+  if (draft.designNeeded === true) lines.push("Design is needed");
+  if (draft.designNeeded === false) lines.push("No new design");
+  return lines;
+}
+
 export function formatNeedsList(input: {
   items: MissingItem[];
   draft: BriefDraft;
   opening: boolean;
+  today?: Date;
   duplicates?: Array<{ name: string; url?: string }>;
 }): string {
   const bullets = input.items.map((item) => `• ${shortNeed(item, input.draft)}`);
   const similar = (input.duplicates ?? []).slice(0, 2).map((task) => `I see an open task that looks similar: ${task.name}${task.url ? ` — ${task.url}` : ""}. Tell me if this is the same one.`);
   const kept = input.draft.consequenceOfDelay ? [`If it's late: ${input.draft.consequenceOfDelay}`, ""] : [];
+  const heard = knownFacts(input.draft);
+  const lead = leadTimeSentence(input.draft, input.today ?? new Date());
+  const heardBlock = heard.length > 0 ? ["I have this so far. Tell me if any of it is wrong:", ...heard.map((line) => `• ${line}`), ""] : [];
+  const leadBlock = lead ? [lead, ""] : [];
   if (!input.opening) {
-    return [...kept, "Thanks. I still need:", ...bullets, ...similar].join("\n");
+    return [...kept, ...leadBlock, "Thanks. I still need:", ...bullets, ...similar].filter((line) => line !== undefined).join("\n");
   }
   return [
     ...kept,
     "Thank you for your request. We have some more information to gather before we can submit it.",
     "",
+    ...heardBlock,
+    ...leadBlock,
     "We need:",
     ...bullets,
     ...similar,
-    "You can answer all of these now, or we can chat back and forth. If you want to chat, let's start with when this is due and what happens if it's late.",
+    "You can answer all of these now, or we can chat through it.",
   ].join("\n");
 }
 

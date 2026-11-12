@@ -17,6 +17,12 @@ export interface BriefDraft {
   finalCopy?: string;
   copyOwner?: string;
   copyDueDate?: string;
+  /** Web requests. True when the copy can be pasted. False when someone else is still writing it. */
+  copyReady?: boolean;
+  /** Web requests. True when a designer is needed. */
+  designNeeded?: boolean;
+  /** People who should follow the Asana task, besides the requester. */
+  alsoNotify?: string[];
   assets?: string[];
   assetsOwner?: string;
   assetsDue?: string;

@@ -683,6 +683,7 @@ function renderReply(
         items: missing.items,
         draft: state.draft,
         opening: (state.answerTrail ?? []).length === 0,
+        today,
         duplicates: state.duplicates,
       })
       : undefined;
@@ -726,6 +727,7 @@ function renderReply(
         items,
         draft: state.draft,
         opening: (state.answerTrail ?? []).length === 0,
+        today,
         duplicates: state.duplicates,
       });
       return { text: outcome.preface ? `${outcome.preface}\n\n${list}` : list };
