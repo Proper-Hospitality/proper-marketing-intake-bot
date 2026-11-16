@@ -1,8 +1,9 @@
 import { addTaskComment, addTaskFollowers, createIntakeTask, userFacingAsanaError } from "../intake/asana.js";
 import { searchWorkspaceUsers } from "../tasks/complete.js";
 import { emailFallbackFile } from "../intake/email/attach.js";
-import { loadSlackAttachments, uploadLoadedAttachments } from "../intake/task-files.js";
+import { failedAttachmentLine, loadSlackAttachments, uploadLoadedAttachments } from "../intake/task-files.js";
 import { FORM_URL, formatDisplayDate } from "../intake/catalog.js";
+import { rushApproverFor, rushBlockedText } from "../intake/rush.js";
 import { isReadyToConfirm } from "../intake/missing.js";
 import { taskName } from "../intake/brief.js";
 import type { ConversationState } from "../store/types.js";
@@ -73,7 +74,7 @@ export async function submitConfirmedBrief(input: {
     return { text: "There's no brief waiting to be filed. Tell me what you need and I'll collect it first." };
   }
   if (state.draft.rushBlock && state.draft.rushApprovedFor !== state.draft.requestedCompletionDate) {
-    return { text: "That date needs approval from Koral Captain or DeeDee Brown before I can file it. Nothing was created." };
+    return { text: rushBlockedText(rushApproverFor(state.draft.properties).name) };
   }
   if (!isReadyToConfirm(state.draft)) {
     return { text: "The brief is missing something, so I didn't create a task. Tell me what to change and I'll show a new summary." };
@@ -90,10 +91,10 @@ export async function submitConfirmedBrief(input: {
     });
     const emailText = emailFallbackFile(
       state,
-      loaded.map((file) => file.slackFileId),
+      loaded.loaded.map((file) => file.slackFileId),
       state.uploadedSlackFileIds ?? [],
     );
-    const filesToUpload = emailText ? [...loaded, emailText] : loaded;
+    const filesToUpload = emailText ? [...loaded.loaded, emailText] : loaded.loaded;
     const result = await createIntakeTask({
       draft: state.draft,
       templateOffer: state.templateOffer,
@@ -132,8 +133,17 @@ export async function submitConfirmedBrief(input: {
       files: filesToUpload,
       fetchImpl: input.fetchImpl,
     });
-    if (uploaded.length > 0) {
-      state.uploadedSlackFileIds = [...(state.uploadedSlackFileIds ?? []), ...uploaded];
+    if (uploaded.uploaded.length > 0) {
+      state.uploadedSlackFileIds = [...(state.uploadedSlackFileIds ?? []), ...uploaded.uploaded];
+    }
+    const failed = [...loaded.failed, ...uploaded.failed];
+    if (failed.length > 0) {
+      await addTaskComment({
+        token: input.token,
+        taskGid: result.taskGid,
+        text: failedAttachmentLine(failed),
+        fetchImpl: input.fetchImpl,
+      });
     }
     await input.store.saveConversation(state);
     const date = state.draft.requestedCompletionDate ? formatDisplayDate(state.draft.requestedCompletionDate) : "no date";
@@ -149,10 +159,11 @@ export async function submitConfirmedBrief(input: {
     if (state.draft.pricePending) {
       lines.push("Price is still pending. Reply in the Asana task or in this thread with the price when you have it.");
     }
-    if ((state.draft.attachments ?? []).length > 0) {
-      const names = state.draft.attachments?.map((file) => file.name || file.fileName || file.ref || "file").join(", ");
-      lines.push(`Attached: ${names}.`);
-    }
+    const attachedNames = (state.draft.attachments ?? [])
+      .filter((file) => !file.slackFileId || (state.uploadedSlackFileIds ?? []).includes(file.slackFileId))
+      .map((file) => file.name || file.fileName || file.ref || "file");
+    if (attachedNames.length > 0) lines.push(`Attached: ${attachedNames.join(", ")}.`);
+    if (failed.length > 0) lines.push(failedAttachmentLine(failed));
     return { text: lines.join("\n") };
   } catch (error) {
     console.error(JSON.stringify({ msg: "asana_submit_failed", error: userFacingAsanaError(error) }));

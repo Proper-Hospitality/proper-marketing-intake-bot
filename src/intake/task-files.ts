@@ -1,4 +1,4 @@
-import { addTaskComment, listTaskAttachmentNames, uploadTaskAttachment, userFacingAsanaError } from "./asana.js";
+import { listTaskAttachmentNames, uploadTaskAttachment, userFacingAsanaError } from "./asana.js";
 import type { TurnAttachment } from "./capture.js";
 import { downloadSlackFile } from "../slack/files.js";
 import type { BriefDraft } from "./types.js";
@@ -11,16 +11,32 @@ export interface LoadedAttachment {
   permalink?: string;
 }
 
-/** Download Slack files so the task notes can include the permalink before create. */
+export interface AttachmentFailure {
+  name: string;
+  link?: string;
+}
+
+export interface LoadedSlackFiles {
+  loaded: LoadedAttachment[];
+  failed: AttachmentFailure[];
+}
+
+export function failedAttachmentLine(failed: AttachmentFailure[]): string {
+  const parts = failed.map((file) => file.link ? `${file.name} ${file.link}` : file.name);
+  return `Attachments (upload failed): ${parts.join(", ")}`;
+}
+
+/** Download Slack files with the bot token. The bytes are uploaded onto the task. */
 export async function loadSlackAttachments(input: {
   draft: BriefDraft;
   slackToken?: string;
   fetchImpl?: typeof fetch;
   alreadyUploaded?: string[];
-}): Promise<LoadedAttachment[]> {
-  if (!input.slackToken) return [];
+}): Promise<LoadedSlackFiles> {
+  if (!input.slackToken) return { loaded: [], failed: [] };
   const skip = new Set(input.alreadyUploaded ?? []);
   const loaded: LoadedAttachment[] = [];
+  const failed: AttachmentFailure[] = [];
   for (const file of input.draft.attachments ?? []) {
     if (!file.slackFileId || skip.has(file.slackFileId)) continue;
     try {
@@ -32,7 +48,7 @@ export async function loadSlackAttachments(input: {
       file.name = downloaded.name || file.name;
       file.permalink = downloaded.permalink || file.permalink;
       file.mimetype = downloaded.mimetype || file.mimetype;
-      if (!file.ref) file.ref = file.permalink || file.name;
+      if (!file.ref || /slack\.com\/files/i.test(file.ref)) file.ref = file.name || file.ref;
       loaded.push({
         slackFileId: file.slackFileId,
         name: downloaded.name || file.name || "attachment",
@@ -46,9 +62,13 @@ export async function loadSlackAttachments(input: {
         fileId: file.slackFileId,
         error: error instanceof Error ? error.message : "unknown",
       }));
+      failed.push({
+        name: file.name || file.fileName || "attachment",
+        link: file.permalink,
+      });
     }
   }
-  return loaded;
+  return { loaded, failed };
 }
 
 export async function uploadLoadedAttachments(input: {
@@ -56,9 +76,10 @@ export async function uploadLoadedAttachments(input: {
   asanaToken: string;
   files: LoadedAttachment[];
   fetchImpl?: typeof fetch;
-}): Promise<string[]> {
-  if (input.files.length === 0) return [];
+}): Promise<{ uploaded: string[]; failed: AttachmentFailure[] }> {
+  if (input.files.length === 0) return { uploaded: [], failed: [] };
   const uploaded: string[] = [];
+  const failed: AttachmentFailure[] = [];
   const namesOnTask = new Set<string>();
   try {
     for (const name of await listTaskAttachmentNames({
@@ -93,25 +114,12 @@ export async function uploadLoadedAttachments(input: {
       uploaded.push(file.slackFileId);
       if (nameKey) namesOnTask.add(nameKey);
     } catch (error) {
-      const link = file.permalink ? ` ${file.permalink}` : "";
       const reason = userFacingAsanaError(error);
       console.error(JSON.stringify({ msg: "asana_attachment_failed", fileId: file.slackFileId, error: reason }));
-      try {
-        await addTaskComment({
-          token: input.asanaToken,
-          taskGid: input.taskGid,
-          text: `Slack file ${file.name}${link} could not be uploaded. ${reason}`,
-          fetchImpl: input.fetchImpl,
-        });
-      } catch (commentError) {
-        console.error(JSON.stringify({
-          msg: "asana_attachment_comment_failed",
-          error: commentError instanceof Error ? commentError.message : "unknown",
-        }));
-      }
+      failed.push({ name: file.name, link: file.permalink });
     }
   }
-  return uploaded;
+  return { uploaded, failed };
 }
 
 function normalizeFileName(name: string | undefined): string {

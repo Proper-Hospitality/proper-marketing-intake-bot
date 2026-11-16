@@ -150,7 +150,7 @@ describe("files on the thread parent", () => {
         return json({ data: { gid: "ATT2" } });
       }) as unknown as typeof fetch,
     });
-    expect(uploaded).toEqual([FILE_ID]);
+    expect(uploaded.uploaded).toEqual([FILE_ID]);
     expect(calls.some((call) => call.startsWith("POST"))).toBe(false);
   });
 

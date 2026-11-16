@@ -82,7 +82,7 @@ describe("intake field order", () => {
     );
     expect(body.data.projects).toEqual([PROJECT_GID]);
     expect(body.data.memberships).toEqual([{ project: PROJECT_GID, section: SECTION_GID }]);
-    expect(body.data.name).toBe("SMP | Email | Holiday Newsletter");
+    expect(body.data.name).toBe("SMP, Holiday newsletter");
     const fieldGids = Object.keys(body.data.custom_fields);
     expect(fieldGids).not.toContain(REQUEST_TYPE_FIELD_GID);
     expect(fieldGids).not.toContain(PROPERTY_FIELD_GID);
@@ -94,7 +94,7 @@ describe("intake field order", () => {
   });
 
   it("names the task the way the form does and keeps the brief layout", () => {
-    expect(taskName({ properties: ["AUP", "SFP"], requestType: "Marketing", taskType: "Offers", requestName: "Q1 group offer" })).toBe("AUP, SFP | Offers | Q1 Group Offer");
+    expect(taskName({ properties: ["AUP", "SFP"], requestType: "Marketing", taskType: "Offers", requestName: "Q1 group offer" })).toBe("AUP, SFP, Q1 group offer");
     const notes = buildDescription({
       draft: {
         requesterName: "Elena Ruiz",
@@ -119,8 +119,9 @@ describe("intake field order", () => {
     });
     expect(notes).toContain("Name:\nElena Ruiz");
     expect(notes).toContain("What can we help you with?:\nSocial");
-    const brief = notes.split("## Brief\n")[1]?.split("\n\n")[0];
-    expect(brief).toBe("Recommended Copy / Details: This weekend at SMP.");
+    expect(notes).toContain("Recommended Copy / Details:\nThis weekend at SMP.");
+    expect(notes).not.toContain("## Brief");
+    expect(notes).not.toContain("## Assets");
     expect(notes).toContain("Canva template offered: SMP-Happenings https://www.canva.com/brand/brand-templates/EAHJyAsHwPs. Not used: Wants the team to design it.");
     expect(notes).not.toContain("Requester wants");
     expect(notes).not.toContain("missing a year");

@@ -173,6 +173,46 @@ export const ROUTING_BUCKET_OPTION_GIDS: Record<string, string> = {
   "New Projects": "",
 };
 
+/**
+ * Kinsey East signs off new-property work unless the requester names someone else.
+ * She is not a rush approver. Same-day approval stays with Koral and DeeDee.
+ * Tahoe is LTP. Dallas is DAL. New Projects/Development is the coming-soon code already in the catalog.
+ */
+export const NEW_PROPERTY_APPROVER = {
+  name: "Kinsey East",
+  email: "kinsey.east@properhotel.com",
+  slackId: "U0ANYBQHGCR",
+} as const;
+
+export const NEW_PROPERTY_APPROVER_CODES = [
+  "MIN",
+  "LTP",
+  "DAL",
+  "New Projects/Development",
+] as const;
+
+export function isNewPropertyCode(code: string): boolean {
+  return (NEW_PROPERTY_APPROVER_CODES as readonly string[]).includes(code);
+}
+
+export function defaultNewPropertyApprover(properties: string[]): string | undefined {
+  if (properties.some((code) => isNewPropertyCode(code))) return NEW_PROPERTY_APPROVER.name;
+  return undefined;
+}
+
+export function applyDefaultApprover(draft: { approver?: string; properties?: string[] }): void {
+  if (draft.approver?.trim()) return;
+  const name = defaultNewPropertyApprover(draft.properties ?? []);
+  if (name) draft.approver = name;
+}
+
+/** The named approver, the new-property default, or the routing placeholder. */
+export function signOffFor(draft: { approver?: string; properties?: string[] }): string {
+  const named = draft.approver?.trim();
+  if (named) return named;
+  return defaultNewPropertyApprover(draft.properties ?? []) ?? routingSignOff(draft.properties ?? []).signOff;
+}
+
 /** Shown in the confirmation. Names are not filled in until the bucket mapping is confirmed. */
 export function routingSignOff(properties: string[]): { bucket?: string; signOff: string } {
   const bucket = expectedRoutingBucket(properties);

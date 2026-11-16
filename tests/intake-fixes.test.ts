@@ -264,7 +264,7 @@ describe("slack attachments on the intake task", () => {
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
     const created = calls.find((call) => call.method === "POST" && call.url.endsWith("/tasks"));
-    expect(created?.notes).toContain("https://properhospitalitycorp.slack.com/files/F-SPEC/image.png");
+    expect(created?.notes).not.toContain("https://properhospitalitycorp.slack.com/files/F-SPEC/image.png");
     expect(created?.notes).toContain("9x16");
     expect(calls.some((call) => call.method === "POST" && call.url.includes("/tasks/T-AD/attachments") && call.form)).toBe(true);
     expect(state.uploadedSlackFileIds).toContain("F-SPEC");

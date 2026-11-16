@@ -17,7 +17,7 @@ export interface SlackThreadMessage {
 
 export interface SlackApi {
   postMessage(args: { channel: string; threadTs?: string; text: string; blocks?: unknown[] }): Promise<{ ts?: string }>;
-  /** Direct message, used to send rush approval buttons to DeeDee and Koral. */
+  /** Direct message, used to send the rush approval button to DeeDee or Koral. */
   postDm?(args: { userId: string; text: string; blocks?: unknown[] }): Promise<void>;
   updateMessage(args: { channel: string; ts: string; text: string; blocks?: unknown[] }): Promise<void>;
   userProfile(userId: string): Promise<{ name?: string; email?: string }>;

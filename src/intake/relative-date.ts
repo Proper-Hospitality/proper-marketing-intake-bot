@@ -1,4 +1,5 @@
 import { normalizeDate } from "./catalog.js";
+import { isNormal24HourSend } from "./lead-time.js";
 import type { BriefDraft } from "./types.js";
 import { addCalendarDays, classifyRush, laIsoDate, weekdayIndex } from "./rush.js";
 
@@ -90,8 +91,19 @@ export function formatSpokenDate(iso: string): string {
 
 export function assignCompletionDate(draft: BriefDraft, iso: string, today: Date): void {
   draft.requestedCompletionDate = iso;
+  applyRushBlock(draft, today);
+}
+
+/**
+ * Same-day still needs Koral or DeeDee. A weekend due date is still blocked.
+ * Newsletter Send and SMS Send treat the next day as a normal 24 hour turnaround.
+ */
+export function applyRushBlock(draft: BriefDraft, today: Date): void {
+  const iso = draft.requestedCompletionDate;
+  if (!iso) return;
   const rush = classifyRush(iso, today);
-  if (rush && draft.rushApprovedFor !== iso) draft.rushBlock = rush;
+  const normalNextDay = rush === "next_day" && isNormal24HourSend(draft);
+  if (rush && !normalNextDay && draft.rushApprovedFor !== iso) draft.rushBlock = rush;
   else delete draft.rushBlock;
 }
 

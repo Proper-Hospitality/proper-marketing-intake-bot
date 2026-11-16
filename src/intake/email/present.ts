@@ -3,7 +3,7 @@ import { listMissing } from "../missing.js";
 import { formatQuestions, formatSummary, formatTemplateOffer } from "../brief.js";
 import { greet } from "../../slack/mentions.js";
 import { propertyPhrase } from "../catalog.js";
-import { rushExplanation } from "../rush.js";
+import { rushApproverFor, rushExplanation } from "../rush.js";
 import type { FlowOutcome } from "../flow.js";
 import type { ConversationState } from "../../store/types.js";
 import type { EmailIntakeState, EmailProposal } from "./types.js";
@@ -136,7 +136,7 @@ export function presentEmailStep(
     };
   }
   if (outcome.kind === "rush_required") {
-    const notice = rushExplanation(outcome.reason, outcome.date);
+    const notice = rushExplanation(outcome.reason, outcome.date, rushApproverFor(state.draft.properties).name);
     const missing = listMissing(state.draft, _today);
     if (state.intakePace === "chat" || missing.items.length <= 1) {
       return { text: joinParts(preface, notice) };

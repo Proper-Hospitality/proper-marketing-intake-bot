@@ -1,3 +1,5 @@
+import { expectedRoutingBucket } from "./catalog.js";
+
 const LA = "America/Los_Angeles";
 
 export type RushReason = "same_day" | "next_day" | "friday_monday" | "weekend";
@@ -13,6 +15,27 @@ export function rushApprovers(env: NodeJS.ProcessEnv = process.env): RushApprove
     { id: env.RUSH_APPROVER_KORAL_ID || "U0B5F1HN98Q", name: "Koral Captain" },
     { id: env.RUSH_APPROVER_DEEDEE_ID || "U0B6N3RE23T", name: "DeeDee Brown" },
   ];
+}
+
+/**
+ * One rush approver, from the same Routing Bucket Asana uses for Check Brief.
+ * Proper and By Proper go to DeeDee. The Collective goes to Koral.
+ * An unknown or mixed bucket falls back to DeeDee and logs a warning.
+ */
+export function rushApproverFor(properties: string[] | undefined, env: NodeJS.ProcessEnv = process.env): RushApprover {
+  const people = rushApprovers(env);
+  const deedee = people.find((person) => person.name === "DeeDee Brown") ?? people[1];
+  const koral = people.find((person) => person.name === "Koral Captain") ?? people[0];
+  const bucket = expectedRoutingBucket(properties ?? []);
+  if (bucket === "Proper & By Proper") return deedee;
+  if (bucket === "Collective") return koral;
+  console.warn(JSON.stringify({
+    msg: "rush_approver_bucket_unknown",
+    properties: properties ?? [],
+    bucket: bucket ?? null,
+    fallback: deedee.name,
+  }));
+  return deedee;
 }
 
 export function laIsoDate(date: Date): string {
@@ -58,7 +81,7 @@ export function classifyRush(dueIso: string, now: Date): RushReason | null {
   return null;
 }
 
-export function rushExplanation(reason: RushReason, dueIso: string): string {
+export function rushExplanation(reason: RushReason, dueIso: string, approverName: string): string {
   if (reason === "weekend") {
     return `${dueIso} is a Saturday or Sunday, so it can't be the due date. Send a weekday.`;
   }
@@ -67,7 +90,11 @@ export function rushExplanation(reason: RushReason, dueIso: string): string {
     : reason === "same_day"
       ? `${dueIso} is the same day.`
       : `${dueIso} is the next day.`;
-  return `${why} That needs approval before a task can be filed. Press *Request approval*, or reply with that, and I'll ask DeeDee Brown and Koral Captain. Or send a later date.`;
+  return `${why} That needs approval before a task can be filed. Press *Request approval*, or reply with that, and I'll ask ${approverName}. Or send a later date.`;
+}
+
+export function rushBlockedText(approverName: string): string {
+  return `That date needs approval from ${approverName} before I can file it. Nothing was created.`;
 }
 
 /** Slack mrkdwn and a trailing punctuation mark, so "*Request approval*" still matches. */
@@ -80,7 +107,7 @@ export function plainSlackText(text: string): string {
 }
 
 /**
- * The requester wants the rush sent to DeeDee and Koral.
+ * The requester wants the rush sent to the brand approver.
  * Matches "Request Approval", "*Request approval*", "please request approval",
  * "yes ask them", "ask them", and "you said you would ask them?".
  */
@@ -94,14 +121,13 @@ export function wantsRushApproval(text: string): boolean {
   return false;
 }
 
-export function rushAskedText(mentionsOn: boolean): string {
-  const names = "DeeDee Brown and Koral Captain";
+export function rushAskedText(mentionsOn: boolean, approverName: string): string {
   if (mentionsOn) {
-    return `I've asked ${names} to approve. I'll file it as soon as one approves.`;
+    return `I've asked ${approverName} to approve. I'll file it as soon as they approve.`;
   }
-  return `I've asked ${names} to approve. Each of them gets a direct message from me with Approve and Decline, since mentions are off. I'll file it as soon as one approves.`;
+  return `I've asked ${approverName} to approve. They get a direct message from me with Approve and Decline, since mentions are off. I'll file it as soon as they approve.`;
 }
 
-export function rushAlreadyAskedText(): string {
-  return "I've already asked DeeDee Brown and Koral Captain to approve. I'll file it as soon as one approves.";
+export function rushAlreadyAskedText(approverName: string): string {
+  return `I've already asked ${approverName} to approve. I'll file it as soon as they approve.`;
 }

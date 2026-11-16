@@ -2,6 +2,17 @@ import { daysUntil } from "./catalog.js";
 import { addCalendarDays, laIsoDate, weekdayIndex } from "./rush.js";
 import type { BriefDraft } from "./types.js";
 
+/**
+ * CRM sends Kinsey runs on a 24 hour turnaround.
+ * A due date the next day is normal for these and only these.
+ */
+export const NORMAL_24_HOUR_SENDS = ["Newsletter Send", "SMS Send"] as const;
+
+export function isNormal24HourSend(draft: BriefDraft): boolean {
+  return draft.requestType === "CRM & Paid"
+    && (NORMAL_24_HOUR_SENDS as readonly string[]).includes(draft.taskType ?? "");
+}
+
 /** Working-day lead times Elena approved. Other task types keep the 7-day check. */
 const NAMED_WORKING_DAYS: Record<string, number> = {
   "New Page": 10,
@@ -27,6 +38,14 @@ export interface LeadTime {
 }
 
 export function leadTimeFor(draft: BriefDraft): LeadTime {
+  if (isNormal24HourSend(draft)) {
+    return {
+      days: 1,
+      kind: "calendar",
+      phrase: "Most send tasks are a 24 hour turnaround",
+      named: true,
+    };
+  }
   const task = draft.taskType ?? "";
   const named = NAMED_WORKING_DAYS[task];
   if (named) {

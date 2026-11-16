@@ -1,4 +1,6 @@
+import { isNormal24HourSend } from "./lead-time.js";
 import { followUpsFor } from "./question-tree.js";
+import { captureUrls } from "./urls.js";
 import {
   ATTACHMENT_KINDS,
   type AttachmentKind,
@@ -15,6 +17,7 @@ export const ATTACHMENT_KIND_LABELS: Record<AttachmentKind, string> = {
   photo: "Photo needed for the page",
   page_content: "PDF of content to build as a page",
   context: "Context: a previous version of the asset, or a deck with background",
+  email_slice: "Email slices",
 };
 
 export const ATTACHMENT_KIND_HINT = [
@@ -43,7 +46,6 @@ export interface AttachmentInput {
 
 const FILE_EXT = /\.(pdf|png|jpe?g|webp|gif|tiff?|ai|psd|zip|docx?|pptx?|xlsx?)(?:$|[?#])/i;
 const GENERIC_PDF = /^(menu|menus|document|doc|untitled|file|download|scan|image|brochure|final|new)(?:\s*\(\d+\))?\.pdf$/i;
-const URL_RE = /https?:\/\/[^\s<>]+/gi;
 
 export function isAttachmentQuestion(id: string | undefined): boolean {
   return Boolean(id && (id === ATTACHMENT_PROVIDE_ID || id.startsWith("attachmentKind:") || id.startsWith("attachmentPdf:")));
@@ -62,6 +64,9 @@ export function attachmentKindFromText(text: string): AttachmentKind | undefined
   const hasPhoto = /\b(photos?|images?|pictures?)\b/.test(trimmed);
   const hasPage = /built as a page|build as a page|page content|content to be built|sales group/.test(trimmed);
   const hasContext = /\bcontext\b|previous version|background info|background deck|\bdeck\b/.test(trimmed);
+  if (/\bemail slices?\b|\bslices of the email\b|\bslice of the email\b|\bslices attached\b|\bfiles are the slices\b/.test(trimmed)) {
+    return "email_slice";
+  }
   if (hasPhoto && hasMenu && !/brochure|link onto a page|linked onto/.test(trimmed)) return "photo";
   if (hasPage && !hasMenu) return "page_content";
   if (hasMenu && !hasPhoto && !hasContext) return "menu_or_brochure";
@@ -141,7 +146,31 @@ export function mergeAttachmentInputs(
   return next;
 }
 
+const SLICE_WORDS = /slices attached|files are the slices|email slices|slices of the email|slice of the email/i;
+
+export function isImageAttachment(file: RequestAttachment): boolean {
+  const name = `${file.name ?? ""} ${file.fileName ?? ""} ${file.mimetype ?? ""} ${file.ref ?? ""}`;
+  return /\bimage\/|\.(?:png|jpe?g|webp|gif)(?:$|[?#\s])|\b(?:png|jpe?g|webp|gif)\b/i.test(name);
+}
+
+/**
+ * CRM send images are the email slices. A requester who already said the files
+ * are slices does not get asked what kind of file each image is.
+ * An image is never left as "PDF of content to build as a page".
+ */
+export function markEmailSlices(draft: BriefDraft, text?: string): void {
+  const described = Boolean(text && SLICE_WORDS.test(text));
+  const crmSend = isNormal24HourSend(draft);
+  if (!described && !crmSend) return;
+  for (const file of draft.attachments ?? []) {
+    if (!isImageAttachment(file)) continue;
+    if (file.kind === "menu_or_brochure" || file.kind === "photo" || file.kind === "email_slice") continue;
+    file.kind = "email_slice";
+  }
+}
+
 export function attachmentMissing(draft: BriefDraft): Array<{ id: string; label: string; hint?: string }> {
+  markEmailSlices(draft);
   if (!requestHasFiles(draft)) return [];
   const attachments = viewAttachments(draft);
   if (attachments.length === 0) {
@@ -473,7 +502,7 @@ function displayRef(attachment: RequestAttachment): string {
 }
 
 function allUrls(text: string): string[] {
-  return [...text.matchAll(URL_RE)].map((match) => trimUrl(match[0]));
+  return captureUrls(text);
 }
 
 function fileNamesFromNote(text: string): string[] {

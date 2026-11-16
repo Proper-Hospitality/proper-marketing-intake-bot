@@ -1,8 +1,7 @@
 import { fieldQuestion, friendlyRecap, naturalAck } from "./ask-text.js";
 import { greet } from "../slack/mentions.js";
-import { attachmentAssetLines, attachmentBriefLines } from "./attachments.js";
 import { formatRequestTypeChoices, formatTaskTypeChoices } from "./choices.js";
-import { formatDisplayDate, formatFullDate, FORM_URL, normalizeDate, routingSignOff, secondContact } from "./catalog.js";
+import { applyDefaultApprover, formatDisplayDate, formatFullDate, normalizeDate, routingSignOff, secondContact, signOffFor } from "./catalog.js";
 import { PRICE_PENDING_LINE, type MissingItem } from "./missing.js";
 import { followUpsFor, SUPPORT_QUESTION } from "./question-tree.js";
 import type { TemplateMatchResult } from "./templates.js";
@@ -22,79 +21,40 @@ export function buildDescription(input: {
   slackThread?: string;
 }): string {
   const { draft } = input;
-  const properties = (draft.properties ?? []).join(", ");
-  const date = draft.requestedCompletionDate ? formatDisplayDate(draft.requestedCompletionDate) : "";
-  const followUps = draft.requestType && draft.taskType ? followUpsFor(draft.requestType, draft.taskType) : [];
-  const briefLines = briefAnswerLines(draft);
+  applyDefaultApprover(draft);
+  const support = draft.requestType ? SUPPORT_QUESTION[draft.requestType] : "What type of support do you need?";
+  const signOff = signOffFor(draft);
   const templateLine = canvaTemplateLine(draft, input.templateOffer);
   const pending = [
     ...(draft.pricePending ? [PRICE_PENDING_LINE] : []),
     ...(draft.skipped ?? []).map((entry) => `${entry.label}: Not sure (requester will provide)`),
   ];
-
-  const assetLines = [
-    ...(draft.assets ?? []),
-    ...followUps
-      .filter((field) => field.satisfies?.includes("assets") && draft.followUps?.[field.label])
-      .map((field) => draft.followUps?.[field.label] as string),
-  ];
-  if (draft.assetsOwner) {
-    assetLines.push(`Coming from ${draft.assetsOwner}${draft.assetsDue ? ` by ${draft.assetsDue}` : ""}`);
-  }
-  assetLines.push(...attachmentAssetLines(draft));
-
-  const support = draft.requestType ? SUPPORT_QUESTION[draft.requestType] : "What type of support do you need?";
-
-  return [
-    "Name:",
-    draft.requesterName ?? "",
-    "",
-    "Email address:",
-    draft.requesterEmail ?? "",
-    "",
-    ...(draft.originalRequester ? ["Original requester:", draft.originalRequester, ""] : []),
-    ...(draft.forwardedBy ? ["Forwarded by:", draft.forwardedBy, ""] : []),
-    ...(draft.emailSubject ? ["Email subject:", draft.emailSubject, ""] : []),
-    "Request Name:",
-    draft.requestName ?? "",
-    "",
-    "Property:",
-    properties,
-    "",
-    "Requested Completion Date:",
-    date,
-    "",
-    "Consequence of Delay:",
-    draft.consequenceOfDelay ?? "",
-    "",
-    "What can we help you with?:",
-    draft.requestType ?? "",
-    "",
-    `${support}:`,
-    draft.taskType ?? "",
-    "",
-    "## Brief",
-    briefLines.join("\n") || "(none)",
-    "",
+  const lines = [
+    ...formPair("Name", draft.requesterName),
+    ...formPair("Email address", draft.requesterEmail),
+    ...formPair("Original requester", draft.originalRequester),
+    ...formPair("Forwarded by", draft.forwardedBy),
+    ...formPair("Email subject", draft.emailSubject),
+    ...formPair("Request Name", draft.requestName),
+    ...formPair("Property", (draft.properties ?? []).join(", ")),
+    ...formPair("Requested Completion Date", draft.requestedCompletionDate ? formatDisplayDate(draft.requestedCompletionDate) : undefined),
+    ...formPair("Consequence of Delay", draft.consequenceOfDelay),
+    ...formPair("What can we help you with?", draft.requestType),
+    ...formPair(support, draft.taskType),
+    ...formAnswerLines(draft),
+    ...externalFileLines(draft),
     ...(draft.rushApprovedBy ? [`Rush approved by ${draft.rushApprovedBy}`, ""] : []),
     ...(templateLine ? [templateLine, ""] : []),
     "## Pending from requester",
     pending.join("\n") || "(none)",
     "",
-    "## Assets",
-    unique(assetLines).join("\n") || "(none)",
-    "",
-    "## Approver",
-    draft.approver ?? "",
-    "",
-    "Sign-off:",
-    routingSignOff(draft.properties ?? []).signOff,
-    ...(draft.alsoNotify?.length ? ["", `Also notify: ${draft.alsoNotify.join(", ")}`] : []),
-    "",
-    ...submissionLines(draft),
+    ...formPair("Approver", draft.approver),
+    ...formPair("Sign-off", signOff),
+    ...(draft.alsoNotify?.length ? [`Also notify: ${draft.alsoNotify.join(", ")}`, ""] : []),
     "———————————————",
     `Drafted from Slack: ${input.slackThread ?? ""}`,
-  ].join("\n");
+  ];
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n");
 }
 
 export function formatQuestions(input: {
@@ -172,6 +132,7 @@ export function formatSummary(input: {
   duplicates: Array<{ name: string; url?: string }>;
 }): string {
   const { draft } = input;
+  applyDefaultApprover(draft);
   const lines = [
     friendlyRecap(draft),
     "",
@@ -185,8 +146,8 @@ export function formatSummary(input: {
     `Property: ${(draft.properties ?? []).join(", ")}`,
     `Requested: ${draft.requestedCompletionDate ? formatDisplayDate(draft.requestedCompletionDate) : ""}`,
     `If it's late: ${draft.consequenceOfDelay ?? ""}`,
-    `Approver: ${draft.approver ?? ""}`,
-    `Goes live: ${draft.whereItGoesLive ?? followUpDestination(draft) ?? ""}`,
+    `Approver: ${draft.approver ?? signOffFor(draft)}`,
+    ...goesLiveLine(draft),
   ];
   const signOff = routingSignOff(draft.properties ?? []);
   if (signOff.bucket && signOff.bucket !== "Mixed") {
@@ -194,7 +155,7 @@ export function formatSummary(input: {
   } else if (signOff.bucket === "Mixed") {
     lines.push("Properties span more than one routing bucket. The board will sort that out.");
   }
-  lines.push(`Sign-off: ${signOff.signOff}`);
+  lines.push(`Sign-off: ${signOffFor(draft)}`);
   if (draft.requestType && draft.taskType) {
     const printed = new Set<string>();
     for (const field of followUpsFor(draft.requestType, draft.taskType)) {
@@ -215,11 +176,8 @@ export function formatSummary(input: {
   if (draft.designNeeded === true) lines.push("Design needed: yes");
   if (draft.designNeeded === false) lines.push("Design needed: no");
   if ((draft.alsoNotify ?? []).length > 0) lines.push(`Also notify: ${draft.alsoNotify?.join(", ")}`);
-  if ((draft.assets ?? []).length > 0) lines.push(`Assets: ${(draft.assets ?? []).join(", ")}`);
-  for (const line of attachmentAssetLines(draft)) lines.push(`File: ${line}`);
-  const links = (draft.providedLinks ?? []).filter((link) => link !== FORM_URL);
-  if (links.length > 0) lines.push(`Link you provided: ${links.join(", ")}`);
-  if (draft.finalCopy) lines.push(`Copy: ${truncate(draft.finalCopy, 500)}`);
+  const attachments = attachmentNames(draft);
+  if (attachments.length > 0) lines.push(`Attachments: ${attachments.join(", ")}`);
   const offer = input.templateOffer;
   if (offer && offer.matches.length > 0) {
     lines.push(
@@ -249,10 +207,51 @@ export function formatTemplateAccepted(result: TemplateMatchResult): string {
   return `Use the template and you don't need a task.\n${links}\nIf you later want the team to design it, say so and I'll collect the brief.`;
 }
 
-function submissionLines(draft: BriefDraft): string[] {
-  const links = (draft.providedLinks ?? []).filter((link) => link !== FORM_URL);
-  if (links.length === 0) return [];
-  return ["Submission link:", links.join("\n"), ""];
+function formPair(label: string, value: string | undefined): string[] {
+  const text = value?.trim();
+  if (!text) return [];
+  const heading = label.endsWith(":") ? label : `${label}:`;
+  return [heading, text, ""];
+}
+
+function goesLiveLine(draft: BriefDraft): string[] {
+  const live = placeName(draft.whereItGoesLive) ?? placeName(followUpDestination(draft));
+  return live ? [`Goes live: ${live}`] : [];
+}
+
+function placeName(value: string | undefined): string | undefined {
+  const text = value?.trim();
+  if (!text || /https?:\/\//i.test(text)) return undefined;
+  return text;
+}
+
+function attachmentNames(draft: BriefDraft): string[] {
+  const names: string[] = [];
+  for (const file of draft.attachments ?? []) {
+    const name = file.name || file.fileName || fileNameOf(file.ref) || fileNameOf(file.permalink);
+    if (!name || names.includes(name)) continue;
+    names.push(name);
+  }
+  return names;
+}
+
+function fileNameOf(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || /^https?:\/\//i.test(trimmed) && /slack\.com\/files/i.test(trimmed) && !/\.[a-z0-9]{2,5}(?:$|\?)/i.test(trimmed)) {
+    return undefined;
+  }
+  const last = trimmed.split("?")[0]?.split("/").pop();
+  if (!last || last.length > 180) return undefined;
+  return decodeURIComponentSafe(last);
+}
+
+function decodeURIComponentSafe(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function choiceList(itemId: string, requestType: BriefDraft["requestType"]): string | undefined {
@@ -271,28 +270,60 @@ function followUpDestination(draft: BriefDraft): string | undefined {
   return undefined;
 }
 
-function briefAnswerLines(draft: BriefDraft): string[] {
+function formAnswerLines(draft: BriefDraft): string[] {
   if (!draft.requestType || !draft.taskType) return [];
   const lines: string[] = [];
   const printed = new Set<string>();
+  const skipped = new Set((draft.skipped ?? []).map((entry) => entry.label));
+  const answered = new Set<string>();
   for (const field of followUpsFor(draft.requestType, draft.taskType)) {
     printed.add(field.label);
     const value = draft.followUps?.[field.label];
-    if (!value?.trim()) continue;
-    lines.push(`${field.label}: ${renderRequesterAnswer(field.kind, value)}`);
+    if (value?.trim()) {
+      const rendered = renderRequesterAnswer(field.kind, value);
+      lines.push(...formPair(field.label, rendered));
+      answered.add(rendered.trim());
+    } else if (!field.required && !skipped.has(field.label)) {
+      lines.push(...formPair(field.label, "N/A"));
+    }
   }
   for (const [label, value] of Object.entries(draft.followUps ?? {})) {
     if (printed.has(label) || !value?.trim()) continue;
-    lines.push(`${label}: ${value.trim()}`);
+    lines.push(...formPair(label, value.trim()));
+    answered.add(value.trim());
   }
-  if (draft.designNeeded === true) lines.push("Design needed: yes");
-  if (draft.designNeeded === false) lines.push("Design needed: no");
-  lines.push(...attachmentBriefLines(draft));
-  if (draft.finalCopy?.trim()) lines.push(`Final copy: ${draft.finalCopy.trim()}`);
+  if (draft.designNeeded === true) lines.push(...formPair("Design needed", "yes"));
+  if (draft.designNeeded === false) lines.push(...formPair("Design needed", "no"));
+  const copy = draft.finalCopy?.trim();
+  if (copy && !answered.has(copy)) lines.push(...formPair("Final copy", copy));
   if (draft.copyOwner?.trim()) {
     const due = draft.copyDueDate ? normalizeDate(draft.copyDueDate) : undefined;
-    lines.push(`Copy owner: ${draft.copyOwner.trim()}${due ? ` (due ${formatFullDate(due)})` : ""}`);
+    lines.push(...formPair("Copy owner", `${draft.copyOwner.trim()}${due ? ` (due ${formatFullDate(due)})` : ""}`));
   }
+  if (draft.assetsOwner?.trim()) {
+    lines.push(...formPair("Assets coming from", `${draft.assetsOwner.trim()}${draft.assetsDue ? ` by ${draft.assetsDue}` : ""}`));
+  }
+  return lines;
+}
+
+/** Dropbox, Drive, and website files. Slack uploads are Asana attachments, not note links. */
+function externalFileLines(draft: BriefDraft): string[] {
+  const answered = new Set(Object.values(draft.followUps ?? {}).map((value) => value.trim()));
+  const links: string[] = [];
+  const flags: string[] = [];
+  for (const file of draft.attachments ?? []) {
+    if (file.pdfDeferred) {
+      flags.push(`${file.name || file.fileName || file.ref || "Attachment"}: Not an upload-ready PDF. Flagged for marketing (Let marketing recommend).`);
+    }
+    if (file.slackFileId) continue;
+    const ref = file.ref || file.permalink;
+    if (!ref || /^slack file\b/i.test(ref) || /slack\.com\/files/i.test(ref)) continue;
+    if (answered.has(ref) || links.includes(ref)) continue;
+    links.push(ref);
+  }
+  const lines: string[] = [];
+  if (links.length > 0) lines.push("Attachments:", ...links, "");
+  for (const flag of flags) lines.push(flag, "");
   return lines;
 }
 
@@ -325,13 +356,3 @@ function truncate(value: string, max: number): string {
   return `${flat.slice(0, max - 1)}…`;
 }
 
-function unique(values: string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values) {
-    if (!value || seen.has(value)) continue;
-    seen.add(value);
-    result.push(value);
-  }
-  return result;
-}

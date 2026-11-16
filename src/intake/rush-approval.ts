@@ -1,6 +1,6 @@
 import type { KnownBlock } from "@slack/types";
 import type { ConversationState, Store } from "../store/types.js";
-import { rushAllowsApproval, rushApprovers, type RushReason } from "./rush.js";
+import { rushAllowsApproval, rushApproverFor, rushApprovers, type RushReason } from "./rush.js";
 
 export interface RushApproval {
   id: string;
@@ -85,9 +85,8 @@ export async function startRushApproval(input: {
   input.state.draft.rushApprovalId = id;
   const text = `${input.summary}\n\nApprove or decline this rush date.`;
   const blocks = rushApprovalBlocks(text, id);
-  for (const approver of rushApprovers()) {
-    await input.postDm(approver.id, text, blocks);
-  }
+  const approver = rushApproverFor(input.state.draft.properties);
+  await input.postDm(approver.id, text, blocks);
   return approval;
 }
 
