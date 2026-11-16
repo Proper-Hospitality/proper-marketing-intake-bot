@@ -39,13 +39,13 @@ export async function replyToFiledThread(input: {
     }
     const failed = [...loaded.failed, ...uploaded.failed];
     if (failed.length > 0) {
-      failedUploads = failedAttachmentLine(failed);
       await addTaskComment({
         token: input.asanaToken,
         taskGid: state.taskGid,
-        text: failedUploads,
+        text: failedAttachmentLine(failed),
         fetchImpl: input.fetchImpl,
       });
+      failedUploads = `Could not upload: ${failed.map((file) => file.name).join(", ")}.`;
     }
   }
 
@@ -55,9 +55,12 @@ export async function replyToFiledThread(input: {
     state.taskUrl ?? "",
   ];
   const files = state.draft.attachments ?? [];
-  if (files.length > 0) {
-    const names = files.map((file) => file.name || file.fileName || file.ref || "file").join(", ");
-    lines.push(files.length === 1 ? `${names} is included on that task.` : `${names} are included on that task.`);
+  const names = files
+    .map((file) => file.name || file.fileName)
+    .filter((name): name is string => typeof name === "string" && !/^https?:\/\//i.test(name));
+  if (names.length > 0) {
+    const list = names.join(", ");
+    lines.push(names.length === 1 ? `${list} is included on that task.` : `${list} are included on that task.`);
   } else if (/\battach/i.test(input.userText)) {
     lines.push("I don't have a file from this thread to put on the task.");
   }

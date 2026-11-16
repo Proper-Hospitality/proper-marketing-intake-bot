@@ -202,7 +202,7 @@ export function formatTemplateAccepted(result: TemplateMatchResult): string {
 }
 
 function formPair(label: string, value: string | undefined): string[] {
-  const text = value?.trim();
+  const text = value ? exactAnswer(value) : "";
   if (!text) return [];
   const heading = label.endsWith(":") ? label : `${label}:`;
   return [heading, text, ""];

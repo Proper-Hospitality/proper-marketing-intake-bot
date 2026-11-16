@@ -1,5 +1,6 @@
 import type { KnownBlock } from "@slack/types";
 import type { ConversationState, Store } from "../store/types.js";
+import { NEW_PROPERTY_APPROVER } from "./catalog.js";
 import { rushAllowsApproval, rushApproverFor, rushApprovers, type RushReason } from "./rush.js";
 
 export interface RushApproval {
@@ -10,6 +11,8 @@ export interface RushApproval {
   date: string;
   summary: string;
   reason: RushReason;
+  /** The one person who was asked. New-property rushes accept only this id. */
+  approverId?: string;
   status: "pending" | "approved" | "declined";
   decidedById?: string;
   decidedByName?: string;
@@ -79,6 +82,7 @@ export async function startRushApproval(input: {
     date: input.date,
     summary: input.summary,
     reason: input.reason,
+    approverId: rushApproverFor(input.state.draft.properties).id,
     status: "pending",
   };
   await saveRushApproval(input.store, approval);
@@ -91,6 +95,7 @@ export async function startRushApproval(input: {
 }
 
 export function approverName(userId: string): string | undefined {
+  if (userId === NEW_PROPERTY_APPROVER.slackId) return NEW_PROPERTY_APPROVER.name;
   return rushApprovers().find((approver) => approver.id === userId)?.name;
 }
 
@@ -101,9 +106,12 @@ export async function applyRushDecision(input: {
   decision: "approved" | "declined";
 }): Promise<{ ok: boolean; text: string; approval?: RushApproval }> {
   const name = approverName(input.approverId);
-  if (!name) return { ok: false, text: "Only Koral Captain or DeeDee Brown can approve this date." };
+  if (!name) return { ok: false, text: "Only Koral Captain, DeeDee Brown, or Kinsey East can approve this date." };
   const approval = await loadRushApproval(input.store, input.approvalId);
   if (!approval) return { ok: false, text: "That approval request is no longer on file." };
+  if (approval.approverId === NEW_PROPERTY_APPROVER.slackId && input.approverId !== NEW_PROPERTY_APPROVER.slackId) {
+    return { ok: false, text: "Only Kinsey East can approve this date." };
+  }
   if (approval.status !== "pending") return { ok: false, text: `This date was already ${approval.status}.`, approval };
   const state = await input.store.getConversation(approval.conversationKey);
   if (!state) return { ok: false, text: "I couldn't find the original request." };

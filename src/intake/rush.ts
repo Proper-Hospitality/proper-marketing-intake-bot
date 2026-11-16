@@ -1,4 +1,4 @@
-import { expectedRoutingBucket } from "./catalog.js";
+import { expectedRoutingBucket, isNewPropertyCode, NEW_PROPERTY_APPROVER } from "./catalog.js";
 
 const LA = "America/Los_Angeles";
 
@@ -23,6 +23,9 @@ export function rushApprovers(env: NodeJS.ProcessEnv = process.env): RushApprove
  * An unknown or mixed bucket falls back to DeeDee and logs a warning.
  */
 export function rushApproverFor(properties: string[] | undefined, env: NodeJS.ProcessEnv = process.env): RushApprover {
+  if ((properties ?? []).some((code) => isNewPropertyCode(code))) {
+    return { id: NEW_PROPERTY_APPROVER.slackId, name: NEW_PROPERTY_APPROVER.name };
+  }
   const people = rushApprovers(env);
   const deedee = people.find((person) => person.name === "DeeDee Brown") ?? people[1];
   const koral = people.find((person) => person.name === "Koral Captain") ?? people[0];
@@ -116,7 +119,7 @@ export function wantsRushApproval(text: string): boolean {
   if (!plain || plain.length > 160) return false;
   if (/\brequest(?:ing)?\s+approval\b/i.test(plain)) return true;
   if (/\byou said you would ask\b/i.test(plain)) return true;
-  if (/\b(?:please\s+)?(?:yes\s+)?ask\s+(?:them|koral|deedee|dee dee)\b/i.test(plain)) return true;
+  if (/\b(?:please\s+)?(?:yes\s+)?ask\s+(?:them|koral|deedee|dee dee|kinsey)\b/i.test(plain)) return true;
   if (/\b(?:go ahead and ask|ask for approval)\b/i.test(plain)) return true;
   return false;
 }

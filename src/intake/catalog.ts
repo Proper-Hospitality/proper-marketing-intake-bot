@@ -175,7 +175,7 @@ export const ROUTING_BUCKET_OPTION_GIDS: Record<string, string> = {
 
 /**
  * Kinsey East signs off new-property work unless the requester names someone else.
- * She is not a rush approver. Same-day approval stays with Koral and DeeDee.
+ * She is also the only rush approver for those properties. Other properties stay with DeeDee or Koral.
  * Tahoe is LTP. Dallas is DAL. New Projects/Development is the coming-soon code already in the catalog.
  */
 export const NEW_PROPERTY_APPROVER = {

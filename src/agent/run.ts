@@ -128,6 +128,7 @@ export async function runIntakeTurn(input: {
   const state = input.state;
   if (input.slackUser.name && !state.draft.requesterName) state.draft.requesterName = input.slackUser.name;
   if (input.slackUser.email && !state.draft.requesterEmail) state.draft.requesterEmail = input.slackUser.email;
+  if (input.slackUser.id && !state.draft.requesterSlackId) state.draft.requesterSlackId = input.slackUser.id;
   captureIncomingFiles(state.draft, input.userText, state.lastAskedId);
 
   if (isTeammateChatter(input.userText) && state.messages.some((turn) => turn.role === "assistant")) {

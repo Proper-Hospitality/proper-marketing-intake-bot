@@ -30,14 +30,23 @@ export function cleanCapturedUrl(raw: string): string {
  * The requester's words, ready to store.
  * Slack <url|label> keeps the URL. Everything else is only trimmed.
  */
-export function exactAnswer(text: string): string {
-  const links = text.replace(SLACK_LINK, "$1");
-  return links
-    .split("\n")
-    .map((line) => line.trim())
-    .join("\n")
+/**
+ * Drop the bot's file summary. It is not part of an answer, a title, or a filed note.
+ * Slack <url|label> is resolved first. A slack.com/files URL is removed either way.
+ */
+export function stripFileEcho(text: string): string {
+  return text
+    .replace(/\s*Files attached \(saved on this request\):[\s\S]*$/i, "")
+    .replace(/\n?Files:\s*[^\n]*\((?:ID…|[A-Z0-9]{6,})[^)\n]*\)[^\n]*$/i, "")
+    .replace(/https?:\/\/\S*slack\.com\/files\/\S*/gi, "")
+    .replace(/[ \t]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+export function exactAnswer(text: string): string {
+  const links = text.replace(SLACK_LINK, "$1");
+  return stripFileEcho(links.split("\n").map((line) => line.trim()).join("\n").replace(/\n{3,}/g, "\n\n"));
 }
 
 export function captureUrls(text: string): string[] {

@@ -104,6 +104,8 @@ describe("24 hour CRM sends", () => {
   it("treats next-day Newsletter Send and SMS Send as normal", () => {
     expect(NORMAL_24_HOUR_SENDS).toEqual(["Newsletter Send", "SMS Send"]);
     const newsletter = kinseyDraft();
+    newsletter.properties = ["SMP"];
+    newsletter.requesterEmail = "elena@properhotel.com";
     applyRushBlock(newsletter, TODAY);
     expect(newsletter.rushBlock).toBeUndefined();
     expect(isNormal24HourSend(newsletter)).toBe(true);
@@ -113,6 +115,8 @@ describe("24 hour CRM sends", () => {
 
     const sms: BriefDraft = {
       ...kinseyDraft(),
+      properties: ["SMP"],
+      requesterEmail: "elena@properhotel.com",
       taskType: "SMS Send",
       followUps: {
         "Audience / Distribution Plan": "Minnesota Database",
@@ -126,6 +130,7 @@ describe("24 hour CRM sends", () => {
 
     const sameDay = kinseyDraft();
     sameDay.requestedCompletionDate = "2026-11-16";
+    sameDay.requesterEmail = "elena@properhotel.com";
     applyRushBlock(sameDay, TODAY);
     expect(sameDay.rushBlock).toBe("same_day");
 
@@ -137,6 +142,7 @@ describe("24 hour CRM sends", () => {
     const friday = new Date("2026-11-13T18:00:00Z");
     const monday = kinseyDraft();
     monday.requestedCompletionDate = "2026-11-16";
+    monday.requesterEmail = "elena@properhotel.com";
     applyRushBlock(monday, friday);
     expect(monday.rushBlock).toBe("friday_monday");
 
@@ -246,15 +252,8 @@ describe("rush approval by brand", () => {
       expect(rushApproverFor(["HJWL"])).toMatchObject({ name: "Koral Captain", id: "U0B5F1HN98Q" });
       expect(warn).not.toHaveBeenCalled();
 
-      expect(rushApproverFor(["MIN"])).toMatchObject({ name: "DeeDee Brown", id: "U0B6N3RE23T" });
-      expect(warn).toHaveBeenCalledTimes(1);
-      const payload = JSON.parse(String(warn.mock.calls[0]?.[0]));
-      expect(payload).toMatchObject({
-        msg: "rush_approver_bucket_unknown",
-        properties: ["MIN"],
-        bucket: null,
-        fallback: "DeeDee Brown",
-      });
+      expect(rushApproverFor(["MIN"])).toMatchObject({ name: "Kinsey East", id: "U0ANYBQHGCR" });
+      expect(warn).not.toHaveBeenCalled();
       expect(rushExplanation("next_day", NEXT_DAY, "DeeDee Brown")).toContain("I'll ask DeeDee Brown");
       expect(rushExplanation("next_day", NEXT_DAY, "Koral Captain")).toContain("I'll ask Koral Captain");
       expect(rushExplanation("next_day", NEXT_DAY, "DeeDee Brown")).not.toContain("and Koral");
