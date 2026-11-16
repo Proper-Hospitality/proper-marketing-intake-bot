@@ -36,6 +36,7 @@ import { loadRushApproval, startRushApproval } from "../intake/rush-approval.js"
 import {
   rushAllowsApproval,
   rushAlreadyAskedText,
+  rushApproverFor,
   rushAskedText,
   rushExplanation,
   wantsRushApproval,
@@ -245,17 +246,22 @@ export async function runIntakeTurn(input: {
   if (wantsRushApproval(input.userText) && state.draft.rushBlock && state.draft.requestedCompletionDate) {
     if (!rushAllowsApproval(state.draft.rushBlock)) {
       return remember(state, input.userText, {
-        text: rushExplanation(state.draft.rushBlock, state.draft.requestedCompletionDate),
+        text: rushExplanation(
+          state.draft.rushBlock,
+          state.draft.requestedCompletionDate,
+          rushApproverFor(state.draft.properties).name,
+        ),
       });
     }
     if (!input.rush) {
       return remember(state, input.userText, {
-        text: "I still need to ask DeeDee Brown and Koral Captain, and this turn has no way to message them. Nothing was filed.",
+        text: `I still need to ask ${rushApproverFor(state.draft.properties).name}, and this turn has no way to message them. Nothing was filed.`,
       });
     }
     const pendingId = state.draft.rushApprovalId;
     const pending = pendingId ? await loadRushApproval(input.rush.store, pendingId) : null;
-    let notice = rushAlreadyAskedText();
+    const approverName = rushApproverFor(state.draft.properties).name;
+    let notice = rushAlreadyAskedText(approverName);
     if (pending?.status !== "pending") {
       await startRushApproval({
         state,
@@ -267,7 +273,7 @@ export async function runIntakeTurn(input: {
         threadTs: input.rush.threadTs,
         postDm: input.rush.postDm,
       });
-      notice = rushAskedText(mentionsEnabled());
+      notice = rushAskedText(mentionsEnabled(), approverName);
     }
     state.rushExplainedFor = state.draft.requestedCompletionDate;
     await input.rush.store.saveConversation(state);
@@ -671,7 +677,7 @@ function renderReply(
     return { text: DELIVERABLE_QUESTION };
   }
   if (outcome?.kind === "rush_required") {
-    const notice = rushExplanation(outcome.reason, outcome.date);
+    const notice = rushExplanation(outcome.reason, outcome.date, rushApproverFor(state.draft.properties).name);
     const missing = listMissing(state.draft, today);
     const batched = state.intakePace !== "chat" && missing.items.length > 1;
     if (batched) {

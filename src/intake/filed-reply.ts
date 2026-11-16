@@ -1,5 +1,6 @@
 import { FORM_URL } from "./catalog.js";
-import { loadSlackAttachments, uploadLoadedAttachments } from "./task-files.js";
+import { failedAttachmentLine, loadSlackAttachments, uploadLoadedAttachments } from "./task-files.js";
+import { addTaskComment } from "./asana.js";
 import { taskName } from "./brief.js";
 import type { TurnAttachment } from "./capture.js";
 import { rememberAttachment } from "./capture.js";
@@ -19,6 +20,7 @@ export async function replyToFiledThread(input: {
 }): Promise<string> {
   const state = input.state;
   for (const file of input.attachments ?? []) rememberAttachment(state.draft, file);
+  let failedUploads: string | undefined;
   if (state.taskGid && input.asanaToken && input.slackToken) {
     const loaded = await loadSlackAttachments({
       draft: state.draft,
@@ -29,11 +31,21 @@ export async function replyToFiledThread(input: {
     const uploaded = await uploadLoadedAttachments({
       taskGid: state.taskGid,
       asanaToken: input.asanaToken,
-      files: loaded,
+      files: loaded.loaded,
       fetchImpl: input.fetchImpl,
     });
-    if (uploaded.length > 0) {
-      state.uploadedSlackFileIds = [...(state.uploadedSlackFileIds ?? []), ...uploaded];
+    if (uploaded.uploaded.length > 0) {
+      state.uploadedSlackFileIds = [...(state.uploadedSlackFileIds ?? []), ...uploaded.uploaded];
+    }
+    const failed = [...loaded.failed, ...uploaded.failed];
+    if (failed.length > 0) {
+      failedUploads = failedAttachmentLine(failed);
+      await addTaskComment({
+        token: input.asanaToken,
+        taskGid: state.taskGid,
+        text: failedUploads,
+        fetchImpl: input.fetchImpl,
+      });
     }
   }
 
@@ -49,6 +61,7 @@ export async function replyToFiledThread(input: {
   } else if (/\battach/i.test(input.userText)) {
     lines.push("I don't have a file from this thread to put on the task.");
   }
+  if (failedUploads) lines.push(failedUploads);
   const userForms = (state.draft.providedLinks ?? []).filter((link) => link !== FORM_URL);
   if (userForms.length > 0) {
     lines.push(`The link you provided stays ${userForms.join(", ")}.`);

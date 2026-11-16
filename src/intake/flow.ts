@@ -1,5 +1,6 @@
-import { mergeAttachmentInputs, type AttachmentInput } from "./attachments.js";
+import { markEmailSlices, mergeAttachmentInputs, type AttachmentInput } from "./attachments.js";
 import {
+  applyDefaultApprover,
   canonicalizeProperty,
   canonicalizeRequestType,
   canonicalizeTaskType,
@@ -13,7 +14,7 @@ import { catalogWithoutUpdatingProperties, unmatchedSourceNote } from "./collate
 import type { CollateralOffer } from "./collateral/types.js";
 import { matchTemplates, type TemplateMatchResult } from "./templates.js";
 import { planRoute } from "./routing.js";
-import { assignCompletionDate, resolveDateInput } from "./relative-date.js";
+import { applyRushBlock, assignCompletionDate, resolveDateInput } from "./relative-date.js";
 import type { BriefDraft, RequestType } from "./types.js";
 
 export interface RecordInput {
@@ -111,6 +112,9 @@ export function declineCollateral(state: FlowState, reason: string, today = new 
 
 function advance(state: FlowState, today: Date): FlowOutcome {
   const draft = state.draft;
+  applyDefaultApprover(draft);
+  applyRushBlock(draft, today);
+  markEmailSlices(draft);
   const routed = routeDeliverable(state);
   if (routed) return routed;
 
@@ -233,6 +237,9 @@ function mergeDraft(draft: BriefDraft, input: RecordInput, today: Date): string[
     errors.push("Follow-up answers need a request type and task type first.");
   }
 
+  applyDefaultApprover(draft);
+  applyRushBlock(draft, today);
+  markEmailSlices(draft);
   return errors;
 }
 

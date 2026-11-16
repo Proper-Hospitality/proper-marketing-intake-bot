@@ -1,4 +1,6 @@
 import { FORM_URL } from "../intake/catalog.js";
+import { markEmailSlices } from "../intake/attachments.js";
+import { rushApproverFor, rushBlockedText } from "../intake/rush.js";
 import { rememberAttachment } from "../intake/capture.js";
 import { continueEmailConversation, startNextEmailBrief } from "../intake/email/turn.js";
 import { runIntakeTurn, type DesignDeps, type Llm } from "../agent/run.js";
@@ -212,7 +214,7 @@ export async function handleConfirmAction(deps: {
       return;
     }
     if (state.draft.rushBlock && state.draft.rushApprovedFor !== state.draft.requestedCompletionDate) {
-      const text = "That date needs approval from DeeDee Brown or Koral Captain before I can file it. Nothing was created.";
+      const text = rushBlockedText(rushApproverFor(state.draft.properties).name);
       await deps.slack.postMessage({
         channel: action.channel,
         threadTs: action.threadTs,
@@ -236,6 +238,7 @@ export async function handleConfirmAction(deps: {
       const saved = state.draft.attachments?.find((item) => item.slackFileId === file.slackFileId);
       if (saved && !saved.kind) saved.kind = "context";
     }
+    markEmailSlices(state.draft);
     const result = await submitConfirmedBrief({
       confirmed: true,
       version: action.version,

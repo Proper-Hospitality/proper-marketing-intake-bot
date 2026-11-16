@@ -127,9 +127,9 @@ describe("one question at a time", () => {
       },
       templateOffer: null,
     });
-    expect(description).toContain("## Brief\nRecommended Copy / Details: Join us in December.");
+    expect(description).toContain("Recommended Copy / Details:\nJoin us in December.");
     expect(description).toContain("## Pending from requester\nAudience / Distribution Plan: Not sure (requester will provide)");
-    expect(description).not.toContain("Audience / Distribution Plan: Not sure (requester will provide)\n## Brief");
+    expect(description).not.toContain("Audience / Distribution Plan:\nNot sure");
   });
 });
 

@@ -1,5 +1,6 @@
-import { isFigmaLink } from "./attachments.js";
-import { FORM_URL, inferProperties } from "./catalog.js";
+import { isFigmaLink, markEmailSlices } from "./attachments.js";
+import { inferProperties } from "./catalog.js";
+import { captureUrls } from "./urls.js";
 import { listMissing } from "./missing.js";
 import {
   assignCompletionDate,
@@ -74,6 +75,7 @@ export function absorbTurnFacts(input: {
   for (const file of input.attachments ?? []) {
     rememberAttachment(draft, file, input.specsByFileId?.[file.slackFileId]);
   }
+  markEmailSlices(draft, input.userText);
 }
 
 export function rememberAttachment(draft: BriefDraft, file: TurnAttachment, specs?: string): void {
@@ -99,11 +101,6 @@ export function rememberAttachment(draft: BriefDraft, file: TurnAttachment, spec
       specs: specs?.slice(0, 1500),
     });
     draft.attachments = list;
-  }
-  const label = file.permalink || `Slack file ${name} (${file.slackFileId})`;
-  const assets = draft.assets ?? [];
-  if (!assets.some((asset) => asset.includes(file.slackFileId) || asset === label || asset.includes(name))) {
-    draft.assets = [...assets, label];
   }
   if (specs && !draft.followUps?.["Asset Size"] && specsLookLikeSize(specs)) {
     draft.followUps = { ...(draft.followUps ?? {}), "Asset Size": specs.trim().slice(0, 500) };
@@ -199,7 +196,6 @@ export function rememberRequestFacts(draft: BriefDraft, text: string): void {
     const link = extractLinks(text).find((item) => !isFigmaLink(item));
     if (link && !draft.followUps?.URL) {
       draft.followUps = { ...(draft.followUps ?? {}), URL: link };
-      if (!draft.whereItGoesLive) draft.whereItGoesLive = link;
     }
   }
   if (draft.copyReady === undefined) {
@@ -277,18 +273,8 @@ function rememberLinks(draft: BriefDraft, text: string): void {
     if (!merged.includes(link)) merged.push(link);
   }
   draft.providedLinks = merged;
-  if (!draft.whereItGoesLive && /submit(?:ted)? via|officially submitted|link here/i.test(text)) {
-    draft.whereItGoesLive = links[0];
-  }
 }
 
 export function extractLinks(text: string): string[] {
-  const matches = text.match(/https?:\/\/[^\s<>)\]]+/g) ?? [];
-  const links: string[] = [];
-  for (const match of matches) {
-    const link = match.replace(/[.,;]+$/, "");
-    if (link === FORM_URL || links.includes(link)) continue;
-    links.push(link);
-  }
-  return links;
+  return captureUrls(text);
 }

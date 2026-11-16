@@ -1,5 +1,5 @@
-import { attachmentMissing, requestHasFiles } from "./attachments.js";
-import { daysUntil, propertyNames, taskTypeNames } from "./catalog.js";
+import { attachmentMissing, markEmailSlices, requestHasFiles } from "./attachments.js";
+import { applyDefaultApprover, daysUntil, propertyNames, taskTypeNames } from "./catalog.js";
 import { leadTimeFor, leadTimeIsTight, leadTimeSentence } from "./lead-time.js";
 import { followUpsFor, SUPPORT_QUESTION } from "./question-tree.js";
 import { REQUEST_TYPES, type BriefDraft, type FollowUp, type RequestType } from "./types.js";
@@ -72,6 +72,8 @@ export function isFilled(value: string | undefined): boolean {
 }
 
 export function listMissing(draft: BriefDraft, today = new Date()): MissingReport {
+  applyDefaultApprover(draft);
+  markEmailSlices(draft);
   const items: MissingItem[] = [];
   const warnings: string[] = [];
 

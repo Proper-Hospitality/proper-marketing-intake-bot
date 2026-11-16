@@ -109,10 +109,11 @@ describe("pending prices", () => {
         needsProperty: false,
       },
     });
-    const brief = description.split("## Brief\n")[1]?.split("\n\n")[0];
-    expect(brief?.startsWith(`${MENU}: Test burger $16\nLink to Current Menu: https://example.com/menu`)).toBe(true);
-    expect(brief).toContain("Attachment type: PDF of a menu or brochure to link onto a page");
-    expect(brief).toContain("SMP_Calabra_Dinner_Nov2026.pdf — https://drive.example.com/menu");
+    expect(description).toContain(`${MENU}:\nTest burger $16`);
+    expect(description).toContain("Link to Current Menu:\nhttps://example.com/menu");
+    expect(description).toContain("Attachments:\nhttps://drive.example.com/menu");
+    expect(description).not.toContain("Attachment type:");
+    expect(description).not.toContain("## Brief");
     expect(description).toContain("## Pending from requester\nPrice: TBD (requester will provide)");
     expect(description).toContain(PRICE_PENDING_LINE);
     expect(description).toContain("Canva template offered: 5X7_ProperEventMenu https://www.canva.com/brand/brand-templates/EAG_kd17cpk. Not used: does not fit.");
@@ -127,7 +128,7 @@ describe("pending prices", () => {
       },
       templateOffer: null,
     });
-    expect(dated).toContain("Offer Go Live Date: December 1, 2026");
+    expect(dated).toContain("Offer Go Live Date:\nDecember 1, 2026");
 
     const summary = formatSummary({ draft, warnings: [], templateOffer: null, duplicates: [] });
     expect(summary).toContain(PRICE_PENDING_LINE);

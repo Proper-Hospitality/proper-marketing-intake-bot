@@ -136,10 +136,10 @@ describe("attachment kinds", () => {
     });
     expect(ready.confirm?.version).toBe(1);
     const description = buildDescription({ draft: state.draft, templateOffer: null });
-    expect(description).toContain("Attachment type: PDF of a menu or brochure to link onto a page");
     expect(description).toContain("https://www.dropbox.com/s/abc/SMP_Calabra_Dinner_Nov2026.pdf");
-    expect(description).toContain("## Brief");
-    expect(ready.text).toContain("PDF of a menu or brochure to link onto a page");
+    expect(description).not.toContain("Attachment type:");
+    expect(description).not.toContain("## Assets");
+    expect(ready.text).toContain("Attachments: SMP_Calabra_Dinner_Nov2026.pdf");
 
     const named: BriefDraft = {
       ...menuUploadDraft(),
@@ -174,7 +174,7 @@ describe("attachment kinds", () => {
     expect(state.draft.attachments?.[0]?.pdfDeferred).toBe(true);
     expect(reply.confirm?.version).toBe(1);
     const description = buildDescription({ draft: state.draft, templateOffer: null });
-    expect(description).toContain("Attachment type: PDF of a menu or brochure to link onto a page");
+    expect(description).not.toContain("Attachment type:");
     expect(description).toContain("Figma Buzz file");
     expect(description).toContain("Flagged for marketing (Let marketing recommend)");
   });
@@ -195,10 +195,10 @@ describe("attachment kinds", () => {
     expect(applyAttachmentAnswer(draft, "attachmentKind:1", "context: previous version")).toBe("recorded");
     expect(listMissing(draft, today).items).toEqual([]);
     const description = buildDescription({ draft, templateOffer: null });
-    expect(description).toContain("Attachment 1 type: Photo needed for the page");
-    expect(description).toContain("Attachment 2 type: Context: a previous version of the asset, or a deck with background");
     expect(description).toContain("Calabra-dinner.pdf");
     expect(description).toContain("https://www.dropbox.com/s/hero/pool.jpg");
+    expect(description).not.toContain("Attachment 1 type:");
+    expect(description).not.toContain("Photo needed for the page");
   });
 
   it("keeps an existing-file check ahead of the attachment questions", () => {

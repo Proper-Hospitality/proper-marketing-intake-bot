@@ -2,27 +2,27 @@ import { describe, expect, it } from "vitest";
 import { taskName } from "../src/intake/task-name.js";
 
 describe("standard task names", () => {
-  it("builds a scannable name and does not repeat the property or type", () => {
+  it("uses the property and the request name, the way the form does", () => {
     expect(taskName({
       properties: ["SMP"],
       requestType: "Web",
       taskType: "New Page",
-      requestName: "SMP new page holiday offer",
-    })).toBe("SMP | New Page | Holiday Offer");
+      requestName: "Holiday offer",
+    })).toBe("SMP, Holiday offer");
 
     expect(taskName({
       properties: ["HJWL"],
       requestType: "Web",
       taskType: "Menu Upload",
-      requestName: "Hotel June West LA dinner menu",
-    })).toBe("HJWL | Menu Upload | Dinner Menu");
+      requestName: "Dinner menu",
+    })).toBe("HJWL, Dinner menu");
 
     expect(taskName({
-      properties: ["SFP"],
-      requestType: "Web",
-      taskType: "Happenings",
-      requestName: "San Francisco art week",
-    })).toBe("SFP | Happenings | Art Week");
+      properties: ["MIN"],
+      requestType: "CRM & Paid",
+      taskType: "Newsletter Send",
+      requestName: "Local Announcement Email",
+    })).toBe("MIN, Local Announcement Email");
   });
 
   it("names each split email request on its own", () => {
@@ -32,12 +32,12 @@ describe("standard task names", () => {
       requestType: "Web",
       taskType: "Page Edit",
       requestName: "Lake Tahoe membership interest form",
-    })).toBe("LTP | Page Edit | Membership Interest Form");
+    })).toBe("LTP, Lake Tahoe membership interest form");
     expect(taskName({
       ...shared,
       requestType: "CRM & Paid",
       taskType: "Newsletter Send",
       requestName: "membership questionnaire",
-    })).toBe("LTP | Newsletter Send | Membership Questionnaire");
+    })).toBe("LTP, membership questionnaire");
   });
 });

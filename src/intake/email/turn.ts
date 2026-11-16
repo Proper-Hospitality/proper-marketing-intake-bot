@@ -1,4 +1,5 @@
 import { searchExistingTasks } from "../asana.js";
+import { markEmailSlices } from "../attachments.js";
 import { rememberAttachment } from "../capture.js";
 import { applyAnswers } from "../flow.js";
 import { confirmBlocks, messageBlocks } from "../../slack/blocks.js";
@@ -268,6 +269,7 @@ function seedDraft(email: EmailIntakeState, proposal: EmailProposal, useProposal
     const saved = draft.attachments?.find((item) => item.slackFileId === file.slackFileId);
     if (saved && !saved.kind) saved.kind = "context";
   }
+  markEmailSlices(draft);
   return draft;
 }
 

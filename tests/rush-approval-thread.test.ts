@@ -31,7 +31,7 @@ const recordType: Llm = {
 };
 
 describe("Kinsey's Nov 11 homepage rush", () => {
-  it("asks DeeDee and Koral, keeps tomorrow, and does not announce filing", async () => {
+  it("asks DeeDee for a By Proper property, keeps tomorrow, and does not announce filing", async () => {
     expect(wantsRushApproval("Request Approval")).toBe(true);
     expect(wantsRushApproval("*Request approval*")).toBe(true);
     expect(wantsRushApproval("please request approval")).toBe(true);
@@ -67,6 +67,8 @@ describe("Kinsey's Nov 11 homepage rush", () => {
       expect(state.draft.followUps?.["Audience / Distribution Plan"]).toBe("the homepage, 3rd spot");
       expect(state.draft.followUps?.["Recommended Copy / Details"]).toBe("Medium Cool");
       expect(first.text).toContain("2026-11-12 is the next day");
+      expect(first.text).toContain("I'll ask DeeDee Brown");
+      expect(first.text).not.toContain("Koral");
       expect(first.text).toContain("Request approval");
       expect(first.text).toContain("We need:");
       expect(first.text).not.toContain("membership interest list");
@@ -80,10 +82,11 @@ describe("Kinsey's Nov 11 homepage rush", () => {
         today: TODAY,
         rush,
       });
-      expect(dms).toEqual(["U0B5F1HN98Q", "U0B6N3RE23T"]);
-      expect(asked.text).toContain("I've asked DeeDee Brown and Koral Captain");
+      expect(dms).toEqual(["U0B6N3RE23T"]);
+      expect(asked.text).toContain("I've asked DeeDee Brown");
+      expect(asked.text).not.toContain("Koral");
       expect(asked.text).toContain("direct message");
-      expect(asked.text).toContain("as soon as one approves");
+      expect(asked.text).toContain("as soon as they approve");
       expect(asked.text).not.toContain("membership interest list");
       expect(asked.text).not.toContain("weekly newsletter");
       expect(state.draft.requestedCompletionDate).toBe("2026-11-12");
@@ -116,7 +119,7 @@ describe("Kinsey's Nov 11 homepage rush", () => {
       expect(state.draft.requestedCompletionDate).toBe("2026-11-12");
       expect(complaint.text).not.toContain("2026-11-11 is the same day");
       expect(complaint.text).toContain("already asked");
-      expect(dms).toHaveLength(2);
+      expect(dms).toHaveLength(1);
 
       const bold = await runIntakeTurn({
         state,
@@ -129,7 +132,7 @@ describe("Kinsey's Nov 11 homepage rush", () => {
       expect(state.draft.requestedCompletionDate).toBe("2026-11-12");
       expect(bold.text).not.toContain("2026-11-12 is the next day");
       expect(bold.text).toContain("already asked");
-      expect(dms).toHaveLength(2);
+      expect(dms).toHaveLength(1);
     } finally {
       if (previousMentions === undefined) delete process.env.SLACK_MENTIONS_ENABLED;
       else process.env.SLACK_MENTIONS_ENABLED = previousMentions;

@@ -59,8 +59,8 @@ describe("Elena's Nov 10 intake decisions", () => {
     });
     expect(state.draft.followUps?.["Asset Size"]).toBe(LET_MARKETING_RECOMMEND);
     const description = buildDescription({ draft: state.draft, templateOffer: null });
-    expect(description).toContain("Asset Size: Let marketing recommend");
-    expect(description).not.toContain("Dimensions: Let marketing recommend\n## Brief");
+    expect(description).toContain("Asset Size:\nLet marketing recommend");
+    expect(description).not.toContain("Dimensions: Let marketing recommend");
     expect(recorded.text.length).toBeGreaterThan(0);
   });
 
@@ -134,7 +134,7 @@ describe("Elena's Nov 10 intake decisions", () => {
       threadTs: "1.2",
       postDm: async (userId) => { dms.push(userId); },
     });
-    expect(dms).toEqual(["U0B5F1HN98Q", "U0B6N3RE23T"]);
+    expect(dms).toEqual(["U0B6N3RE23T"]);
     const saved = await store.getValue(`intake:rush:${state.draft.rushApprovalId}`);
     expect(saved).toContain("pending");
     state.phase = "awaiting_confirm";
@@ -159,7 +159,7 @@ describe("Elena's Nov 10 intake decisions", () => {
     expect(reloaded?.draft.rushApprovedBy).toBe("DeeDee Brown");
     const description = buildDescription({ draft: reloaded!.draft, templateOffer: null });
     expect(description).toContain("Rush approved by DeeDee Brown");
-    expect(description.split("## Brief")[1]?.split("Rush approved")[0]).not.toContain("Rush approved");
+    expect(description.split("Rush approved by")[0]).not.toContain("Rush approved");
   });
 
   it("lets Koral or DeeDee approve a Friday request due Monday, and refuses a Saturday due date", async () => {
@@ -184,7 +184,7 @@ describe("Elena's Nov 10 intake decisions", () => {
       threadTs: "1.2",
       postDm: async (userId) => { dms.push(userId); },
     });
-    expect(dms).toEqual(["U0B5F1HN98Q", "U0B6N3RE23T"]);
+    expect(dms).toEqual(["U0B6N3RE23T"]);
     const decision = await applyRushDecision({
       store,
       approvalId: state.draft.rushApprovalId ?? "",
