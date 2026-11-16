@@ -111,7 +111,7 @@ describe("pending prices", () => {
     });
     expect(description).toContain(`${MENU}:\nTest burger $16`);
     expect(description).toContain("Link to Current Menu:\nhttps://example.com/menu");
-    expect(description).toContain("Attachments:\nhttps://drive.example.com/menu");
+    expect(description).not.toContain("https://drive.example.com/menu");
     expect(description).not.toContain("Attachment type:");
     expect(description).not.toContain("## Brief");
     expect(description).toContain("## Pending from requester\nPrice: TBD (requester will provide)");

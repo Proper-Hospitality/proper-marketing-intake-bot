@@ -1,6 +1,6 @@
 import { isFigmaLink, markEmailSlices } from "./attachments.js";
 import { inferProperties } from "./catalog.js";
-import { captureUrls } from "./urls.js";
+import { captureUrls, exactAnswer } from "./urls.js";
 import { listMissing } from "./missing.js";
 import {
   assignCompletionDate,
@@ -107,6 +107,44 @@ export function rememberAttachment(draft: BriefDraft, file: TurnAttachment, spec
   }
 }
 
+const CONTROL_REPLY = /^(yes|yep|yeah|yup|no|nope|nah|ok|okay|sure|skip|back|request approval|please request approval)[.!]?$/i;
+const DATE_ONLY = /^(today|tomorrow|eow|end of(?: the)? week|(?:this |next )?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|\d{4}-\d{2}-\d{2}|[a-z]{3,9}\.?\s+\d{1,2}(?:,?\s+\d{4})?)[.!]?$/i;
+
+/** The reply to the question on screen, stored without paraphrasing. */
+export function keepExactReply(draft: BriefDraft, askedId: string | undefined, userText: string): void {
+  if (!askedId || askedId === "batch") return;
+  const exact = exactAnswer(userText);
+  if (!exact || exact.length > 4000 || CONTROL_REPLY.test(exact)) return;
+  if (askedId === "consequenceOfDelay") {
+    draft.consequenceOfDelay = exact;
+    return;
+  }
+  if (askedId === "timing" && !DATE_ONLY.test(exact)) {
+    draft.consequenceOfDelay = exact;
+    return;
+  }
+  if (askedId === "requestName") {
+    draft.requestName = exact;
+    return;
+  }
+  if (askedId === "approver") {
+    draft.approver = exact;
+    return;
+  }
+  if (askedId === "whereItGoesLive" && !/^https?:\/\//i.test(exact)) {
+    draft.whereItGoesLive = exact;
+    return;
+  }
+  if (askedId === "copy" || askedId === "finalCopy") {
+    draft.finalCopy = exact;
+    return;
+  }
+  if (askedId.startsWith("followup:")) {
+    const label = askedId.slice("followup:".length);
+    draft.followUps = { ...(draft.followUps ?? {}), [label]: exact };
+  }
+}
+
 export function extractConsequence(text: string): string | undefined {
   const sentence = text.trim().split("\n").map((line) => line.trim()).find(Boolean) ?? "";
   if (!sentence || sentence.length > 400) return undefined;
@@ -157,7 +195,6 @@ export function rememberDesignFacts(draft: BriefDraft, text: string): void {
     if (!audience) {
       draft.followUps = { ...(draft.followUps ?? {}), "Audience / Distribution Plan": placement };
     }
-    if (!draft.whereItGoesLive) draft.whereItGoesLive = placement;
   }
   const said = text.match(/\bshould say\s+["“']?([^"”'\n.]+)["”']?/i);
   const copy = said?.[1]?.trim();
@@ -179,11 +216,10 @@ export function rememberDesignFacts(draft: BriefDraft, text: string): void {
 }
 
 export function inferPlacement(text: string): string | undefined {
-  if (!/\bhomepage\b/i.test(text)) return undefined;
-  const spot = text.match(/\b(first|second|third|\d(?:st|nd|rd|th))\s+homepage\s+spot\b/i);
-  if (spot?.[1]) return `the homepage, ${spot[1].toLowerCase()} spot`;
-  if (/\bspot\b/i.test(text)) return "the homepage";
-  return "the homepage";
+  const sentences = text.split(/(?<=[.!?])\s+/).map((part) => exactAnswer(part));
+  const spot = sentences.find((part) => /\bhomepage\s+spot\b/i.test(part));
+  if (spot) return spot;
+  return sentences.find((part) => /\bhomepage\b/i.test(part) && !/\bhomepage element\b/i.test(part));
 }
 
 export function rememberRequestFacts(draft: BriefDraft, text: string): void {
@@ -256,13 +292,22 @@ function rememberOfferFacts(draft: BriefDraft, text: string): void {
   if (ads && !followUps["What replaces it in ads or evergreen campaigns"]) {
     followUps["What replaces it in ads or evergreen campaigns"] = ads;
   }
-  if (/\btransactional emails?\b/i.test(text) && !followUps["Rate or promo codes in transactional emails"]) {
-    followUps["Rate or promo codes in transactional emails"] = /\b(no|not|aren't|are not|unaffected)\b/i.test(text) ? "No" : "Yes";
+  const transactional = sentenceWith(text, /transactional emails?/i);
+  if (transactional && !followUps["Rate or promo codes in transactional emails"]) {
+    followUps["Rate or promo codes in transactional emails"] = transactional;
   }
-  if (/\brules (?:and|&) regulations\b/i.test(text) && /\bphoto\b/i.test(text) && !followUps["Offer copy, rules, and photo"]) {
-    followUps["Offer copy, rules, and photo"] = "Copy, rules and regulations, and a photo are attached.";
+  const rules = sentenceWith(text, /rules (?:and|&) regulations/i);
+  if (rules && /\bphoto\b/i.test(rules) && !followUps["Offer copy, rules, and photo"]) {
+    followUps["Offer copy, rules, and photo"] = rules;
   }
   draft.followUps = followUps;
+}
+
+function sentenceWith(text: string, pattern: RegExp): string | undefined {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((part) => exactAnswer(part))
+    .find((part) => pattern.test(part));
 }
 
 function rememberLinks(draft: BriefDraft, text: string): void {

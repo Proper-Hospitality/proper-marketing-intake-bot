@@ -26,6 +26,20 @@ export function cleanCapturedUrl(raw: string): string {
   return url;
 }
 
+/**
+ * The requester's words, ready to store.
+ * Slack <url|label> keeps the URL. Everything else is only trimmed.
+ */
+export function exactAnswer(text: string): string {
+  const links = text.replace(SLACK_LINK, "$1");
+  return links
+    .split("\n")
+    .map((line) => line.trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function captureUrls(text: string): string[] {
   const found: string[] = [];
   const take = (raw: string | undefined) => {

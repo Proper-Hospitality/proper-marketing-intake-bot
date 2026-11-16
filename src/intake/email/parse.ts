@@ -92,9 +92,6 @@ export function proposeEmailBriefs(input: { subject: string; bodyText: string })
       const proposal = classifyAsk(detail, input.subject);
       proposal.detail = detail;
       proposal.summary = summarizeAsk(detail, proposal.title);
-      if (proposal.followUps && proposal.summary) {
-        for (const key of Object.keys(proposal.followUps)) proposal.followUps[key] = proposal.summary;
-      }
       return proposal;
     });
 }
@@ -206,17 +203,15 @@ function classifyAsk(detail: string, subject: string): EmailProposal {
     };
   }
   if (/\b(questionnaire|survey)\b/i.test(detail) || (/\bsend\b/i.test(detail) && /\b(list|audience)\b/i.test(detail))) {
-    const list = detail.match(/hand-built 500\+\s*person membership interest list/i)?.[0];
     return {
       title: "Membership interest questionnaire",
       detail,
       requestType: "CRM & Paid",
       taskType: "Newsletter Send",
       followUps: {
-        "Audience / Distribution Plan": list ?? detail,
+        "Audience / Distribution Plan": detail,
         "Recommended Copy / Details": detail,
       },
-      whereItGoesLive: list,
     };
   }
   if (/\bplan\b/i.test(detail) && /\b(update|cadence|launch|share|often)\b/i.test(detail)) {

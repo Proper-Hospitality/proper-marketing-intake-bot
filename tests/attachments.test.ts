@@ -136,8 +136,9 @@ describe("attachment kinds", () => {
     });
     expect(ready.confirm?.version).toBe(1);
     const description = buildDescription({ draft: state.draft, templateOffer: null });
-    expect(description).toContain("https://www.dropbox.com/s/abc/SMP_Calabra_Dinner_Nov2026.pdf");
+    expect(description).not.toContain("https://www.dropbox.com/s/abc/SMP_Calabra_Dinner_Nov2026.pdf");
     expect(description).not.toContain("Attachment type:");
+    expect(ready.text).toContain("SMP_Calabra_Dinner_Nov2026.pdf");
     expect(description).not.toContain("## Assets");
     expect(ready.text).toContain("Attachments: SMP_Calabra_Dinner_Nov2026.pdf");
 
@@ -188,17 +189,17 @@ describe("attachment kinds", () => {
       ],
     };
     expect(listMissing(draft, today).items.map((item) => item.id)).toEqual([
-      "attachmentKind:0",
       "attachmentKind:1",
+      "attachmentPdf:0",
     ]);
     expect(applyAttachmentAnswer(draft, "attachmentKind:0", "photo")).toBe("recorded");
     expect(applyAttachmentAnswer(draft, "attachmentKind:1", "context: previous version")).toBe("recorded");
     expect(listMissing(draft, today).items).toEqual([]);
     const description = buildDescription({ draft, templateOffer: null });
-    expect(description).toContain("Calabra-dinner.pdf");
-    expect(description).toContain("https://www.dropbox.com/s/hero/pool.jpg");
+    expect(description).not.toContain("https://www.dropbox.com/s/hero/pool.jpg");
     expect(description).not.toContain("Attachment 1 type:");
     expect(description).not.toContain("Photo needed for the page");
+    expect(draft.attachments?.[1]?.kind).toBe("context");
   });
 
   it("keeps an existing-file check ahead of the attachment questions", () => {
