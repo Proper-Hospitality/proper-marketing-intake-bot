@@ -5,6 +5,8 @@ export type RequestType = (typeof REQUEST_TYPES)[number];
 export interface BriefDraft {
   requesterName?: string;
   requesterEmail?: string;
+  /** Slack member who asked. Used to skip rush approval when Kinsey files her own new-property request. */
+  requesterSlackId?: string;
   requestName?: string;
   properties?: string[];
   requestedCompletionDate?: string;

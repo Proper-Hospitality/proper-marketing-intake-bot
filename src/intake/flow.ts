@@ -15,6 +15,7 @@ import type { CollateralOffer } from "./collateral/types.js";
 import { matchTemplates, type TemplateMatchResult } from "./templates.js";
 import { planRoute } from "./routing.js";
 import { applyRushBlock, assignCompletionDate, resolveDateInput } from "./relative-date.js";
+import { exactAnswer } from "./urls.js";
 import type { BriefDraft, RequestType } from "./types.js";
 
 export interface RecordInput {
@@ -223,12 +224,13 @@ function mergeDraft(draft: BriefDraft, input: RecordInput, today: Date): string[
     for (const [label, value] of Object.entries(input.followUps)) {
       if (!value || !value.trim()) continue;
       const dateLike = /date/i.test(label);
-      const trimmed = value.trim();
+      const clean = exactAnswer(value);
+      if (!clean) continue;
       if (dateLike) {
-        const parsed = resolveDateInput(trimmed, today);
-        draft.followUps[label] = parsed?.iso ?? trimmed;
+        const parsed = resolveDateInput(clean, today);
+        draft.followUps[label] = parsed?.iso ?? clean;
       } else {
-        draft.followUps[label] = trimmed;
+        draft.followUps[label] = clean;
       }
       if (isPricePendingStatement(draft.followUps[label])) draft.pricePending = true;
       if (mentionsActualPrice(draft.followUps[label])) draft.pricePending = false;
@@ -245,7 +247,9 @@ function mergeDraft(draft: BriefDraft, input: RecordInput, today: Date): string[
 
 function assignText(draft: BriefDraft, key: keyof BriefDraft, value: string | undefined): void {
   if (!value || !value.trim()) return;
-  (draft as Record<string, unknown>)[key] = value.trim();
+  const clean = exactAnswer(value);
+  if (!clean) return;
+  (draft as Record<string, unknown>)[key] = clean;
 }
 
 function matchText(draft: BriefDraft): string {

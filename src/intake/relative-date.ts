@@ -1,4 +1,4 @@
-import { normalizeDate } from "./catalog.js";
+import { isNewPropertyCode, NEW_PROPERTY_APPROVER, normalizeDate } from "./catalog.js";
 import { isNormal24HourSend } from "./lead-time.js";
 import type { BriefDraft } from "./types.js";
 import { addCalendarDays, classifyRush, laIsoDate, weekdayIndex } from "./rush.js";
@@ -94,17 +94,38 @@ export function assignCompletionDate(draft: BriefDraft, iso: string, today: Date
   applyRushBlock(draft, today);
 }
 
+export function requesterIsKinsey(draft: { requesterSlackId?: string; requesterEmail?: string }): boolean {
+  if (draft.requesterSlackId) return draft.requesterSlackId === NEW_PROPERTY_APPROVER.slackId;
+  return draft.requesterEmail?.trim().toLowerCase() === NEW_PROPERTY_APPROVER.email;
+}
+
 /**
- * Same-day still needs Koral or DeeDee. A weekend due date is still blocked.
- * Newsletter Send and SMS Send treat the next day as a normal 24 hour turnaround.
+ * Same-day still needs a rush approver. A weekend due date is still blocked.
+ * Newsletter Send and SMS Send treat the next day as normal, except at a new property,
+ * where that date is sent to Kinsey East. Kinsey's own requests skip approval.
  */
 export function applyRushBlock(draft: BriefDraft, today: Date): void {
   const iso = draft.requestedCompletionDate;
   if (!iso) return;
   const rush = classifyRush(iso, today);
-  const normalNextDay = rush === "next_day" && isNormal24HourSend(draft);
-  if (rush && !normalNextDay && draft.rushApprovedFor !== iso) draft.rushBlock = rush;
-  else delete draft.rushBlock;
+  if (!rush || draft.rushApprovedFor === iso) {
+    delete draft.rushBlock;
+    return;
+  }
+  if (rush === "weekend") {
+    draft.rushBlock = "weekend";
+    return;
+  }
+  const newProperty = (draft.properties ?? []).some((code) => isNewPropertyCode(code));
+  if (newProperty && requesterIsKinsey(draft)) {
+    delete draft.rushBlock;
+    return;
+  }
+  if (rush === "next_day" && isNormal24HourSend(draft) && !newProperty) {
+    delete draft.rushBlock;
+    return;
+  }
+  draft.rushBlock = rush;
 }
 
 function collectCalendarDates(text: string, today: string, into: Candidate[]): void {

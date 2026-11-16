@@ -2,8 +2,9 @@ import { addTaskComment, addTaskFollowers, createIntakeTask, userFacingAsanaErro
 import { searchWorkspaceUsers } from "../tasks/complete.js";
 import { emailFallbackFile } from "../intake/email/attach.js";
 import { failedAttachmentLine, loadSlackAttachments, uploadLoadedAttachments } from "../intake/task-files.js";
-import { FORM_URL, formatDisplayDate } from "../intake/catalog.js";
+import { FORM_URL } from "../intake/catalog.js";
 import { rushApproverFor, rushBlockedText } from "../intake/rush.js";
+import { stripFileEcho } from "../intake/urls.js";
 import { isReadyToConfirm } from "../intake/missing.js";
 import { taskName } from "../intake/brief.js";
 import type { ConversationState } from "../store/types.js";
@@ -146,25 +147,11 @@ export async function submitConfirmedBrief(input: {
       });
     }
     await input.store.saveConversation(state);
-    const date = state.draft.requestedCompletionDate ? formatDisplayDate(state.draft.requestedCompletionDate) : "no date";
-    const lines = [
-      `Filed *${taskName(state.draft)}* as ${state.draft.requestType} → ${state.draft.taskType}.`,
-      result.permalinkUrl,
-      `Requested date: ${date}.`,
-      result.automation.summary,
-    ];
-    if (!result.automation.ok) {
-      lines.push("The task link is above. The team can still open it, but the automatic routing may not have finished.");
-    }
-    if (state.draft.pricePending) {
-      lines.push("Price is still pending. Reply in the Asana task or in this thread with the price when you have it.");
-    }
     const attachedNames = (state.draft.attachments ?? [])
       .filter((file) => !file.slackFileId || (state.uploadedSlackFileIds ?? []).includes(file.slackFileId))
-      .map((file) => file.name || file.fileName || file.ref || "file");
-    if (attachedNames.length > 0) lines.push(`Attached: ${attachedNames.join(", ")}.`);
-    if (failed.length > 0) lines.push(failedAttachmentLine(failed));
-    return { text: lines.join("\n") };
+      .map(attachmentFileName)
+      .filter((name): name is string => Boolean(name));
+    return { text: filedConfirmation(state.draft, result.permalinkUrl, attachedNames) };
   } catch (error) {
     console.error(JSON.stringify({ msg: "asana_submit_failed", error: userFacingAsanaError(error) }));
     state.phase = state.taskGid ? "submitting" : "awaiting_confirm";
@@ -176,4 +163,19 @@ export async function submitConfirmedBrief(input: {
         : `I couldn't file this in Asana. No task was created.\n${userFacingAsanaError(error)}\nYou can press Confirm to try again, or use the form: ${FORM_URL}`,
     };
   }
+}
+
+/** Slack confirmation: the task name, the Asana link, and filenames. No file URLs. */
+export function filedConfirmation(draft: Parameters<typeof taskName>[0], taskUrl: string, attachedNames: string[]): string {
+  const lines = [`Filed *${taskName(draft)}*`, taskUrl];
+  const names = [...new Set(attachedNames.map((name) => stripFileEcho(name)).filter((name) => name && !/slack\.com\/files/i.test(name)))];
+  if (names.length > 0) lines.push(`Attached: ${names.join(", ")}.`);
+  return lines.join("\n");
+}
+
+function attachmentFileName(file: { name?: string; fileName?: string; ref?: string }): string | undefined {
+  const named = [file.name, file.fileName].find((value) => value && !/^https?:\/\//i.test(value));
+  if (!named) return undefined;
+  const clean = stripFileEcho(named);
+  return clean || undefined;
 }

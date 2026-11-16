@@ -112,12 +112,9 @@ async function handleFreshMessage(deps: {
     }] : []
   ));
   const attachments = mergeThreadFiles(fromThread, currentFiles);
-  const fileNote = attachments.length > 0
-    ? `\nFiles attached (saved on this request): ${attachments.map((file) => file.permalink ? `${file.name ?? file.slackFileId} ${file.permalink}` : (file.name ?? file.slackFileId)).join(", ")}`
-    : "";
   const reply = await runIntakeTurn({
     state,
-    userText: `${message.text}${fileNote}`.trim(),
+    userText: message.text,
     slackUser,
     llm: deps.llm,
     asanaToken: deps.asanaToken,
