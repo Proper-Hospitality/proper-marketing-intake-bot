@@ -63,7 +63,7 @@ export interface BriefDraft {
   rushApprovalId?: string;
 }
 
-export const ATTACHMENT_KINDS = ["menu_or_brochure", "photo", "page_content", "context", "email_slice"] as const;
+export const ATTACHMENT_KINDS = ["menu_or_brochure", "photo", "page_content", "context", "email_slice", "post_asset"] as const;
 
 export type AttachmentKind = (typeof ATTACHMENT_KINDS)[number];
 

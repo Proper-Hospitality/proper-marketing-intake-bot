@@ -7,7 +7,7 @@ import {
   type AttachmentInput,
 } from "../intake/attachments.js";
 import { addTaskComment, searchExistingTasks, userFacingAsanaError } from "../intake/asana.js";
-import { absorbTurnFacts, contradictsCaptured, noteResolvedDate, type TurnAttachment } from "../intake/capture.js";
+import { absorbTurnFacts, contradictsCaptured, keepExactReply, noteResolvedDate, type TurnAttachment } from "../intake/capture.js";
 import { replyToFiledThread } from "../intake/filed-reply.js";
 import { extractDueDate, formatSpokenDate, messageSuppliesDate, resolveDateInput } from "../intake/relative-date.js";
 import {
@@ -446,6 +446,7 @@ export async function runIntakeTurn(input: {
     if (outcome && outcome.kind !== "invalid") break;
     if (completion && completion.kind !== "listed") break;
   }
+  keepExactReply(state.draft, state.lastAskedId, input.userText);
 
   if (outcome?.kind === "invalid" && state.draft.requestedCompletionDate && outcome.errors.every((error) => /completion date/i.test(error))) {
     outcome = applyAnswers(state, {}, today);

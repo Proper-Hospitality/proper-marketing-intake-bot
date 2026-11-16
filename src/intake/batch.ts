@@ -39,11 +39,8 @@ export function parseBatchAnswers(text: string, draft: BriefDraft, today: Date):
   const why = extractConsequence(text);
   if (why && !draft.consequenceOfDelay) input.consequenceOfDelay = why;
   const links = extractLinks(text);
-  if (links[0]) {
-    if (!draft.whereItGoesLive) input.whereItGoesLive = links[0];
-    if (draft.requestType === "Web" && (draft.taskType === "Page Edit" || draft.taskType === "New Page" || saysNewPage(text))) {
-      input.followUps = { ...(input.followUps ?? {}), URL: links[0] };
-    }
+  if (links[0] && draft.requestType === "Web" && (draft.taskType === "Page Edit" || draft.taskType === "New Page" || saysNewPage(text))) {
+    input.followUps = { ...(input.followUps ?? {}), URL: links[0] };
   }
   if (saysNewPage(text) && draft.requestType === "Web" && draft.taskType !== "New Page") {
     input.taskType = "New Page";

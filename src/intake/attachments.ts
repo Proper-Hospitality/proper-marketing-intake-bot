@@ -18,6 +18,7 @@ export const ATTACHMENT_KIND_LABELS: Record<AttachmentKind, string> = {
   page_content: "PDF of content to build as a page",
   context: "Context: a previous version of the asset, or a deck with background",
   email_slice: "Email slices",
+  post_asset: "Post asset",
 };
 
 export const ATTACHMENT_KIND_HINT = [
@@ -153,24 +154,69 @@ export function isImageAttachment(file: RequestAttachment): boolean {
   return /\bimage\/|\.(?:png|jpe?g|webp|gif)(?:$|[?#\s])|\b(?:png|jpe?g|webp|gif)\b/i.test(name);
 }
 
+const SAID_PAGE = /page content|content to be built|pdf of content|build (?:this |it |them )?as a page/i;
+const SAID_PHOTO = /\b(photos?|images?|pictures?)\b/i;
+const SAID_MENU = /\b(menus?|brochures?)\b/i;
+const SAID_FILES = /\b(attached|attachments?|files are|here(?:'|’)s the file|here is the file|here are the files|these files|the files|slices attached)\b/i;
+
+function isPdfAttachment(file: RequestAttachment): boolean {
+  return /\.pdf(?:$|[?#\s])/i.test(`${file.name ?? ""} ${file.fileName ?? ""} ${file.ref ?? ""}`);
+}
+
+function weakRole(kind: RequestAttachment["kind"]): boolean {
+  return !kind || kind === "context";
+}
+
 /**
- * CRM send images are the email slices. A requester who already said the files
- * are slices does not get asked what kind of file each image is.
- * An image is never left as "PDF of content to build as a page".
+ * A file role comes from the request type, or from what the requester said.
+ * Social images are post assets. CRM send images are email slices.
+ * A Web PDF is page content only when they say so.
+ * A described file is not asked "what kind of file is this?".
  */
-export function markEmailSlices(draft: BriefDraft, text?: string): void {
-  const described = Boolean(text && SLICE_WORDS.test(text));
-  const crmSend = isNormal24HourSend(draft);
-  if (!described && !crmSend) return;
+export function applyFileRoles(draft: BriefDraft, text?: string): void {
+  const saidPage = Boolean(text && SAID_PAGE.test(text));
+  const saidSlices = Boolean(text && SLICE_WORDS.test(text));
+  const saidPhoto = Boolean(text && SAID_PHOTO.test(text));
+  const saidMenu = Boolean(text && SAID_MENU.test(text));
+  const saidFiles = Boolean(text && (SAID_FILES.test(text) || saidSlices || saidPage || saidMenu));
+  const social = draft.requestType === "Social";
+  const crmImages = isNormal24HourSend(draft) || (draft.requestType === "CRM & Paid" && saidSlices);
+  const menuTask = draft.taskType === "Menu Upload" || draft.taskType === "Menu (F&B, Spa)";
   for (const file of draft.attachments ?? []) {
-    if (!isImageAttachment(file)) continue;
-    if (file.kind === "menu_or_brochure" || file.kind === "photo" || file.kind === "email_slice") continue;
-    file.kind = "email_slice";
+    const image = isImageAttachment(file);
+    const pdf = isPdfAttachment(file);
+    if (saidPage && pdf) {
+      file.kind = "page_content";
+      continue;
+    }
+    if (file.kind === "page_content" && text && !saidPage) file.kind = undefined;
+    if ((saidSlices || (crmImages && image)) && image && (weakRole(file.kind) || file.kind === "page_content")) {
+      file.kind = "email_slice";
+      continue;
+    }
+    if (social && image && (weakRole(file.kind) || file.kind === "page_content")) {
+      file.kind = "post_asset";
+      continue;
+    }
+    if ((menuTask || saidMenu) && pdf && weakRole(file.kind)) {
+      file.kind = "menu_or_brochure";
+      continue;
+    }
+    if (saidPhoto && image && weakRole(file.kind)) {
+      file.kind = "photo";
+      continue;
+    }
+    if (saidFiles && !file.kind) file.kind = "context";
   }
 }
 
+/** @deprecated use applyFileRoles */
+export function markEmailSlices(draft: BriefDraft, text?: string): void {
+  applyFileRoles(draft, text);
+}
+
 export function attachmentMissing(draft: BriefDraft): Array<{ id: string; label: string; hint?: string }> {
-  markEmailSlices(draft);
+  applyFileRoles(draft);
   if (!requestHasFiles(draft)) return [];
   const attachments = viewAttachments(draft);
   if (attachments.length === 0) {

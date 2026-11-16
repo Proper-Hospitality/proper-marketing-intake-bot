@@ -39,7 +39,7 @@ describe("Kinsey's Nov 11 homepage rush", () => {
     expect(wantsRushApproval("you said you would ask them?")).toBe(true);
     expect(wantsRushApproval("ask them")).toBe(true);
     expect(messageSuppliesDate("you said you would ask them?")).toBe(false);
-    expect(inferPlacement(KINSEY)).toBe("the homepage, 3rd spot");
+    expect(inferPlacement(KINSEY)).toBe("It goes in the 3rd homepage spot.");
 
     const state = emptyConversation("C0CEMM9G9EW:1794436375.974449");
     state.channel = "C0CEMM9G9EW";
@@ -64,7 +64,7 @@ describe("Kinsey's Nov 11 homepage rush", () => {
         rush,
       });
       expect(state.draft.requestedCompletionDate).toBe("2026-11-12");
-      expect(state.draft.followUps?.["Audience / Distribution Plan"]).toBe("the homepage, 3rd spot");
+      expect(state.draft.followUps?.["Audience / Distribution Plan"]).toBe("It goes in the 3rd homepage spot.");
       expect(state.draft.followUps?.["Recommended Copy / Details"]).toBe("Medium Cool");
       expect(first.text).toContain("2026-11-12 is the next day");
       expect(first.text).toContain("I'll ask DeeDee Brown");
