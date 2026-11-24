@@ -33,8 +33,8 @@ import { DELIVERABLE_QUESTION, parseDeliverableChoice } from "../intake/routing.
 import { mentionsEnabled } from "../slack/mentions.js";
 import { rushRequestBlocks } from "../slack/blocks.js";
 import { formatEasyAsk, formatEasyConfirm, recordEasyReply } from "../intake/easy-chat.js";
-import { hardQuestionById, NOTES_REMINDER } from "../intake/hard-path.js";
-import { classifyNewAsset, parseEmailSplit } from "../intake/new-asset.js";
+import { hardQuestionById, NOTES_REMINDER, recordBriefAnswers } from "../intake/hard-path.js";
+import { classifyNewAsset } from "../intake/new-asset.js";
 import { inferNovelty, parseNoveltyAnswer, parseReportingLane } from "../intake/workflows.js";
 import { canonicalizeProperty, inferProperties } from "../intake/catalog.js";
 import { loadRushApproval, startRushApproval } from "../intake/rush-approval.js";
@@ -741,11 +741,16 @@ function renderReply(
     state.lastAskedId = askedId;
     state.lastAskedLabel = outcome.prompt;
     const notice = outcome.kind === "hard_question" ? outcome.notice : undefined;
-    return { text: notice ? `${notice}\n\n${outcome.prompt}` : outcome.prompt };
+    const gap = outcome.kind === "hard_question" && outcome.id.includes("+") ? "\n" : "\n\n";
+    return { text: notice ? `${notice}${gap}${outcome.prompt}` : outcome.prompt };
   }
   if (outcome?.kind === "creator_studio") {
     state.lastAskedId = undefined;
     return { text: outcome.text };
+  }
+  if (outcome?.kind === "hard_ready") {
+    state.lastAskedId = undefined;
+    return { text: outcome.text, confirm: { version: state.confirmVersion } };
   }
   if (outcome?.kind === "hard_await_notes" || outcome?.kind === "hard_done") {
     state.lastAskedId = undefined;
@@ -985,22 +990,23 @@ function scriptedIntake(state: ConversationState, userText: string, today: Date)
     state.draft.reportingLane = lane;
     return applyAnswers(state, {}, today);
   }
-  if (state.intakeFlow === "simplified" && state.lastAskedId === "emailSplit" && state.phase === "collecting") {
-    const choice = parseEmailSplit(userText);
-    if (!choice) {
-      return { kind: "task_question", id: "emailSplit", prompt: "Should we design the email, send it, or both?" };
+  if (state.intakeFlow === "simplified" && state.lastAskedId === "designReady" && state.phase === "collecting") {
+    const answer = userText.trim();
+    if (/^(yes|yep|yeah|already|it is)\b/i.test(answer)) state.draft.designReady = true;
+    else if (/^(no|nope|nah|not yet)\b/i.test(answer)) state.draft.designReady = false;
+    else return { kind: "task_question", id: "designReady", prompt: state.lastAskedLabel ?? "Is the email already designed?" };
+    return applyAnswers(state, {}, today);
+  }
+  if (
+    state.intakeFlow === "simplified"
+    && state.lastAskedId
+    && state.phase === "collecting"
+    && state.lastAskedId.split("+").every((id) => hardQuestionById(id))
+  ) {
+    if (!recordBriefAnswers(state.draft, state.lastAskedId.split("+"), userText)) {
+      return applyAnswers(state, {}, today);
     }
-    state.draft.emailSplit = choice;
-    if (choice === "send") {
-      state.draft.requestType = "CRM & Paid";
-      state.draft.taskType = "Newsletter Send";
-      delete state.draft.novelty;
-    }
-    const outcome = applyAnswers(state, {}, today);
-    if (choice === "both" && outcome.kind === "task_question") {
-      return { ...outcome, prompt: `We'll start with the design, then the send. ${outcome.prompt}` };
-    }
-    return outcome;
+    return applyAnswers(state, {}, today);
   }
   if (state.intakeFlow === "simplified" && state.lastAskedId?.includes("+") && state.phase === "collecting") {
     const ids = state.lastAskedId.split("+");

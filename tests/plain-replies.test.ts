@@ -168,50 +168,38 @@ describe("send an email is a new request", () => {
       llm: { async complete() { throw new Error("the model must not ask design versus send first"); } },
       today: MONDAY,
     });
-    expect(first.text).toBe(
-      "This is a new request, so it needs approval from <@U0B6N3RE23T>.\n\nWhat do you need this for? For example, a promotion, an event, or to drive bookings.",
-    );
-    expect(first.text).not.toMatch(/designed or only sent|which to file first|Newsletter Send/i);
+    expect(first.text).toBe([
+      "This is a new request, so it needs approval from <@U0B6N3RE23T>.",
+      "- What do you need this for?",
+      "- How will we know it worked?",
+      "- Is there a budget for this? If not, just say no.",
+    ].join("\n"));
+    expect(first.text).not.toMatch(/designed or only sent|which to file first|design, send, or both|two tasks/i);
     expect(first.text.length).toBeLessThanOrEqual(MESSAGE_LIMIT);
 
-    const second = await runIntakeTurn({
+    const next = await runIntakeTurn({
       state,
-      userText: "A note to past guests about winter rates.",
+      userText: "A note to past guests about winter rates.\nMore bookings from past guests.\nNo.",
       slackUser: ELENA,
       llm: { async complete() { throw new Error("scripted"); } },
       today: MONDAY,
     });
-    expect(second.text).toBe("How will we know it worked? For example, more bookings, sign-ups, or clicks.");
+    expect(next.text).toBe("Is the email already designed?");
+    expect(state.draft.businessProblem).toContain("winter rates");
+    expect(state.draft.successLooksLike).toContain("More bookings");
+    expect(state.draft.budget).toBe("No.");
 
-    const third = await runIntakeTurn({
+    const designed = await runIntakeTurn({
       state,
-      userText: "More bookings from past guests.",
+      userText: "No",
       slackUser: ELENA,
       llm: { async complete() { throw new Error("scripted"); } },
       today: MONDAY,
     });
-    expect(third.text).toBe("Is there a budget for this? If not, just say no.");
-
-    const split = await runIntakeTurn({
-      state,
-      userText: "No.",
-      slackUser: ELENA,
-      llm: { async complete() { throw new Error("scripted"); } },
-      today: MONDAY,
-    });
-    expect(split.text).toBe("Should we design the email, send it, or both?");
-
-    const both = await runIntakeTurn({
-      state,
-      userText: "Both",
-      slackUser: ELENA,
-      llm: { async complete() { throw new Error("scripted"); } },
-      today: MONDAY,
-    });
-    expect(both.text.startsWith("We'll start with the design, then the send.")).toBe(true);
-    expect(both.text).toMatch(/Who should get this|text \(copy\)|images or photos/);
-    expect(both.text).not.toMatch(/which to file first|Creative → Email/);
-    expect(both.text.length).toBeLessThanOrEqual(MESSAGE_LIMIT);
+    expect(designed.text).toMatch(/Who should get this|text \(copy\)|images or photos/);
+    expect(designed.text).not.toMatch(/two tasks|which first|design, send, or both/);
+    expect(designed.text.length).toBeLessThanOrEqual(MESSAGE_LIMIT);
+    expect(state.draft.companionTaskType).toBe("Newsletter Send");
   });
 });
 

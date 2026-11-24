@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { assessAutomation, createIntakeTask, type AsanaTask } from "../src/intake/asana.js";
+import { addDependencies, assessAutomation, createIntakeTask, type AsanaTask } from "../src/intake/asana.js";
+import { dependencyPlan } from "../src/intake/dependencies.js";
 import { PROJECT_GID, PROPERTY_FIELD_GID, REQUEST_TYPE_FIELD_GID, SECTION_GID, TASK_TYPE_FIELDS } from "../src/intake/catalog.js";
 import type { BriefDraft } from "../src/intake/types.js";
 
@@ -130,6 +131,22 @@ describe("Asana client", () => {
       readAttempts: 1,
     });
     expect(methods).toEqual(["PUT", "PUT", "GET"]);
+  });
+
+  it("sets the later task to depend on the earlier task", async () => {
+    const plan = dependencyPlan("DESIGN", "SEND");
+    expect(plan).toEqual({ taskGid: "SEND", dependencies: ["DESIGN"] });
+    const fetchImpl = vi.fn(async () => json({ data: {} }));
+    await addDependencies({
+      token: "test-token",
+      taskGid: plan.taskGid,
+      dependencies: plan.dependencies,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain("/tasks/SEND/addDependencies");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({ data: { dependencies: ["DESIGN"] } });
   });
 });
 
