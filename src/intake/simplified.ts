@@ -6,11 +6,12 @@ import {
 } from "./creator-studio.js";
 import {
   HARD_QUESTIONS,
-  NOTES_REMINDER,
   NOVELTY_QUESTION,
+  PROPERTY_QUESTION,
   REPORTING_LANE_QUESTION,
   formatSuggestedBrief,
-  handoffText,
+  keyTaskQuestions,
+  newRequestApproval,
 } from "./hard-path.js";
 import type { BriefDraft, RequestType } from "./types.js";
 import {
@@ -45,8 +46,9 @@ export type SimplifiedResult =
   | { kind: "ask_novelty"; prompt: string }
   | { kind: "ask_reporting_lane"; prompt: string }
   | { kind: "creator_studio"; match: CreatorStudioMatch; text: string }
-  | { kind: "hard_question"; id: string; prompt: string }
-  | { kind: "hard_handoff"; text: string }
+  | { kind: "ask_property"; prompt: string }
+  | { kind: "hard_question"; id: string; prompt: string; notice?: string }
+  | { kind: "task_question"; id: string; prompt: string }
   | { kind: "hard_await_notes"; text: string }
   | { kind: "hard_brief"; text: string; createsTask: boolean }
   | { kind: "hard_done"; text: string };
@@ -60,7 +62,7 @@ export interface SimplifiedState {
 
 /**
  * New-or-edit, Creator Studio, then easy (return undefined and keep today's brief)
- * or hard (three questions, handoff, notes, suggested brief).
+ * or hard (property if needed, three brief questions, then the key task-type questions).
  */
 export function routeSimplified(state: SimplifiedState, today = new Date(), env: NodeJS.ProcessEnv = process.env): SimplifiedResult | undefined {
   if (state.phase === "creator_studio" && state.creatorStudioMatch) {
@@ -138,33 +140,36 @@ export function routeSimplified(state: SimplifiedState, today = new Date(), env:
 
 function advanceHard(
   state: SimplifiedState,
-  workflow: WorkflowAssignment,
-  env: NodeJS.ProcessEnv,
+  _workflow: WorkflowAssignment,
+  _env: NodeJS.ProcessEnv,
 ): SimplifiedResult {
   const draft = state.draft;
+  if (!draft.properties || draft.properties.length === 0) {
+    state.phase = "collecting";
+    return { kind: "ask_property", prompt: PROPERTY_QUESTION };
+  }
+  const notice = draft.managerNotified ? undefined : newRequestApproval(draft);
   for (const question of HARD_QUESTIONS) {
     const value = draft[question.field];
     if (!isFilled(value)) {
       state.phase = "collecting";
-      return { kind: "hard_question", id: question.id, prompt: question.prompt };
+      draft.managerNotified = true;
+      return notice
+        ? { kind: "hard_question", id: question.id, prompt: question.prompt, notice }
+        : { kind: "hard_question", id: question.id, prompt: question.prompt };
     }
   }
-  if (!isFilled(draft.meetingNotes)) {
-    if (!draft.kickoffTeam) draft.kickoffTeam = workflow.suggestions.join(", ");
-    if (state.phase !== "awaiting_notes") {
-      state.phase = "awaiting_notes";
-      return { kind: "hard_handoff", text: handoffText(draft, workflow) };
-    }
-    return { kind: "hard_await_notes", text: NOTES_REMINDER };
+  for (const question of keyTaskQuestions(draft)) {
+    const label = question.id.slice("followup:".length);
+    if (isFilled(draft.followUps?.[label])) continue;
+    state.phase = "collecting";
+    draft.managerNotified = true;
+    return { kind: "task_question", id: question.id, prompt: question.prompt };
   }
-  if (state.phase !== "awaiting_brief_approval") {
-    state.phase = "awaiting_brief_approval";
-    state.confirmVersion += 1;
-  }
+  state.phase = "brief_approved";
   return {
-    kind: "hard_brief",
-    text: formatSuggestedBrief(draft, workflow),
-    createsTask: hardRequestsCreateAsana(env),
+    kind: "hard_done",
+    text: `${newRequestApproval(draft)} I have the answers in this thread. Nothing was filed in Asana.`,
   };
 }
 

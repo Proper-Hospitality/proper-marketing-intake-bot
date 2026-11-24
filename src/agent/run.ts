@@ -33,7 +33,8 @@ import { DELIVERABLE_QUESTION, parseDeliverableChoice } from "../intake/routing.
 import { mentionsEnabled } from "../slack/mentions.js";
 import { rushRequestBlocks } from "../slack/blocks.js";
 import { hardQuestionById, NOTES_REMINDER } from "../intake/hard-path.js";
-import { parseNoveltyAnswer, parseReportingLane } from "../intake/workflows.js";
+import { inferNovelty, parseNoveltyAnswer, parseReportingLane } from "../intake/workflows.js";
+import { canonicalizeProperty, inferProperties } from "../intake/catalog.js";
 import { loadRushApproval, startRushApproval } from "../intake/rush-approval.js";
 import {
   rushAllowsApproval,
@@ -543,6 +544,15 @@ async function executeTool(
       };
     }
     const said = deps.userText ?? "";
+    if (state.intakeFlow === "simplified") {
+      const asked = state.lastAskedId;
+      if (asked !== "businessProblem") delete payload.businessProblem;
+      if (asked !== "successLooksLike") delete payload.successLooksLike;
+      if (asked !== "budget") delete payload.budget;
+      if (!asked?.startsWith("followup:")) delete payload.followUps;
+      const inferred = inferNovelty(said);
+      if (inferred && payload.novelty !== "new" && payload.novelty !== "edit") payload.novelty = inferred;
+    }
     if (state.draft.requestedCompletionDate && !messageSuppliesDate(said)) {
       delete payload.requestedCompletionDate;
     } else if (messageSuppliesDate(said)) {
@@ -686,25 +696,34 @@ function renderReply(
     state.lastAskedLabel = "Existing file or a change";
     return { text: DELIVERABLE_QUESTION };
   }
-  if (outcome?.kind === "ask_novelty" || outcome?.kind === "ask_reporting_lane" || outcome?.kind === "hard_question") {
+  if (
+    outcome?.kind === "ask_novelty"
+    || outcome?.kind === "ask_reporting_lane"
+    || outcome?.kind === "ask_property"
+    || outcome?.kind === "hard_question"
+    || outcome?.kind === "task_question"
+  ) {
     const askedId = outcome.kind === "ask_novelty"
       ? "novelty"
       : outcome.kind === "ask_reporting_lane"
         ? "reportingLane"
-        : outcome.id;
+        : outcome.kind === "ask_property"
+          ? "properties"
+          : outcome.id;
     const previous = state.lastAskedId;
     if (previous && previous !== askedId) {
       state.answerTrail = [...(state.answerTrail ?? []), previous].slice(-30);
     }
     state.lastAskedId = askedId;
     state.lastAskedLabel = outcome.prompt;
-    return { text: outcome.prompt };
+    const notice = outcome.kind === "hard_question" ? outcome.notice : undefined;
+    return { text: notice ? `${notice}\n\n${outcome.prompt}` : outcome.prompt };
   }
   if (outcome?.kind === "creator_studio") {
     state.lastAskedId = undefined;
     return { text: outcome.text };
   }
-  if (outcome?.kind === "hard_handoff" || outcome?.kind === "hard_await_notes" || outcome?.kind === "hard_done") {
+  if (outcome?.kind === "hard_await_notes" || outcome?.kind === "hard_done") {
     state.lastAskedId = undefined;
     return { text: outcome.text };
   }
@@ -934,6 +953,23 @@ function scriptedIntake(state: ConversationState, userText: string, today: Date)
     const answer = userText.trim();
     if (answer.length < 2) return { kind: "hard_question", id: question.id, prompt: question.prompt };
     state.draft[question.field] = answer;
+    return applyAnswers(state, {}, today);
+  }
+  if (state.lastAskedId?.startsWith("followup:") && state.phase === "collecting") {
+    const label = state.lastAskedId.slice("followup:".length);
+    const answer = userText.trim();
+    if (answer.length < 2) {
+      return { kind: "task_question", id: state.lastAskedId, prompt: state.lastAskedLabel ?? label };
+    }
+    state.draft.followUps = { ...(state.draft.followUps ?? {}), [label]: answer };
+    return applyAnswers(state, {}, today);
+  }
+  if (state.lastAskedId === "properties" && state.phase === "collecting") {
+    const named = canonicalizeProperty(userText.trim()) ?? inferProperties(userText)[0];
+    if (!named) {
+      return { kind: "ask_property", prompt: "Which property is this for? A code like SMB or SMP is perfect. I need it to ask the right brand manager." };
+    }
+    state.draft.properties = [named];
     return applyAnswers(state, {}, today);
   }
   return undefined;

@@ -1,9 +1,7 @@
+import { fieldQuestion } from "./ask-text.js";
 import type { BriefDraft } from "./types.js";
-import {
-  BRAND_LEADS_TOGETHER,
-  brandLeadFor,
-  type WorkflowAssignment,
-} from "./workflows.js";
+import { followUpsForFlow } from "./question-tree.js";
+import { brandLeadFor, type WorkflowAssignment } from "./workflows.js";
 
 export const NOVELTY_QUESTION = "Is this new, or an edit of something that already exists?";
 export const REPORTING_LANE_QUESTION = "Is this paid media reporting, or CRM reporting?";
@@ -33,31 +31,36 @@ export function hardQuestionById(id: string | undefined): (typeof HARD_QUESTIONS
   return HARD_QUESTIONS.find((question) => question.id === id);
 }
 
-/** Slack mention when we know the submitter's member id. Otherwise their name. */
-export function submitterTag(draft: BriefDraft): string {
-  if (draft.requesterSlackId) return `<@${draft.requesterSlackId}>`;
-  const name = draft.requesterName?.trim();
-  return name || "the submitter";
+export const PROPERTY_QUESTION = "Which property is this for? A code like SMB or SMP is perfect. I need it to ask the right brand manager.";
+
+/** @mention the brand manager for this property. Proper and By Proper, including Lake Tahoe, go to DeeDee. Collective goes to Koral. */
+export function newRequestApproval(draft: BriefDraft, env: NodeJS.ProcessEnv = process.env): string {
+  const lead = brandLeadFor(draft.properties, env);
+  return `This is a new request, so it needs approval from <@${lead.id}>.`;
 }
 
-export function handoffText(draft: BriefDraft, workflow: WorkflowAssignment): string {
-  const lead = brandLeadFor(draft.properties);
-  const suggest = workflow.suggestions.join(", ");
-  const note = workflow.ownerNote ? `\n${workflow.ownerNote}` : "";
-  return [
-    `This is a hard request (${workflow.bucket}, ${workflow.department}).`,
-    "",
-    `${BRAND_LEADS_TOGETHER} are the brand leads. This property goes to ${lead.name}.`,
-    "",
-    `I'd suggest ${suggest}.`,
-    `Owner: ${workflow.owner}. Approver: ${approverLine(workflow)}.${note}`,
-    "",
-    `${lead.name} will connect with ${submitterTag(draft)}. After you've connected, paste the notes in this thread and I'll draft a brief for approval. Nothing is filed in Asana yet.`,
-  ].join("\n");
+export interface TaskQuestion {
+  id: string;
+  prompt: string;
+}
+
+/** Required questions from the classic question tree for this task type. Optional fields stay off this short list. */
+export function keyTaskQuestions(draft: BriefDraft): TaskQuestion[] {
+  if (!draft.requestType || !draft.taskType) return [];
+  try {
+    return followUpsForFlow(draft.requestType, draft.taskType, "simplified")
+      .filter((field) => field.required)
+      .map((field) => ({
+        id: `followup:${field.label}`,
+        prompt: fieldQuestion({ id: `followup:${field.label}`, label: field.label }, draft),
+      }));
+  } catch {
+    return [];
+  }
 }
 
 export function approverLine(workflow: WorkflowAssignment): string {
-  if (workflow.approverTodo) return "TODO (confirm with Kinsey)";
+  if (workflow.approverTodo || workflow.approver === "TODO") return "still to be confirmed with Kinsey";
   return workflow.approver;
 }
 

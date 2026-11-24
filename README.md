@@ -359,8 +359,8 @@ A simplified request is sorted before the long brief.
 1. If the task can be new or an edit (creative assets, and CRM Pop Up or Automated Flows), the bot asks which. That answer picks the bucket and the approver.
 2. If a Creator Studio catalog is configured and a template matches, the bot sends the link and does not create an Asana task. With no catalog, this step is skipped.
 3. Easy work is only edits and seasonal refreshes. The bot asks the required questions from the existing question tree, shows the summary, and creates the Asana task on Confirm. The owner and approver come from the workshop matrix.
-4. Everything else is hard, including Bug Fix, every Social request, and Integrations. The bot asks the business problem, what success looks like, and any budget. It hands the request to Koral Captain (Collective) or DeeDee Brown (Proper and By Proper, including Lake Tahoe), suggests the department owners, and tags the submitter. That person connects with the submitter. The bot does not schedule the conversation.
-5. After they have connected, someone pastes the notes in the thread. The bot drafts a brief (those three answers, plus scope, owner, approver, and timeline) and waits for Confirm. Confirm does not create an Asana task while `HARD_REQUESTS_CREATE_ASANA` is false.
+4. A new request asks for the property if it is missing, then says it needs approval from the brand manager and @mentions them: DeeDee Brown for Proper and By Proper, including Lake Tahoe, and Koral Captain for Collective. It asks the business problem, what success looks like, and any budget, then the required questions for that task type. It does not suggest other owners or ask for meeting notes. Nothing is filed in Asana.
+5. An edit or seasonal refresh still uses a Creator Studio template when one matches, or the short question list and Confirm to create the Asana task.
 
 Pop Up is a CRM task. The easy refresh only asks for Klaviyo photo and copy. Brandfolder Upload and Affiliate Import are not offered. Integrations is a Web category owned by Elizabeth. Its approver stays TODO until `INTEGRATIONS_APPROVER` is set.
 

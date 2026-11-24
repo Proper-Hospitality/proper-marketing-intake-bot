@@ -126,7 +126,8 @@ export function parseReportingLane(text: string): ReportingLane | undefined {
 /** A clear "edit" or "new" already in the request, so the bot does not ask again. */
 export function inferNovelty(text: string): WorkNovelty | undefined {
   const edit = /\b(edit|editing|refresh|revise|tweak)\b/i.test(text) || /\bupdate the existing\b/i.test(text);
-  const fresh = /\b(brand new|from scratch|net new)\b/i.test(text);
+  const fresh = /\b(brand new|from scratch|net new)\b/i.test(text)
+    || /\b(?:create|creating|make|making)\s+(?:me\s+)?(?:a|an|the)\b/i.test(text);
   if (edit && !fresh) return "edit";
   if (fresh && !edit) return "new";
   return undefined;
