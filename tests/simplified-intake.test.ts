@@ -1,17 +1,9 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { applyAnswers } from "../src/intake/flow.js";
 import { followUpsFor } from "../src/intake/question-tree.js";
 import { approveHardBrief } from "../src/intake/simplified.js";
 import { catalogFromRecords, loadCreatorStudio, type CreatorStudioTemplate } from "../src/intake/creator-studio.js";
-import { kickoffSlotBlocks } from "../src/slack/blocks.js";
-import {
-  fallbackKickoffSlots,
-  isWeekdayBusinessSlot,
-  proposeKickoff,
-  reactionSlotIndex,
-  type CalendarClient,
-} from "../src/intake/schedule.js";
 import { taskTypeNames } from "../src/intake/catalog.js";
 import { rushApproverFor } from "../src/intake/rush.js";
 import {
@@ -253,6 +245,7 @@ describe("hard question flow and handoff", () => {
     expect(third.kind).toBe("hard_question");
     if (third.kind === "hard_question") expect(third.prompt).toContain("budget");
 
+    state.draft.requesterSlackId = "U-ELENA";
     const handoff = applyAnswers(state, { budget: "No budget." }, MONDAY_MORNING);
     expect(handoff.kind).toBe("hard_handoff");
     if (handoff.kind === "hard_handoff") {
@@ -261,8 +254,11 @@ describe("hard question flow and handoff", () => {
       expect(handoff.text).toContain("Koral Captain");
       expect(handoff.text).toContain("Elizabeth");
       expect(handoff.text).toContain("This property goes to DeeDee Brown");
+      expect(handoff.text).toContain("DeeDee Brown will connect with <@U-ELENA>");
+      expect(handoff.text).toContain("paste the notes");
+      expect(handoff.text.toLowerCase()).not.toContain("kickoff");
     }
-    expect(state.phase).toBe("awaiting_team");
+    expect(state.phase).toBe("awaiting_notes");
   });
 
   it("names Koral for Collective and DeeDee for Proper, including Lake Tahoe, and does not hand new properties to Kinsey", () => {
@@ -271,6 +267,7 @@ describe("hard question flow and handoff", () => {
     expect(brandLeadFor(["TCH"]).name).toBe("Koral Captain");
     expect(rushApproverFor(["LTP"]).name).toBe("Kinsey East");
     const collective = emptyConversation("C:social");
+    collective.draft.requesterSlackId = "U-SUBMIT";
     const handoff = applyAnswers(collective, {
       requestType: "Social",
       taskType: "Feed Post Request",
@@ -283,13 +280,16 @@ describe("hard question flow and handoff", () => {
     expect(handoff.kind).toBe("hard_handoff");
     if (handoff.kind === "hard_handoff") {
       expect(handoff.text).toContain("This property goes to Koral Captain");
+      expect(handoff.text).toContain("Koral Captain will connect with <@U-SUBMIT>");
       expect(handoff.text).toContain("Kat");
+      expect(handoff.text.toLowerCase()).not.toContain("kickoff");
     }
   });
 
-  it("drafts a brief from the kickoff notes and does not create an Asana task", () => {
+  it("drafts a brief from the notes and does not create an Asana task", () => {
     const state = emptyConversation("C:brief");
-    applyAnswers(state, {
+    state.draft.requesterSlackId = "U-ELENA";
+    const handoff = applyAnswers(state, {
       requesterName: "Elena Ruiz",
       requestType: "Web",
       taskType: "New Page",
@@ -298,16 +298,14 @@ describe("hard question flow and handoff", () => {
       businessProblem: "Gift cards have no page.",
       successLooksLike: "Guests can buy a card online.",
       budget: "Design time only.",
-      kickoffTeam: "Elizabeth",
     }, MONDAY_MORNING);
-    expect(state.phase).toBe("awaiting_kickoff");
-    expect(state.kickoffSlots).toHaveLength(3);
-
-    const slot = state.kickoffSlots?.[0];
-    if (!slot) throw new Error("missing slot");
-    state.draft.kickoffSlot = slot.label;
-    const notes = applyAnswers(state, {}, MONDAY_MORNING);
-    expect(notes.kind).toBe("hard_await_notes");
+    expect(handoff.kind).toBe("hard_handoff");
+    if (handoff.kind === "hard_handoff") {
+      expect(handoff.text).toContain("Koral Captain will connect with <@U-ELENA>");
+      expect(handoff.text).toContain("Elizabeth");
+      expect(handoff.text.toLowerCase()).not.toContain("kickoff");
+    }
+    expect(state.phase).toBe("awaiting_notes");
 
     const brief = applyAnswers(state, {
       meetingNotes: "Ship a simple gift card page in December. Elizabeth builds it. Elena approves the copy.",
@@ -320,8 +318,8 @@ describe("hard question flow and handoff", () => {
       expect(brief.text).toContain("Design time only.");
       expect(brief.text).toContain("Elizabeth");
       expect(brief.text).toContain("requestor and/or submitter");
-      expect(brief.text).toContain(slot.label);
       expect(brief.text).toContain("Ship a simple gift card page");
+      expect(brief.text.toLowerCase()).not.toContain("kickoff");
     }
     expect(state.phase).toBe("awaiting_brief_approval");
 
@@ -329,100 +327,5 @@ describe("hard question flow and handoff", () => {
     expect(decision.fileAsana).toBe(false);
     expect(decision.text).toContain("didn't create an Asana task");
     expect(state.phase).toBe("brief_approved");
-  });
-});
-
-describe("kickoff scheduling", () => {
-  it("falls back to three weekday times between 9 AM and 5 PM PT", () => {
-    const slots = fallbackKickoffSlots(MONDAY_MORNING);
-    expect(slots).toHaveLength(3);
-    expect(slots.map((slot) => slot.label)).toEqual([
-      "Mon, Nov 23, 10:00 AM–10:15 AM PT",
-      "Mon, Nov 23, 11:00 AM–11:15 AM PT",
-      "Mon, Nov 23, 2:00 PM–2:15 PM PT",
-    ]);
-    for (const slot of slots) {
-      expect(isWeekdayBusinessSlot(new Date(slot.start), new Date(slot.end))).toBe(true);
-    }
-    const fridayEvening = new Date("2026-11-28T00:30:00Z");
-    const next = fallbackKickoffSlots(fridayEvening);
-    expect(next[0]?.label.startsWith("Mon, Nov 30")).toBe(true);
-    expect(next.some((slot) => /Sat|Sun/.test(slot.label))).toBe(false);
-  });
-
-  it("uses Graph times when free/busy works, and the same fallback when it does not", async () => {
-    const denied: CalendarClient = {
-      async findMeetingTimes() {
-        throw new Error("Authorization_RequestDenied");
-      },
-      async getSchedule() {
-        throw new Error("ErrorAccessDenied");
-      },
-    };
-    const fallback = await proposeKickoff({ now: MONDAY_MORNING, client: denied });
-    expect(fallback.source).toBe("fallback");
-    expect(fallback.slots).toHaveLength(3);
-    expect(fallback.note).toMatch(/Free\/busy isn't available/);
-    expect(fallback.organizer).toBe("elena.ruiz@properhotel.com");
-
-    const none = await proposeKickoff({ now: MONDAY_MORNING, client: null });
-    expect(none.source).toBe("fallback");
-    expect(none.slots.map((slot) => slot.label)).toEqual(fallback.slots.map((slot) => slot.label));
-
-    const graph: CalendarClient = {
-      async findMeetingTimes() {
-        return [
-          {
-            start: "2026-11-24T10:00:00",
-            end: "2026-11-24T10:15:00",
-            timeZone: "Pacific Standard Time",
-          },
-          {
-            start: "2026-11-24T15:00:00",
-            end: "2026-11-24T15:15:00",
-            timeZone: "Pacific Standard Time",
-          },
-        ];
-      },
-      async getSchedule() {
-        throw new Error("should not be called");
-      },
-    };
-    const live = await proposeKickoff({ now: MONDAY_MORNING, client: graph });
-    expect(live.source).toBe("graph");
-    expect(live.slots.map((slot) => slot.label)).toEqual([
-      "Tue, Nov 24, 10:00 AM–10:15 AM PT",
-      "Tue, Nov 24, 3:00 PM–3:15 PM PT",
-    ]);
-
-    const blocks = kickoffSlotBlocks("Pick a time", fallback.slots);
-    const actions = blocks.find((block) => block.type === "actions");
-    expect(actions && "elements" in actions && actions.elements).toHaveLength(3);
-    expect(reactionSlotIndex("one")).toBe(0);
-    expect(reactionSlotIndex(":two:")).toBe(1);
-    expect(reactionSlotIndex("three")).toBe(2);
-  });
-
-  it("warns and falls back when Graph is unauthorized, without throwing", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    try {
-      const client: CalendarClient = {
-        async findMeetingTimes() {
-          throw new Error("403");
-        },
-        async getSchedule() {
-          return [{
-            start: "2026-11-23T18:00:00Z",
-            end: "2026-11-23T18:15:00Z",
-          }];
-        },
-      };
-      const proposal = await proposeKickoff({ now: MONDAY_MORNING, client });
-      expect(proposal.source).toBe("graph");
-      expect(proposal.slots.map((slot) => slot.label)).not.toContain("Mon, Nov 23, 10:00 AM–10:15 AM PT");
-      expect(proposal.slots[0]?.label).toContain("11:00 AM");
-    } finally {
-      warn.mockRestore();
-    }
   });
 });

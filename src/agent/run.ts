@@ -31,10 +31,8 @@ import {
 } from "../intake/recommend.js";
 import { DELIVERABLE_QUESTION, parseDeliverableChoice } from "../intake/routing.js";
 import { mentionsEnabled } from "../slack/mentions.js";
-import { kickoffSlotBlocks, rushRequestBlocks } from "../slack/blocks.js";
-import { chooseSlot, hardQuestionById, rememberTeam } from "../intake/hard-path.js";
-import { createGraphCalendarClient } from "../intake/graph-calendar.js";
-import { fallbackProposal, formatScheduleMessage, proposeKickoff } from "../intake/schedule.js";
+import { rushRequestBlocks } from "../slack/blocks.js";
+import { hardQuestionById, NOTES_REMINDER } from "../intake/hard-path.js";
 import { parseNoveltyAnswer, parseReportingLane } from "../intake/workflows.js";
 import { loadRushApproval, startRushApproval } from "../intake/rush-approval.js";
 import {
@@ -234,8 +232,7 @@ export async function runIntakeTurn(input: {
   }
   const scripted = scriptedIntake(state, input.userText, today);
   if (scripted) {
-    const outcome = await withLiveSchedule(state, scripted, today);
-    return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
+    return remember(state, input.userText, renderReply(state, input.slackUser, "", scripted, today));
   }
   if (input.design && (state.phase === "awaiting_design_materials" || state.phase === "design_ready")) {
     const designTurn = await continueDesign({
@@ -487,7 +484,6 @@ export async function runIntakeTurn(input: {
     }
   }
 
-  outcome = await withLiveSchedule(state, outcome, today);
   if (outcome?.kind === "offer_template" && input.design) {
     const offered = await offerDesignBuild(state, outcome.match, input.design.canva);
     if (offered) {
@@ -710,12 +706,6 @@ function renderReply(
     state.lastAskedId = undefined;
     return { text: outcome.text };
   }
-  if (outcome?.kind === "hard_schedule") {
-    state.lastAskedId = "kickoffSlot";
-    state.lastAskedLabel = "Kickoff time";
-    const text = formatScheduleMessage(outcome.proposal);
-    return { text, blocks: kickoffSlotBlocks(text, outcome.proposal.slots) };
-  }
   if (outcome?.kind === "hard_brief") {
     state.lastAskedId = undefined;
     return {
@@ -918,31 +908,9 @@ function scriptedIntake(state: ConversationState, userText: string, today: Date)
   if (state.phase === "creator_studio" || state.phase === "brief_approved" || state.phase === "awaiting_brief_approval") {
     return applyAnswers(state, {}, today);
   }
-  if (state.phase === "awaiting_team") {
-    const team = rememberTeam(userText, suggestionNames(state));
-    if (team.trim().length < 2) return applyAnswers(state, {}, today);
-    state.draft.kickoffTeam = team;
-    return applyAnswers(state, {}, today);
-  }
-  if (state.phase === "awaiting_kickoff") {
-    const slot = chooseSlot(state.kickoffSlots ?? [], userText);
-    if (!slot) {
-      const proposal = state.kickoffSlots?.length
-        ? { ...fallbackProposal(today), slots: state.kickoffSlots, source: "fallback" as const }
-        : fallbackProposal(today);
-      state.kickoffSlots = proposal.slots;
-      state.phase = "awaiting_kickoff";
-      return { kind: "hard_schedule", proposal };
-    }
-    state.draft.kickoffSlot = slot.label;
-    return applyAnswers(state, {}, today);
-  }
   if (state.phase === "awaiting_notes") {
     if (userText.trim().length < 12) {
-      return {
-        kind: "hard_await_notes",
-        text: "Paste the kickoff notes in this thread. A sentence or two on what you agreed is enough.",
-      };
+      return { kind: "hard_await_notes", text: NOTES_REMINDER };
     }
     state.draft.meetingNotes = userText.trim();
     return applyAnswers(state, {}, today);
@@ -967,28 +935,6 @@ function scriptedIntake(state: ConversationState, userText: string, today: Date)
     return applyAnswers(state, {}, today);
   }
   return undefined;
-}
-
-function suggestionNames(state: ConversationState): string[] {
-  const owner = state.draft.workflowOwner ?? "";
-  return owner.split(/,| or /).map((part) => part.replace(/\(.*\)/, "").trim()).filter(Boolean);
-}
-
-async function withLiveSchedule(
-  state: ConversationState,
-  outcome: FlowOutcome | undefined,
-  today: Date,
-): Promise<FlowOutcome | undefined> {
-  if (outcome?.kind !== "hard_schedule") return outcome;
-  const client = createGraphCalendarClient();
-  if (!client) return outcome;
-  try {
-    const proposal = await proposeKickoff({ now: today, client });
-    state.kickoffSlots = proposal.slots;
-    return { kind: "hard_schedule", proposal };
-  } catch {
-    return outcome;
-  }
 }
 
 function looksLikeUseExisting(text: string): boolean {

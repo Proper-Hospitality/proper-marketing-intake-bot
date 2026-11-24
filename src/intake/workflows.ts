@@ -17,7 +17,7 @@ export interface WorkflowAssignment {
   difficulty: Difficulty;
   owner: string;
   approver: string;
-  /** People to suggest for the kickoff. */
+  /** Department owners to suggest when the request is handed off. */
   suggestions: string[];
   /** The approver is still a placeholder. */
   approverTodo?: boolean;

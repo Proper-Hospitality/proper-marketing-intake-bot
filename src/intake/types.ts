@@ -70,8 +70,8 @@ export interface BriefDraft {
   businessProblem?: string;
   successLooksLike?: string;
   budget?: string;
+  /** Suggested people named when the request is handed to Koral or DeeDee. */
   kickoffTeam?: string;
-  kickoffSlot?: string;
   meetingNotes?: string;
   workflowDepartment?: string;
   workflowBucket?: string;

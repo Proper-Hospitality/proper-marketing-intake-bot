@@ -83,22 +83,6 @@ export function emailSplitBlocks(text: string, count: number): KnownBlock[] {
   ];
 }
 
-export function kickoffSlotBlocks(text: string, slots: Array<{ id: string; label: string }>): KnownBlock[] {
-  return [
-    ...messageBlocks(text),
-    {
-      type: "actions",
-      block_id: "kickoff_slots",
-      elements: slots.slice(0, 3).map((slot) => ({
-        type: "button" as const,
-        text: { type: "plain_text" as const, text: slot.label.slice(0, 75), emoji: true },
-        action_id: "kickoff_slot",
-        value: slot.id,
-      })),
-    },
-  ];
-}
-
 export function confirmBlocks(summary: string, version: number): KnownBlock[] {
   const blocks: KnownBlock[] = [
     {

@@ -43,14 +43,6 @@ services:
         sync: false
       - key: CREATOR_STUDIO_CATALOG_JSON
         sync: false
-      - key: MS_GRAPH_TENANT_ID
-        sync: false
-      - key: MS_GRAPH_CLIENT_ID
-        sync: false
-      - key: MS_GRAPH_CLIENT_SECRET
-        sync: false
-      - key: CALENDAR_ORGANIZER_EMAIL
-        value: elena.ruiz@properhotel.com
       - key: HARD_REQUESTS_CREATE_ASANA
         value: "false"
       - key: INTEGRATIONS_APPROVER

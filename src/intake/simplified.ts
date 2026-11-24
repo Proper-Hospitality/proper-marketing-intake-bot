@@ -6,13 +6,12 @@ import {
 } from "./creator-studio.js";
 import {
   HARD_QUESTIONS,
+  NOTES_REMINDER,
   NOVELTY_QUESTION,
   REPORTING_LANE_QUESTION,
   formatSuggestedBrief,
   handoffText,
-  notesPrompt,
 } from "./hard-path.js";
-import { fallbackProposal, type KickoffSlot, type ScheduleProposal } from "./schedule.js";
 import type { BriefDraft, RequestType } from "./types.js";
 import {
   concreteApprover,
@@ -48,7 +47,6 @@ export type SimplifiedResult =
   | { kind: "creator_studio"; match: CreatorStudioMatch; text: string }
   | { kind: "hard_question"; id: string; prompt: string }
   | { kind: "hard_handoff"; text: string }
-  | { kind: "hard_schedule"; proposal: ScheduleProposal }
   | { kind: "hard_await_notes"; text: string }
   | { kind: "hard_brief"; text: string; createsTask: boolean }
   | { kind: "hard_done"; text: string };
@@ -56,14 +54,13 @@ export type SimplifiedResult =
 export interface SimplifiedState {
   phase: string;
   draft: BriefDraft;
-  kickoffSlots?: KickoffSlot[];
   creatorStudioMatch?: CreatorStudioMatch | null;
   confirmVersion: number;
 }
 
 /**
  * New-or-edit, Creator Studio, then easy (return undefined and keep today's brief)
- * or hard (three questions, handoff, kickoff, notes, suggested brief).
+ * or hard (three questions, handoff, notes, suggested brief).
  */
 export function routeSimplified(state: SimplifiedState, today = new Date(), env: NodeJS.ProcessEnv = process.env): SimplifiedResult | undefined {
   if (state.phase === "creator_studio" && state.creatorStudioMatch) {
@@ -128,13 +125,12 @@ export function routeSimplified(state: SimplifiedState, today = new Date(), env:
     return undefined;
   }
 
-  return advanceHard(state, workflow, today, env);
+  return advanceHard(state, workflow, env);
 }
 
 function advanceHard(
   state: SimplifiedState,
   workflow: WorkflowAssignment,
-  today: Date,
   env: NodeJS.ProcessEnv,
 ): SimplifiedResult {
   const draft = state.draft;
@@ -145,19 +141,13 @@ function advanceHard(
       return { kind: "hard_question", id: question.id, prompt: question.prompt };
     }
   }
-  if (!isFilled(draft.kickoffTeam)) {
-    state.phase = "awaiting_team";
-    return { kind: "hard_handoff", text: handoffText(draft, workflow) };
-  }
-  if (!isFilled(draft.kickoffSlot)) {
-    const proposal = fallbackProposal(today);
-    state.kickoffSlots = proposal.slots;
-    state.phase = "awaiting_kickoff";
-    return { kind: "hard_schedule", proposal };
-  }
   if (!isFilled(draft.meetingNotes)) {
-    state.phase = "awaiting_notes";
-    return { kind: "hard_await_notes", text: notesPrompt(draft.kickoffSlot ?? "the kickoff") };
+    if (!draft.kickoffTeam) draft.kickoffTeam = workflow.suggestions.join(", ");
+    if (state.phase !== "awaiting_notes") {
+      state.phase = "awaiting_notes";
+      return { kind: "hard_handoff", text: handoffText(draft, workflow) };
+    }
+    return { kind: "hard_await_notes", text: NOTES_REMINDER };
   }
   if (state.phase !== "awaiting_brief_approval") {
     state.phase = "awaiting_brief_approval";

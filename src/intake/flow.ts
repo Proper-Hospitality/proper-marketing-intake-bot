@@ -16,7 +16,6 @@ import { matchTemplates, type TemplateMatchResult } from "./templates.js";
 import { planRoute } from "./routing.js";
 import { applyRushBlock, assignCompletionDate, resolveDateInput } from "./relative-date.js";
 import { routeSimplified, type SimplifiedResult } from "./simplified.js";
-import type { KickoffSlot } from "./schedule.js";
 import type { CreatorStudioMatch } from "./creator-studio.js";
 import { exactAnswer } from "./urls.js";
 import type { BriefDraft, RequestType } from "./types.js";
@@ -79,7 +78,6 @@ export interface FlowState {
   collateralSourceFor?: string;
   rushExplainedFor?: string;
   confirmVersion: number;
-  kickoffSlots?: KickoffSlot[];
   creatorStudioMatch?: CreatorStudioMatch | null;
 }
 
