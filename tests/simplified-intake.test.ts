@@ -277,7 +277,8 @@ describe("new requests in the simplified flow", () => {
     expect(audience.kind).toBe("task_question");
     if (audience.kind === "task_question") {
       expect(audience.id).toBe("followup:Audience / Distribution Plan");
-      expect(audience.prompt).toContain("Who is");
+      expect(audience.prompt).toBe("Who should get this, and where will they see it?");
+      expect(audience.prompt).not.toMatch(/\b(assets|copy|CTA|distribution|deliverable|creative)\b/i);
     }
 
     const copy = applyAnswers(state, {
@@ -286,7 +287,8 @@ describe("new requests in the simplified flow", () => {
     expect(copy.kind).toBe("task_question");
     if (copy.kind === "task_question") {
       expect(copy.id).toBe("followup:Recommended Copy / Details");
-      expect(copy.prompt).toContain("say");
+      expect(copy.prompt).toBe("What should the text say?");
+      expect(copy.prompt).not.toMatch(/\b(assets|copy|CTA|distribution|deliverable|creative)\b/i);
     }
 
     const done = applyAnswers(state, {

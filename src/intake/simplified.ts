@@ -1,3 +1,4 @@
+import { assumeEasyFacts } from "./easy-chat.js";
 import { isFilled } from "./missing.js";
 import {
   formatCreatorStudioReply,
@@ -132,6 +133,7 @@ export function routeSimplified(state: SimplifiedState, today = new Date(), env:
 
   if (workflow.difficulty === "easy") {
     applyEasyDefaults(draft, workflow);
+    assumeEasyFacts(draft);
     return undefined;
   }
 

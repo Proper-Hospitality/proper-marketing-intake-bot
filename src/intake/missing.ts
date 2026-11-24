@@ -169,7 +169,7 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
 
   if (requestHasFiles(draft)) {
     items.push(...attachmentMissing(draft));
-  } else if (!assetsSatisfied(draft, followUps)) {
+  } else if (!assetsSatisfied(draft, followUps) && !(draft.intakeFlow === "simplified" && textOnlyChange(draft))) {
     items.push({
       id: "assets",
       label: "Assets",
@@ -212,11 +212,13 @@ function webAndOfferQuestions(draft: BriefDraft): MissingItem[] {
   const items: MissingItem[] = [];
   if (draft.requestType === "Web" && draft.taskType && WEB_BRIEF_TYPES.has(draft.taskType)) {
     if (draft.copyReady === undefined && !webCopySatisfied(draft)) {
-      items.push({
-        id: "copyReady",
-        label: "Is the copy ready?",
-        hint: "If yes, paste it. If not, say who is writing it and by when.",
-      });
+      if (!simplifiedWeb(draft)) {
+        items.push({
+          id: "copyReady",
+          label: "Is the copy ready?",
+          hint: "If yes, paste it. If not, say who is writing it and by when.",
+        });
+      }
     } else if (draft.copyReady === false && (!isFilled(draft.copyOwner) || !isFilled(draft.copyDueDate))) {
       items.push({
         id: "copyPlan",
@@ -224,14 +226,18 @@ function webAndOfferQuestions(draft: BriefDraft): MissingItem[] {
         hint: "Name the person and the date.",
       });
     }
-    if (draft.designNeeded === undefined && !copyOnlyChange(draft)) {
+    if (draft.designNeeded === undefined && !copyOnlyChange(draft) && !(draft.intakeFlow === "simplified" && textOnlyChange(draft))) {
       items.push({
         id: "designNeeded",
         label: "Is design needed?",
         hint: "Yes if a designer should make it. No if the web team can use the existing layout.",
       });
     }
-    if ((draft.taskType === "New Page" || draft.taskType === "Page Edit") && !isFilled(draft.followUps?.["What it replaces and where it sits"])) {
+    if (
+      (draft.taskType === "New Page" || draft.taskType === "Page Edit")
+      && !isFilled(draft.followUps?.["What it replaces and where it sits"])
+      && !(draft.intakeFlow === "simplified" && draft.taskType === "Page Edit" && textOnlyChange(draft))
+    ) {
       items.push({
         id: "followup:What it replaces and where it sits",
         label: "What it replaces and where it sits",
@@ -251,7 +257,30 @@ function webAndOfferQuestions(draft: BriefDraft): MissingItem[] {
 function skipExactCopy(draft: BriefDraft, field: FollowUp): boolean {
   if (draft.requestType !== "Web" || !draft.taskType || !WEB_BRIEF_TYPES.has(draft.taskType)) return false;
   if (!field.satisfies?.includes("copy")) return false;
+  if (simplifiedWeb(draft)) return false;
   return draft.copyReady !== true;
+}
+
+function simplifiedWeb(draft: BriefDraft): boolean {
+  return draft.intakeFlow === "simplified"
+    && draft.requestType === "Web"
+    && Boolean(draft.taskType && WEB_BRIEF_TYPES.has(draft.taskType));
+}
+
+/** A text or pricing change. Simplified flow skips design and file questions for these. */
+export function textOnlyChange(draft: BriefDraft): boolean {
+  const blob = [
+    draft.requestName,
+    draft.notes,
+    draft.taskType,
+    draft.finalCopy,
+    ...Object.values(draft.followUps ?? {}),
+  ].filter(Boolean).join(" ");
+  if (/\b(design|designer|layout|banner|figma|photo|image|graphic|illustration|hero)\b/i.test(blob) && !/\bno design\b/i.test(blob)) {
+    return false;
+  }
+  return /\b(pric(?:e|es|ing)|wording|typo|hours|phone)\b/i.test(blob)
+    || (/\b(update|change|edit)\b/i.test(blob) && /\b(text|words|wording|price|pricing)\b/i.test(blob));
 }
 
 function webCopySatisfied(draft: BriefDraft): boolean {

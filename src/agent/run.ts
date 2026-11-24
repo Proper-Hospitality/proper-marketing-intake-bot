@@ -32,6 +32,7 @@ import {
 import { DELIVERABLE_QUESTION, parseDeliverableChoice } from "../intake/routing.js";
 import { mentionsEnabled } from "../slack/mentions.js";
 import { rushRequestBlocks } from "../slack/blocks.js";
+import { formatEasyAsk, formatEasyConfirm, recordEasyReply } from "../intake/easy-chat.js";
 import { hardQuestionById, NOTES_REMINDER } from "../intake/hard-path.js";
 import { inferNovelty, parseNoveltyAnswer, parseReportingLane } from "../intake/workflows.js";
 import { canonicalizeProperty, inferProperties } from "../intake/catalog.js";
@@ -694,7 +695,10 @@ function renderReply(
   if (outcome?.kind === "ask_deliverable") {
     state.lastAskedId = "deliverable";
     state.lastAskedLabel = "Existing file or a change";
-    return { text: DELIVERABLE_QUESTION };
+    const text = state.intakeFlow === "simplified"
+      ? "Do you want the file we already have, or a change to it?"
+      : DELIVERABLE_QUESTION;
+    return { text };
   }
   if (
     outcome?.kind === "ask_novelty"
@@ -736,6 +740,9 @@ function renderReply(
   }
   if (outcome?.kind === "rush_required") {
     const notice = rushExplanation(outcome.reason, outcome.date, rushApproverFor(state.draft.properties).name);
+    if (state.intakeFlow === "simplified") {
+      return { text: notice, blocks: rushAllowsApproval(outcome.reason) ? rushRequestBlocks(notice) : undefined };
+    }
     const missing = listMissing(state.draft, today);
     const batched = state.intakePace !== "chat" && missing.items.length > 1;
     if (batched) {
@@ -776,6 +783,9 @@ function renderReply(
       return { text: confirm };
     }
     return { text: formatPropertyQuestion(mentionId, spokenName) };
+  }
+  if (outcome?.kind === "ask" && state.intakeFlow === "simplified") {
+    return renderSimplifiedAsk(state, outcome);
   }
   if (outcome?.kind === "ask") {
     const items = outcome.missing.items;
@@ -825,6 +835,13 @@ function renderReply(
       captured,
     });
     return { text: outcome.preface ? `${outcome.preface}\n\n${question}` : question };
+  }
+  if ((outcome?.kind === "confirm" || state.phase === "awaiting_confirm") && state.intakeFlow === "simplified") {
+    state.lastAskedId = undefined;
+    return {
+      text: formatEasyConfirm(state.draft),
+      confirm: { version: state.confirmVersion },
+    };
   }
   if (outcome?.kind === "confirm" || state.phase === "awaiting_confirm") {
     const missing = outcome?.kind === "confirm" ? outcome.missing : listMissing(state.draft, today);
@@ -948,6 +965,18 @@ function scriptedIntake(state: ConversationState, userText: string, today: Date)
     state.draft.reportingLane = lane;
     return applyAnswers(state, {}, today);
   }
+  if (state.intakeFlow === "simplified" && state.lastAskedId?.includes("+") && state.phase === "collecting") {
+    const ids = state.lastAskedId.split("+");
+    if (recordEasyReply(state.draft, ids, userText)) return applyAnswers(state, {}, today);
+  }
+  if (
+    state.intakeFlow === "simplified"
+    && (state.lastAskedId === "requestedCompletionDate" || state.lastAskedId === "timing")
+    && state.phase === "collecting"
+  ) {
+    const resolved = extractDueDate(userText, today, { expectingDate: true });
+    if (resolved) return applyAnswers(state, { requestedCompletionDate: resolved.iso }, today);
+  }
   const question = hardQuestionById(state.lastAskedId);
   if (question && state.phase === "collecting") {
     const answer = userText.trim();
@@ -973,6 +1002,24 @@ function scriptedIntake(state: ConversationState, userText: string, today: Date)
     return applyAnswers(state, {}, today);
   }
   return undefined;
+}
+
+function renderSimplifiedAsk(
+  state: ConversationState,
+  outcome: Extract<FlowOutcome, { kind: "ask" }>,
+): AgentReply {
+  const opening = !state.messages.some((turn) => turn.role === "assistant" && turn.content.startsWith("Got it,"));
+  const formatted = formatEasyAsk({ draft: state.draft, items: outcome.missing.items, opening });
+  const previous = state.lastAskedId;
+  const id = formatted.askedIds.join("+");
+  if (previous && id && previous !== id) {
+    state.answerTrail = [...(state.answerTrail ?? []), previous].slice(-30);
+  }
+  if (id) {
+    state.lastAskedId = id;
+    state.lastAskedLabel = formatted.text;
+  }
+  return { text: formatted.text };
 }
 
 function looksLikeUseExisting(text: string): boolean {
