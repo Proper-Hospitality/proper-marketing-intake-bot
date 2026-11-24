@@ -1,4 +1,4 @@
-import { fieldQuestion } from "./ask-text.js";
+import { plainFollowUp } from "./easy-chat.js";
 import type { BriefDraft } from "./types.js";
 import { followUpsForFlow } from "./question-tree.js";
 import { brandLeadFor, type WorkflowAssignment } from "./workflows.js";
@@ -52,7 +52,7 @@ export function keyTaskQuestions(draft: BriefDraft): TaskQuestion[] {
       .filter((field) => field.required)
       .map((field) => ({
         id: `followup:${field.label}`,
-        prompt: fieldQuestion({ id: `followup:${field.label}`, label: field.label }, draft),
+        prompt: plainFollowUp(field.label, draft),
       }));
   } catch {
     return [];
