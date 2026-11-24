@@ -2,12 +2,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { applyAnswers } from "../src/intake/flow.js";
 import { followUpsForFlow, taskTypesForFlow } from "../src/intake/question-tree.js";
-import { approveHardBrief } from "../src/intake/simplified.js";
 import { catalogFromRecords, loadCreatorStudio, type CreatorStudioTemplate } from "../src/intake/creator-studio.js";
 import { taskTypeNames } from "../src/intake/catalog.js";
 import { rushApproverFor } from "../src/intake/rush.js";
 import {
-  BRAND_LEADS_TOGETHER,
   brandLeadFor,
   hardRequestsCreateAsana,
   integrationsApprover,
@@ -233,108 +231,90 @@ describe("Creator Studio", () => {
   });
 });
 
-describe("hard question flow and handoff", () => {
-  it("asks the three brief questions, then hands the request to the brand lead and suggests the owner", () => {
-    const state = simplified("C:bug");
+describe("new requests in the simplified flow", () => {
+  it("asks the property before naming a manager", () => {
+    const state = simplified("C:no-property");
+    const asked = applyAnswers(state, {
+      requestType: "Creative",
+      taskType: "Email",
+      novelty: "new",
+      requestName: "Holiday email",
+    }, MONDAY_MORNING);
+    expect(asked.kind).toBe("ask_property");
+    if (asked.kind === "ask_property") expect(asked.prompt).toContain("property");
+  });
+
+  it("asks the three brief questions, then the required email questions, and mentions DeeDee for SMB", () => {
+    const state = simplified("C:smb-email");
     const first = applyAnswers(state, {
       requesterName: "Elena Ruiz",
-      requestType: "Web",
-      taskType: "Bug Fix",
-      requestName: "Booking widget",
-      properties: ["SMP"],
+      requestType: "Creative",
+      taskType: "Email",
+      novelty: "new",
+      requestName: "Email for SMB",
+      properties: ["SMB"],
     }, MONDAY_MORNING);
     expect(first.kind).toBe("hard_question");
-    if (first.kind === "hard_question") expect(first.prompt).toContain("business problem");
+    if (first.kind !== "hard_question") return;
+    expect(first.notice).toBe("This is a new request, so it needs approval from <@U0B6N3RE23T>.");
+    expect(first.prompt).toContain("business problem");
+    expect(`${first.notice} ${first.prompt}`).not.toMatch(/TODO|Genevieve|Julia|Talley|paste the notes|will connect/i);
 
-    const second = applyAnswers(state, { businessProblem: "Guests cannot finish a booking." }, MONDAY_MORNING);
+    const second = applyAnswers(state, { businessProblem: "Guests are not opening the last email." }, MONDAY_MORNING);
     expect(second.kind).toBe("hard_question");
-    if (second.kind === "hard_question") expect(second.prompt).toContain("success");
+    if (second.kind === "hard_question") {
+      expect(second.prompt).toContain("success");
+      expect(second.notice).toBeUndefined();
+    }
 
-    const third = applyAnswers(state, { successLooksLike: "The widget submits again." }, MONDAY_MORNING);
+    const third = applyAnswers(state, { successLooksLike: "More bookings from the email." }, MONDAY_MORNING);
     expect(third.kind).toBe("hard_question");
     if (third.kind === "hard_question") expect(third.prompt).toContain("budget");
 
-    state.draft.requesterSlackId = "U-ELENA";
-    const handoff = applyAnswers(state, { budget: "No budget." }, MONDAY_MORNING);
-    expect(handoff.kind).toBe("hard_handoff");
-    if (handoff.kind === "hard_handoff") {
-      expect(handoff.text).toContain(BRAND_LEADS_TOGETHER);
-      expect(handoff.text).toContain("DeeDee Brown");
-      expect(handoff.text).toContain("Koral Captain");
-      expect(handoff.text).toContain("Elizabeth");
-      expect(handoff.text).toContain("This property goes to DeeDee Brown");
-      expect(handoff.text).toContain("DeeDee Brown will connect with <@U-ELENA>");
-      expect(handoff.text).toContain("paste the notes");
-      expect(handoff.text.toLowerCase()).not.toContain("kickoff");
+    const audience = applyAnswers(state, { budget: "No extra budget." }, MONDAY_MORNING);
+    expect(audience.kind).toBe("task_question");
+    if (audience.kind === "task_question") {
+      expect(audience.id).toBe("followup:Audience / Distribution Plan");
+      expect(audience.prompt).toContain("Who is");
     }
-    expect(state.phase).toBe("awaiting_notes");
+
+    const copy = applyAnswers(state, {
+      followUps: { "Audience / Distribution Plan": "SMB guests on the newsletter list" },
+    }, MONDAY_MORNING);
+    expect(copy.kind).toBe("task_question");
+    if (copy.kind === "task_question") {
+      expect(copy.id).toBe("followup:Recommended Copy / Details");
+      expect(copy.prompt).toContain("say");
+    }
+
+    const done = applyAnswers(state, {
+      followUps: { "Recommended Copy / Details": "Join us at Shelborne this weekend." },
+    }, MONDAY_MORNING);
+    expect(done.kind).toBe("hard_done");
+    if (done.kind === "hard_done") {
+      expect(done.text).toContain("<@U0B6N3RE23T>");
+      expect(done.text).toContain("Nothing was filed");
+      expect(done.text).not.toMatch(/TODO|Genevieve|Julia|Talley/);
+    }
   });
 
-  it("names Koral for Collective and DeeDee for Proper, including Lake Tahoe, and does not hand new properties to Kinsey", () => {
-    expect(brandLeadFor(["SMP"]).name).toBe("DeeDee Brown");
+  it("mentions Koral for Collective and DeeDee for Lake Tahoe", () => {
+    expect(brandLeadFor(["SMP"]).id).toBe("U0B6N3RE23T");
     expect(brandLeadFor(["LTP"]).name).toBe("DeeDee Brown");
-    expect(brandLeadFor(["TCH"]).name).toBe("Koral Captain");
+    expect(brandLeadFor(["TCH"]).id).toBe("U0B5F1HN98Q");
     expect(rushApproverFor(["LTP"]).name).toBe("Kinsey East");
     const collective = simplified("C:social");
-    collective.draft.requesterSlackId = "U-SUBMIT";
-    const handoff = applyAnswers(collective, {
+    const asked = applyAnswers(collective, {
       requestType: "Social",
       taskType: "Feed Post Request",
+      novelty: "new",
       requestName: "Roof night",
       properties: ["TCH"],
-      businessProblem: "The roof night is not on the calendar.",
-      successLooksLike: "The post is live the day before.",
-      budget: "None.",
     }, MONDAY_MORNING);
-    expect(handoff.kind).toBe("hard_handoff");
-    if (handoff.kind === "hard_handoff") {
-      expect(handoff.text).toContain("This property goes to Koral Captain");
-      expect(handoff.text).toContain("Koral Captain will connect with <@U-SUBMIT>");
-      expect(handoff.text).toContain("Kat");
-      expect(handoff.text.toLowerCase()).not.toContain("kickoff");
+    expect(asked.kind).toBe("hard_question");
+    if (asked.kind === "hard_question") {
+      expect(asked.notice).toContain("<@U0B5F1HN98Q>");
+      expect(asked.notice).not.toMatch(/Kat|Genevieve|TODO/);
     }
-  });
-
-  it("drafts a brief from the notes and does not create an Asana task", () => {
-    const state = simplified("C:brief");
-    state.draft.requesterSlackId = "U-ELENA";
-    const handoff = applyAnswers(state, {
-      requesterName: "Elena Ruiz",
-      requestType: "Web",
-      taskType: "New Page",
-      requestName: "Gift card page",
-      properties: ["HJWL"],
-      businessProblem: "Gift cards have no page.",
-      successLooksLike: "Guests can buy a card online.",
-      budget: "Design time only.",
-    }, MONDAY_MORNING);
-    expect(handoff.kind).toBe("hard_handoff");
-    if (handoff.kind === "hard_handoff") {
-      expect(handoff.text).toContain("Koral Captain will connect with <@U-ELENA>");
-      expect(handoff.text).toContain("Elizabeth");
-      expect(handoff.text.toLowerCase()).not.toContain("kickoff");
-    }
-    expect(state.phase).toBe("awaiting_notes");
-
-    const brief = applyAnswers(state, {
-      meetingNotes: "Ship a simple gift card page in December. Elizabeth builds it. Elena approves the copy.",
-    }, MONDAY_MORNING);
-    expect(brief.kind).toBe("hard_brief");
-    if (brief.kind === "hard_brief") {
-      expect(brief.createsTask).toBe(false);
-      expect(brief.text).toContain("Gift cards have no page.");
-      expect(brief.text).toContain("Guests can buy a card online.");
-      expect(brief.text).toContain("Design time only.");
-      expect(brief.text).toContain("Elizabeth");
-      expect(brief.text).toContain("requestor and/or submitter");
-      expect(brief.text).toContain("Ship a simple gift card page");
-      expect(brief.text.toLowerCase()).not.toContain("kickoff");
-    }
-    expect(state.phase).toBe("awaiting_brief_approval");
-
-    const decision = approveHardBrief(state);
-    expect(decision.fileAsana).toBe(false);
-    expect(decision.text).toContain("didn't create an Asana task");
-    expect(state.phase).toBe("brief_approved");
   });
 });
