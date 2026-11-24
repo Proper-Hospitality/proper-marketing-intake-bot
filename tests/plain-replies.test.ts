@@ -170,8 +170,8 @@ describe("send an email is a new request", () => {
     });
     expect(first.text).toBe([
       "This is a new request, so it needs approval from <@U0B6N3RE23T>.",
-      "- What do you need this for?",
-      "- How will we know it worked?",
+      "- What do you need this for? For example, a promotion, an event, or to drive bookings.",
+      "- How will we know it worked? For example, more bookings, sign-ups, or clicks.",
       "- Is there a budget for this? If not, just say no.",
     ].join("\n"));
     expect(first.text).not.toMatch(/designed or only sent|which to file first|design, send, or both|two tasks/i);
