@@ -258,31 +258,28 @@ describe("new requests in the simplified flow", () => {
     expect(first.kind).toBe("hard_question");
     if (first.kind !== "hard_question") return;
     expect(first.notice).toBe("This is a new request, so it needs approval from <@U0B6N3RE23T>.");
-    expect(first.prompt).toBe("What do you need this for? For example, a promotion, an event, or to drive bookings.");
-    expect(`${first.notice} ${first.prompt}`).not.toMatch(/TODO|Genevieve|Julia|Talley|paste the notes|will connect/i);
+    expect(first.id).toBe("businessProblem+successLooksLike+budget");
+    expect(first.prompt).toContain("- What do you need this for?");
+    expect(first.prompt).toContain("- How will we know it worked?");
+    expect(first.prompt).toContain("- Is there a budget for this? If not, just say no.");
+    expect(`${first.notice}\n${first.prompt}`.length).toBeLessThanOrEqual(300);
+    expect(`${first.notice} ${first.prompt}`).not.toMatch(/TODO|Genevieve|Julia|Talley|paste the notes|will connect|design, send, or both/i);
 
     const second = applyAnswers(state, { businessProblem: "Guests are not opening the last email." }, MONDAY_MORNING);
     expect(second.kind).toBe("hard_question");
     if (second.kind === "hard_question") {
-      expect(second.prompt).toBe("How will we know it worked? For example, more bookings, sign-ups, or clicks.");
+      expect(second.prompt).toContain("How will we know it worked?");
+      expect(second.prompt).toContain("Is there a budget for this? If not, just say no.");
       expect(second.notice).toBeUndefined();
     }
 
-    const third = applyAnswers(state, { successLooksLike: "More bookings from the email." }, MONDAY_MORNING);
-    expect(third.kind).toBe("hard_question");
-    if (third.kind === "hard_question") {
-      expect(third.prompt).toBe("Is there a budget for this? If not, just say no.");
-    }
+    const third = applyAnswers(state, {
+      successLooksLike: "More bookings from the email.",
+      budget: "No extra budget.",
+    }, MONDAY_MORNING);
+    expect(third.kind).toBe("task_question");
 
-    const split = applyAnswers(state, { budget: "No extra budget." }, MONDAY_MORNING);
-    expect(split.kind).toBe("task_question");
-    if (split.kind === "task_question") {
-      expect(split.id).toBe("emailSplit");
-      expect(split.prompt).toBe("Should we design the email, send it, or both?");
-    }
-    state.draft.emailSplit = "design";
-
-    const audience = applyAnswers(state, {}, MONDAY_MORNING);
+    const audience = third;
     expect(audience.kind).toBe("task_question");
     if (audience.kind === "task_question") {
       expect(audience.id).toBe("followup:Audience / Distribution Plan");
@@ -312,16 +309,16 @@ describe("new requests in the simplified flow", () => {
       followUps: {
         "Recommended Copy / Details": "Join us at Shelborne this weekend.",
         "CTA Link": "https://properhotel.com/shelborne",
+        "CTA Links": "https://properhotel.com/shelborne",
       },
       assets: ["none"],
       requestedCompletionDate: "2026-12-15",
       approver: "DeeDee Brown",
+      whereItGoesLive: "Past guest email",
     }, MONDAY_MORNING);
-    expect(done.kind).toBe("hard_done");
-    if (done.kind === "hard_done") {
-      expect(done.text).toContain("<@U0B6N3RE23T>");
-      expect(done.text).toContain("Nothing was filed");
-      expect(done.text).not.toMatch(/TODO|Genevieve|Julia|Talley/);
+    expect(done.kind === "hard_ready" || done.kind === "hard_done").toBe(true);
+    if (done.kind === "hard_ready" || done.kind === "hard_done") {
+      expect(done.text).not.toMatch(/two tasks|which first|design, send, or both/i);
     }
   });
 

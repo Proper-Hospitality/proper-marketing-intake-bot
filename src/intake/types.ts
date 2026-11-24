@@ -80,8 +80,11 @@ export interface BriefDraft {
   hardBriefApproved?: boolean;
   /** The new-request approval line was already shown in this thread. */
   managerNotified?: boolean;
-  /** New email: design the creative, send it, or both. Asked after the three brief questions. */
-  emailSplit?: "design" | "send" | "both";
+  /** True when the upstream piece already exists, so only the later task is filed. */
+  designReady?: boolean;
+  /** The later task that waits on this one. The requester is not asked to choose it. */
+  companionRequestType?: RequestType;
+  companionTaskType?: string;
   /** Set only for a simplified thread. Classic drafts leave this unset. */
   intakeFlow?: "classic" | "simplified";
 }

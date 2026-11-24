@@ -1,12 +1,13 @@
+import { designAlreadyUnclear, missingForRequest, taskPairFor } from "./dependencies.js";
 import { formatEasyAsk } from "./easy-chat.js";
-import { isFilled, listMissing } from "./missing.js";
+import { isFilled } from "./missing.js";
 import {
   formatCreatorStudioReply,
   loadCreatorStudio,
   type CreatorStudioMatch,
 } from "./creator-studio.js";
 import {
-  HARD_QUESTIONS,
+  briefBundle,
   NOVELTY_QUESTION,
   PROPERTY_QUESTION,
   REPORTING_LANE_QUESTION,
@@ -51,7 +52,8 @@ export type SimplifiedResult =
   | { kind: "task_question"; id: string; prompt: string }
   | { kind: "hard_await_notes"; text: string }
   | { kind: "hard_brief"; text: string; createsTask: boolean }
-  | { kind: "hard_done"; text: string };
+  | { kind: "hard_done"; text: string }
+  | { kind: "hard_ready"; text: string };
 
 export interface SimplifiedState {
   phase: string;
@@ -148,35 +150,53 @@ function advanceHard(
     state.phase = "collecting";
     return { kind: "ask_property", prompt: PROPERTY_QUESTION };
   }
-  const notice = draft.managerNotified ? undefined : newRequestApproval(draft);
-  for (const question of HARD_QUESTIONS) {
-    const value = draft[question.field];
-    if (!isFilled(value)) {
-      state.phase = "collecting";
-      draft.managerNotified = true;
-      return notice
-        ? { kind: "hard_question", id: question.id, prompt: question.prompt, notice }
-        : { kind: "hard_question", id: question.id, prompt: question.prompt };
-    }
-  }
-  if (draft.requestType === "Creative" && draft.taskType === "Email" && !draft.emailSplit) {
+  const bundle = briefBundle(draft);
+  if (bundle) {
     state.phase = "collecting";
+    const notice = draft.managerNotified ? undefined : newRequestApproval(draft);
     draft.managerNotified = true;
-    return {
-      kind: "task_question",
-      id: "emailSplit",
-      prompt: "Should we design the email, send it, or both?",
-    };
+    return notice
+      ? { kind: "hard_question", id: bundle.id, prompt: bundle.prompt, notice }
+      : { kind: "hard_question", id: bundle.id, prompt: bundle.prompt };
   }
-  const pending = listMissing(draft, today).items;
+  const pair = taskPairFor(draft);
+  if (pair && draft.designReady === undefined && draft.taskType === pair.upstream.taskType) {
+    if (designAlreadyUnclear(`${draft.notes ?? ""} ${draft.requestName ?? ""}`)) {
+      state.phase = "collecting";
+      return { kind: "task_question", id: "designReady", prompt: pair.unclearPrompt };
+    }
+    draft.designReady = false;
+    draft.companionRequestType = pair.downstream.requestType;
+    draft.companionTaskType = pair.downstream.taskType;
+  }
+  if (pair && draft.designReady === true && draft.taskType === pair.upstream.taskType) {
+    draft.requestType = pair.downstream.requestType;
+    draft.taskType = pair.downstream.taskType;
+    delete draft.novelty;
+    delete draft.companionRequestType;
+    delete draft.companionTaskType;
+  }
+  if (pair && draft.designReady === false) {
+    draft.companionRequestType = pair.downstream.requestType;
+    draft.companionTaskType = pair.downstream.taskType;
+  }
+  const pending = missingForRequest(draft, today);
   if (pending.length > 0) {
     const turn = formatEasyAsk({ draft, items: pending, opening: false });
     const id = turn.askedIds.join("+");
     if (id) {
       state.phase = "collecting";
-      draft.managerNotified = true;
       return { kind: "task_question", id, prompt: turn.text };
     }
+  }
+  if (draft.companionTaskType) {
+    state.phase = "awaiting_confirm";
+    state.confirmVersion += 1;
+    const place = draft.properties?.[0] ?? "this";
+    return {
+      kind: "hard_ready",
+      text: `I can file this ${place} ${draft.requestName?.trim() || "request"}. Click Confirm and I'll create it.`,
+    };
   }
   state.phase = "brief_approved";
   return {

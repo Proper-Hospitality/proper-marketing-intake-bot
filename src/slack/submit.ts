@@ -1,4 +1,5 @@
-import { addTaskComment, addTaskFollowers, createIntakeTask, userFacingAsanaError } from "../intake/asana.js";
+import { addDependencies, addTaskComment, addTaskFollowers, createIntakeTask, userFacingAsanaError } from "../intake/asana.js";
+import { companionDraft, dependencyPlan } from "../intake/dependencies.js";
 import { searchWorkspaceUsers } from "../tasks/complete.js";
 import { emailFallbackFile } from "../intake/email/attach.js";
 import { failedAttachmentLine, loadSlackAttachments, uploadLoadedAttachments } from "../intake/task-files.js";
@@ -146,12 +147,35 @@ export async function submitConfirmedBrief(input: {
         fetchImpl: input.fetchImpl,
       });
     }
+    let companionUrl = "";
+    if (state.draft.companionTaskType && state.draft.designReady === false) {
+      const second = await createIntakeTask({
+        draft: companionDraft(state.draft),
+        templateOffer: null,
+        slackThread: input.slackThread,
+        token: input.token,
+        fetchImpl: input.fetchImpl,
+      });
+      const plan = dependencyPlan(result.taskGid, second.taskGid);
+      await addDependencies({
+        token: input.token,
+        taskGid: plan.taskGid,
+        dependencies: plan.dependencies,
+        fetchImpl: input.fetchImpl,
+      });
+      companionUrl = second.permalinkUrl;
+    }
     await input.store.saveConversation(state);
     const attachedNames = (state.draft.attachments ?? [])
       .filter((file) => !file.slackFileId || (state.uploadedSlackFileIds ?? []).includes(file.slackFileId))
       .map(attachmentFileName)
       .filter((name): name is string => Boolean(name));
-    return { text: filedConfirmation(state.draft, result.permalinkUrl, attachedNames) };
+    const filed = filedConfirmation(state.draft, result.permalinkUrl, attachedNames);
+    return {
+      text: companionUrl
+        ? `${filed}\nThe send is set to wait until the design is done.\n${companionUrl}`
+        : filed,
+    };
   } catch (error) {
     console.error(JSON.stringify({ msg: "asana_submit_failed", error: userFacingAsanaError(error) }));
     state.phase = state.taskGid ? "submitting" : "awaiting_confirm";

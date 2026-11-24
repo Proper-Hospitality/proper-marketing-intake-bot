@@ -415,6 +415,19 @@ async function readTask(fetchImpl: typeof fetch, token: string, taskGid: string)
   return payload.data;
 }
 
+/** The task depends on these earlier tasks. Asana POST /tasks/{gid}/addDependencies. */
+export async function addDependencies(input: {
+  token: string;
+  taskGid: string;
+  dependencies: string[];
+  fetchImpl?: typeof fetch;
+}): Promise<void> {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  await asanaRequest(fetchImpl, input.token, "POST", `/tasks/${input.taskGid}/addDependencies`, {
+    data: { dependencies: input.dependencies },
+  });
+}
+
 async function asanaRequest<T>(
   fetchImpl: typeof fetch,
   token: string,

@@ -1,4 +1,5 @@
 import { plainFollowUp } from "./easy-chat.js";
+import { isFilled } from "./missing.js";
 import type { BriefDraft } from "./types.js";
 import { followUpsForFlow } from "./question-tree.js";
 import { brandLeadFor, type WorkflowAssignment } from "./workflows.js";
@@ -29,6 +30,40 @@ export type HardQuestionId = (typeof HARD_QUESTIONS)[number]["id"];
 
 export function hardQuestionById(id: string | undefined): (typeof HARD_QUESTIONS)[number] | undefined {
   return HARD_QUESTIONS.find((question) => question.id === id);
+}
+
+/** Short lines for the first new-request reply. Budget is always in that list. */
+export const BRIEF_LINES: Record<HardQuestionId, string> = {
+  businessProblem: "What do you need this for?",
+  successLooksLike: "How will we know it worked?",
+  budget: "Is there a budget for this? If not, just say no.",
+};
+
+export function missingBriefQuestions(draft: BriefDraft): Array<(typeof HARD_QUESTIONS)[number]> {
+  return HARD_QUESTIONS.filter((question) => !isFilled(draft[question.field]));
+}
+
+export function briefBundle(draft: BriefDraft): { id: string; prompt: string } | undefined {
+  const missing = missingBriefQuestions(draft);
+  if (missing.length === 0) return undefined;
+  const lines = missing.map((question) => BRIEF_LINES[question.id]);
+  const prompt = lines.length === 1 ? lines[0] : lines.map((line) => `- ${line}`).join("\n");
+  return { id: missing.map((question) => question.id).join("+"), prompt };
+}
+
+/** Map a reply onto the brief questions still open. Never invents a budget. */
+export function recordBriefAnswers(draft: BriefDraft, ids: string[], text: string): boolean {
+  const lines = text
+    .split(/\n+/)
+    .map((line) => line.replace(/^[-*•]\s*/, "").trim())
+    .filter(Boolean);
+  if (lines.length === 0) return false;
+  lines.forEach((line, index) => {
+    const id = ids[index];
+    const question = hardQuestionById(id);
+    if (question) draft[question.field] = line;
+  });
+  return true;
 }
 
 export const PROPERTY_QUESTION = "Which property is this for? A code like SMB or SMP is perfect. I need it to ask the right brand manager.";
