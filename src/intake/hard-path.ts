@@ -11,17 +11,17 @@ export const HARD_QUESTIONS = [
   {
     id: "businessProblem",
     field: "businessProblem",
-    prompt: "What's the business problem this solves?",
+    prompt: "What do you need this for? For example, a promotion, an event, or to drive bookings.",
   },
   {
     id: "successLooksLike",
     field: "successLooksLike",
-    prompt: "What does success look like?",
+    prompt: "How will we know it worked? For example, more bookings, sign-ups, or clicks.",
   },
   {
     id: "budget",
     field: "budget",
-    prompt: "Is there any budget?",
+    prompt: "Is there a budget for this? If not, just say no.",
   },
 ] as const;
 
