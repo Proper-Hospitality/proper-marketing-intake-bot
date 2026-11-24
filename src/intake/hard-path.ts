@@ -32,11 +32,11 @@ export function hardQuestionById(id: string | undefined): (typeof HARD_QUESTIONS
   return HARD_QUESTIONS.find((question) => question.id === id);
 }
 
-/** Short lines for the first new-request reply. Budget is always in that list. */
+/** Lines for the first new-request reply. Budget is always in that list. */
 export const BRIEF_LINES: Record<HardQuestionId, string> = {
-  businessProblem: "What do you need this for?",
-  successLooksLike: "How will we know it worked?",
-  budget: "Is there a budget for this? If not, just say no.",
+  businessProblem: HARD_QUESTIONS[0].prompt,
+  successLooksLike: HARD_QUESTIONS[1].prompt,
+  budget: HARD_QUESTIONS[2].prompt,
 };
 
 export function missingBriefQuestions(draft: BriefDraft): Array<(typeof HARD_QUESTIONS)[number]> {

@@ -259,16 +259,18 @@ describe("new requests in the simplified flow", () => {
     if (first.kind !== "hard_question") return;
     expect(first.notice).toBe("This is a new request, so it needs approval from <@U0B6N3RE23T>.");
     expect(first.id).toBe("businessProblem+successLooksLike+budget");
-    expect(first.prompt).toContain("- What do you need this for?");
-    expect(first.prompt).toContain("- How will we know it worked?");
-    expect(first.prompt).toContain("- Is there a budget for this? If not, just say no.");
+    expect(first.prompt).toBe([
+      "- What do you need this for? For example, a promotion, an event, or to drive bookings.",
+      "- How will we know it worked? For example, more bookings, sign-ups, or clicks.",
+      "- Is there a budget for this? If not, just say no.",
+    ].join("\n"));
     expect(`${first.notice}\n${first.prompt}`.length).toBeLessThanOrEqual(300);
     expect(`${first.notice} ${first.prompt}`).not.toMatch(/TODO|Genevieve|Julia|Talley|paste the notes|will connect|design, send, or both/i);
 
     const second = applyAnswers(state, { businessProblem: "Guests are not opening the last email." }, MONDAY_MORNING);
     expect(second.kind).toBe("hard_question");
     if (second.kind === "hard_question") {
-      expect(second.prompt).toContain("How will we know it worked?");
+      expect(second.prompt).toContain("How will we know it worked? For example, more bookings, sign-ups, or clicks.");
       expect(second.prompt).toContain("Is there a budget for this? If not, just say no.");
       expect(second.notice).toBeUndefined();
     }
