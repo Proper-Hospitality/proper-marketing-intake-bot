@@ -211,7 +211,6 @@ describe("attachment kinds", () => {
       properties: ["SMP"],
       requestType: "Creative",
       taskType: "Menu (F&B, Spa)",
-      novelty: "edit",
       attachments: [{ ref: "https://www.dropbox.com/s/abc/SMP_Calabra_Dinner_Nov2026.pdf" }],
     }, today);
     expect(outcome.kind === "ask_collateral_year" || outcome.kind === "offer_collateral" || outcome.kind === "ask_deliverable").toBe(true);
@@ -269,7 +268,6 @@ function finishedEmail(): BriefDraft {
     properties: ["SMP"],
     requestType: "Creative",
     taskType: "Email",
-    novelty: "edit",
     requestedCompletionDate: "2026-12-01",
     consequenceOfDelay: "Members miss the sale.",
     approver: "DeeDee Brown",

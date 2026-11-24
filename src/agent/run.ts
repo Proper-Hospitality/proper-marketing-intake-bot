@@ -68,7 +68,7 @@ import {
 } from "../tasks/complete.js";
 import { assistantBlocksForReplay, isHistoryRejection, sanitizeStoredHistory } from "./history.js";
 import { buildSystemPrompt } from "./prompt.js";
-import { INTAKE_TOOLS } from "./tools.js";
+import { intakeTools } from "./tools.js";
 import { LEADING_ACK, formatNeedsList, naturalAck } from "../intake/ask-text.js";
 import { batchHasAnswers, isTeammateChatter, isVagueAnswer, parseBatchAnswers, saysNewPage, wantsToChat } from "../intake/batch.js";
 import { emailAddressee, formatEmailPropertyConfirm } from "../intake/email/present.js";
@@ -230,9 +230,11 @@ export async function runIntakeTurn(input: {
       preset = applyAnswers(state, {}, today);
     }
   }
-  const scripted = scriptedIntake(state, input.userText, today);
-  if (scripted) {
-    return remember(state, input.userText, renderReply(state, input.slackUser, "", scripted, today));
+  if (state.intakeFlow === "simplified") {
+    const scripted = scriptedIntake(state, input.userText, today);
+    if (scripted) {
+      return remember(state, input.userText, renderReply(state, input.slackUser, "", scripted, today));
+    }
   }
   if (input.design && (state.phase === "awaiting_design_materials" || state.phase === "design_ready")) {
     const designTurn = await continueDesign({
@@ -410,7 +412,7 @@ export async function runIntakeTurn(input: {
       response = await input.llm.complete({
         system: buildSystemPrompt(state, input.slackUser, today),
         messages,
-        tools: INTAKE_TOOLS,
+        tools: intakeTools(state.intakeFlow),
       });
     } catch (error) {
       if (!healedHistory && isHistoryRejection(error)) {

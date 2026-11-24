@@ -39,6 +39,9 @@ services:
         sync: false
       - key: SLACK_EMAIL_INTAKE_CHANNELS
         sync: false
+      # Example test channel: C0CLGRR3Z28. Blank keeps every channel on the classic flow.
+      - key: SIMPLIFIED_FLOW_CHANNELS
+        sync: false
       - key: CREATOR_STUDIO_CATALOG_PATH
         sync: false
       - key: CREATOR_STUDIO_CATALOG_JSON

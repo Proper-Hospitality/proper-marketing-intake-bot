@@ -1,3 +1,4 @@
+import { assignIntakeFlow } from "../intake/flow-switch.js";
 import { approveHardBrief } from "../intake/simplified.js";
 import { FORM_URL } from "../intake/catalog.js";
 import { markEmailSlices } from "../intake/attachments.js";
@@ -71,6 +72,7 @@ async function handleFreshMessage(deps: {
   const key = conversationKey(message.channel, message.threadTs, message.ts, message.isDm);
   const state = (await deps.store.getConversation(key)) ?? emptyConversation(key);
   state.channel = message.channel;
+  assignIntakeFlow(state);
   if (state.emailIntake?.requesterSlackId) state.slackUserId = state.emailIntake.requesterSlackId;
   else if (!state.emailIntake) state.slackUserId = message.userId;
   state.threadTs = message.threadTs ?? (message.isDm ? undefined : message.ts);

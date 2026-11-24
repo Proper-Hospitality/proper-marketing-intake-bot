@@ -565,9 +565,7 @@ describe("forwarded email intake", () => {
         approver: "Jamie Mark",
         followUps: { "CTA Links": "Same questions as the membership page form" },
       }, TODAY);
-      expect(second.kind).toBe("hard_question");
-      filed.phase = "awaiting_confirm";
-      filed.confirmVersion += 1;
+      expect(second.kind).toBe("confirm");
       await store.saveConversation(filed);
       await handleConfirmAction({
         store,

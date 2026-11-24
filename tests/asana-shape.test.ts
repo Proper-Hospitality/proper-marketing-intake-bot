@@ -176,11 +176,10 @@ describe("24 hour CRM sends", () => {
       consequenceOfDelay: "We miss the announcement.",
       followUps: kinseyDraft().followUps,
     }, TODAY);
-    expect(outcome.kind).toBe("hard_question");
+    expect(outcome.kind).toBe("confirm");
     expect(state.draft.rushBlock).toBeUndefined();
     expect(state.draft.approver).toBe("Kinsey East");
-    state.phase = "awaiting_confirm";
-    state.confirmVersion += 1;
+    expect(state.phase).toBe("awaiting_confirm");
     expect(listMissing(state.draft, TODAY).warnings.join(" ")).not.toContain("inside the 7-day lead time");
 
     const store = new MemoryStore();

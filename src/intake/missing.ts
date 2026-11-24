@@ -1,7 +1,7 @@
 import { attachmentMissing, markEmailSlices, requestHasFiles } from "./attachments.js";
 import { applyDefaultApprover, daysUntil, propertyNames, taskTypeNames } from "./catalog.js";
 import { leadTimeFor, leadTimeIsTight, leadTimeSentence } from "./lead-time.js";
-import { followUpsFor, SUPPORT_QUESTION } from "./question-tree.js";
+import { followUpsForFlow, SUPPORT_QUESTION, taskTypesForFlow } from "./question-tree.js";
 import { REQUEST_TYPES, type BriefDraft, type FollowUp, type RequestType } from "./types.js";
 
 export interface MissingItem {
@@ -115,12 +115,14 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
     items.push({
       id: "taskType",
       label: SUPPORT_QUESTION[draft.requestType],
-      hint: taskTypeNames(draft.requestType).join(", "),
+      hint: (draft.intakeFlow === "simplified"
+        ? taskTypesForFlow(draft.requestType, "simplified")
+        : taskTypeNames(draft.requestType)).join(", "),
     });
     return { items: presentQuestions(draft, items, []), warnings };
   }
 
-  const followUps = followUpsFor(draft.requestType, draft.taskType);
+  const followUps = followUpsForFlow(draft.requestType, draft.taskType, draft.intakeFlow);
   for (const field of followUps) {
     if (!field.required) continue;
     if (skipExactCopy(draft, field)) continue;

@@ -323,7 +323,6 @@ function adDraft(): BriefDraft {
     properties: ["SMB"],
     requestType: "Creative",
     taskType: "Ad",
-    novelty: "edit",
     approver: "DeeDee Brown",
     whereItGoesLive: "Digital signage",
     assets: ["https://drive.example.com/ref"],

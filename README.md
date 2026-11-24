@@ -87,6 +87,7 @@ On the blueprint screen, Render lists these because `render.yaml` marks the secr
 | `CANVA_CLIENT_SECRET` | Canva developer integration. Same as above. Starts with `cnvca`. |
 | `SLACK_INTAKE_CHANNELS` | Optional. Comma-separated Slack channel IDs. In these channels every top-level message starts intake. No @mention is required. Leave it blank and only @mentions and direct messages start intake. |
 | `SLACK_EMAIL_INTAKE_CHANNELS` | Optional. Comma-separated Slack channel IDs that receive forwarded email. Leave it blank and email intake is off. See **Email intake** below. |
+| `SIMPLIFIED_FLOW_CHANNELS` | Optional. Comma-separated Slack channel IDs that use the simplified flow. Example: `C0CLGRR3Z28`. Leave it blank and every channel stays on the classic flow, including `#marketing-asana-bot` (`C0CBU9X6F0F`) and email intake. |
 | `SLACK_STATUS_CHANNELS` | Optional. Comma-separated Slack channel IDs, such as `C0AV038G751` for `#marketing-crew`. Leave it blank and the bot will not propose Asana status updates. |
 | `SLACK_MENTIONS_ENABLED` | Optional. Leave it unset or `false` and the bot greets people by first name (`Hi Jamie!`) instead of an @mention. Set it to `true` when mentions should come back. |
 | `REDIS_URL` | Filled in by the blueprint from the Key Value service. Leave it alone. |
@@ -351,7 +352,9 @@ The bot will not propose twice for the same message, and it will not propose mor
 
 ## Simplified intake
 
-A request is sorted before the long brief.
+The classic flow is the default in every channel. A thread keeps the flow it started with. The simplified flow runs only in channels listed in `SIMPLIFIED_FLOW_CHANNELS`. The example test channel is `C0CLGRR3Z28`. `#marketing-asana-bot` (`C0CBU9X6F0F`) and email intake stay classic until that id is added to the list.
+
+A simplified request is sorted before the long brief.
 
 1. If the task can be new or an edit (creative assets, and CRM Pop Up or Automated Flows), the bot asks which. That answer picks the bucket and the approver.
 2. If a Creator Studio catalog is configured and a template matches, the bot sends the link and does not create an Asana task. With no catalog, this step is skipped.

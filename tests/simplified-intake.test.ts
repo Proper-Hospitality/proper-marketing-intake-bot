@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { applyAnswers } from "../src/intake/flow.js";
-import { followUpsFor } from "../src/intake/question-tree.js";
+import { followUpsForFlow, taskTypesForFlow } from "../src/intake/question-tree.js";
 import { approveHardBrief } from "../src/intake/simplified.js";
 import { catalogFromRecords, loadCreatorStudio, type CreatorStudioTemplate } from "../src/intake/creator-studio.js";
 import { taskTypeNames } from "../src/intake/catalog.js";
@@ -13,7 +13,13 @@ import {
   integrationsApprover,
   resolveWorkflow,
 } from "../src/intake/workflows.js";
-import { emptyConversation } from "../src/store/types.js";
+import { emptyConversation, type ConversationState } from "../src/store/types.js";
+
+function simplified(key: string): ConversationState {
+  const state = emptyConversation(key);
+  state.intakeFlow = "simplified";
+  return state;
+}
 
 const MONDAY_MORNING = new Date("2026-11-23T16:00:00Z");
 const FIXTURE = JSON.parse(
@@ -22,7 +28,7 @@ const FIXTURE = JSON.parse(
 
 describe("bucket routing", () => {
   it("asks new or edit only where both exist, and that answer picks the bucket", () => {
-    const email = emptyConversation("C:email");
+    const email = simplified("C:email");
     const asked = applyAnswers(email, {
       requestType: "Creative",
       taskType: "Email",
@@ -122,14 +128,17 @@ describe("bucket routing", () => {
   });
 
   it("drops Brandfolder Upload and Affiliate Import, and treats Pop Up as a Klaviyo CRM task", () => {
-    expect(taskTypeNames("Web")).not.toContain("Brandfolder Upload");
-    expect(taskTypeNames("Web")).not.toContain("Affiliate Import");
-    expect(taskTypeNames("Creative")).not.toContain("Pop Up");
+    expect(taskTypeNames("Web")).toContain("Brandfolder Upload");
+    expect(taskTypesForFlow("Web", "simplified")).not.toContain("Brandfolder Upload");
+    expect(taskTypesForFlow("Web", "simplified")).not.toContain("Affiliate Import");
+    expect(taskTypesForFlow("Creative", "simplified")).not.toContain("Pop Up");
+    expect(taskTypesForFlow("Web", "classic")).toContain("Brandfolder Upload");
     expect(taskTypeNames("Web")).toContain("Integrations");
-    const popup = followUpsFor("CRM & Paid", "Pop Up").filter((field) => field.required).map((field) => field.label);
+    const popup = followUpsForFlow("CRM & Paid", "Pop Up", "simplified").filter((field) => field.required).map((field) => field.label);
     expect(popup).toEqual(["Copy for Klaviyo", "Photo for Klaviyo"]);
+    expect(followUpsForFlow("CRM & Paid", "Pop Up", "classic").map((field) => field.label)).toContain("Audience / Distribution Plan");
 
-    const state = emptyConversation("C:popup");
+    const state = simplified("C:popup");
     const asked = applyAnswers(state, {
       requestType: "Creative",
       taskType: "Pop Up",
@@ -171,7 +180,7 @@ describe("bucket routing", () => {
 describe("Creator Studio", () => {
   it("skips the lookup when no catalog is configured", () => {
     expect(loadCreatorStudio({}).configured).toBe(false);
-    const state = emptyConversation("C:page");
+    const state = simplified("C:page");
     const outcome = applyAnswers(state, {
       requesterName: "Elena Ruiz",
       requesterEmail: "elena@example.com",
@@ -203,7 +212,7 @@ describe("Creator Studio", () => {
     const previous = process.env.CREATOR_STUDIO_CATALOG_JSON;
     process.env.CREATOR_STUDIO_CATALOG_JSON = JSON.stringify(FIXTURE);
     try {
-      const state = emptyConversation("C:studio");
+      const state = simplified("C:studio");
       const outcome = applyAnswers(state, {
         requestType: "Creative",
         taskType: "Email",
@@ -226,7 +235,7 @@ describe("Creator Studio", () => {
 
 describe("hard question flow and handoff", () => {
   it("asks the three brief questions, then hands the request to the brand lead and suggests the owner", () => {
-    const state = emptyConversation("C:bug");
+    const state = simplified("C:bug");
     const first = applyAnswers(state, {
       requesterName: "Elena Ruiz",
       requestType: "Web",
@@ -266,7 +275,7 @@ describe("hard question flow and handoff", () => {
     expect(brandLeadFor(["LTP"]).name).toBe("DeeDee Brown");
     expect(brandLeadFor(["TCH"]).name).toBe("Koral Captain");
     expect(rushApproverFor(["LTP"]).name).toBe("Kinsey East");
-    const collective = emptyConversation("C:social");
+    const collective = simplified("C:social");
     collective.draft.requesterSlackId = "U-SUBMIT";
     const handoff = applyAnswers(collective, {
       requestType: "Social",
@@ -287,7 +296,7 @@ describe("hard question flow and handoff", () => {
   });
 
   it("drafts a brief from the notes and does not create an Asana task", () => {
-    const state = emptyConversation("C:brief");
+    const state = simplified("C:brief");
     state.draft.requesterSlackId = "U-ELENA";
     const handoff = applyAnswers(state, {
       requesterName: "Elena Ruiz",

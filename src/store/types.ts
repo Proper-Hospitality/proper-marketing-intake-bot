@@ -115,6 +115,11 @@ export interface ConversationState {
   /** Batch lists every missing field. Chat asks one question, starting with the due date. */
   intakePace?: "batch" | "chat";
   creatorStudioMatch?: CreatorStudioMatch | null;
+  /**
+   * Which intake flow started this thread. Set once and kept.
+   * Absent only on a brand-new state before the first message is routed.
+   */
+  intakeFlow?: "classic" | "simplified";
   updatedAt: string;
 }
 

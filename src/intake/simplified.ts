@@ -84,6 +84,14 @@ export function routeSimplified(state: SimplifiedState, today = new Date(), env:
   if (SKIP_PHASES.has(state.phase)) return undefined;
 
   const draft = state.draft;
+  if (draft.requestType === "Creative" && draft.taskType === "Pop Up") {
+    draft.requestType = "CRM & Paid";
+    draft.taskType = "Pop Up";
+  }
+  if (draft.requestType === "Web" && (draft.taskType === "Brandfolder Upload" || draft.taskType === "Affiliate Import")) {
+    delete draft.taskType;
+    return undefined;
+  }
   if (!draft.requestType || !draft.taskType) return undefined;
 
   if (needsReportingLane(draft.requestType, draft.taskType) && !draft.reportingLane) {

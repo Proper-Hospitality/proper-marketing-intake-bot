@@ -19,7 +19,6 @@ describe("pending prices", () => {
       properties: ["SMP"],
       requestType: "Creative",
       taskType: "Menu (F&B, Spa)",
-      novelty: "edit",
       requestedCompletionDate: "2026-12-01",
       consequenceOfDelay: "The dinner service has no menu.",
       approver: "DeeDee Brown",

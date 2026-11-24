@@ -78,6 +78,8 @@ export interface BriefDraft {
   workflowOwner?: string;
   workflowApprover?: string;
   hardBriefApproved?: boolean;
+  /** Set only for a simplified thread. Classic drafts leave this unset. */
+  intakeFlow?: "classic" | "simplified";
 }
 
 export const ATTACHMENT_KINDS = ["menu_or_brochure", "photo", "page_content", "context", "email_slice", "post_asset"] as const;

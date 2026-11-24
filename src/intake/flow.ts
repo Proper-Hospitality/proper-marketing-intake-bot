@@ -79,6 +79,8 @@ export interface FlowState {
   rushExplainedFor?: string;
   confirmVersion: number;
   creatorStudioMatch?: CreatorStudioMatch | null;
+  /** Locked when the thread starts. Absent means classic, same as main. */
+  intakeFlow?: "classic" | "simplified";
 }
 
 export function applyAnswers(state: FlowState, input: RecordInput, today = new Date()): FlowOutcome {
@@ -127,8 +129,11 @@ function advance(state: FlowState, today: Date): FlowOutcome {
   applyDefaultApprover(draft);
   applyRushBlock(draft, today);
   markEmailSlices(draft);
-  const simplified = routeSimplified(state, today);
-  if (simplified) return simplified;
+  if (state.intakeFlow === "simplified") {
+    draft.intakeFlow = "simplified";
+    const simplified = routeSimplified(state, today);
+    if (simplified) return simplified;
+  }
   const routed = routeDeliverable(state);
   if (routed) return routed;
 
@@ -223,12 +228,6 @@ function mergeDraft(draft: BriefDraft, input: RecordInput, today: Date): string[
       draft.requestType = resolved;
       requestType = resolved;
     }
-  }
-
-  if (requestType === "Creative" && input.taskType && /^pop[-\s]?up$/i.test(input.taskType.trim())) {
-    draft.requestType = "CRM & Paid";
-    requestType = "CRM & Paid";
-    input.taskType = "Pop Up";
   }
 
   if (input.taskType) {
