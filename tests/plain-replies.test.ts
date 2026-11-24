@@ -11,7 +11,7 @@ import {
 import { emptyConversation } from "../src/store/types.js";
 
 const MONDAY = new Date("2026-11-23T16:00:00Z");
-const JARGON = /\b(assets|copy|CTA|distribution plan|deliverable|creative)\b/i;
+const JARGON = /\b(assets|distribution plan|deliverable|creative)\b/i;
 const ELENA = { id: "U1", name: "Elena Ruiz", email: "elena@example.com" };
 
 describe("plain simplified questions", () => {
@@ -19,10 +19,11 @@ describe("plain simplified questions", () => {
     expect(FILE_QUESTION).toBe("What images or files should we use? You can attach them here or share a link.");
     expect(plainFollowUp("Photo Link", {})).toBe(FILE_QUESTION);
     expect(plainFollowUp("Link to Organized Assets", {})).toBe(FILE_QUESTION);
-    expect(TEXT_QUESTION).toBe("What should the text say?");
+    expect(TEXT_QUESTION).toBe("What should the text (copy) say?");
     expect(plainFollowUp("Recommended Copy / Details", {})).toBe(TEXT_QUESTION);
-    expect(CLICK_QUESTION).toBe("What button or link should people click?");
+    expect(CLICK_QUESTION).toBe("What button or link should people click (CTA)?");
     expect(plainFollowUp("CTA Link", {})).toBe(CLICK_QUESTION);
+    expect(FILE_QUESTION).not.toMatch(/\bassets\b/i);
     expect(AUDIENCE_QUESTION).toBe("Who should get this, and where will they see it?");
     expect(plainFollowUp("Audience / Distribution Plan", {})).toBe(AUDIENCE_QUESTION);
     for (const prompt of [FILE_QUESTION, TEXT_QUESTION, CLICK_QUESTION, AUDIENCE_QUESTION]) {

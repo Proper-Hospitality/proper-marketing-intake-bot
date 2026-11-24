@@ -7,8 +7,8 @@ import { formatSpokenDate } from "./relative-date.js";
 const MESSAGE_LIMIT = 300;
 
 const FILE_QUESTION = "What images or files should we use? You can attach them here or share a link.";
-const TEXT_QUESTION = "What should the text say?";
-const CLICK_QUESTION = "What button or link should people click?";
+const TEXT_QUESTION = "What should the text (copy) say?";
+const CLICK_QUESTION = "What button or link should people click (CTA)?";
 const AUDIENCE_QUESTION = "Who should get this, and where will they see it?";
 
 /** User-facing wording for one follow-up. Plain language, no intake jargon. */
@@ -16,9 +16,9 @@ export function plainFollowUp(label: string, draft: BriefDraft): string {
   if (label === "URL") return "What's the link to the page?";
   if (/page change/i.test(label)) return changeQuestion(draft);
   if (/page headline/i.test(label)) return "What's the headline?";
-  if (/page copy/i.test(label)) return "What text should go on the page?";
+  if (/page copy/i.test(label)) return "What text (copy) should go on the page?";
   if (/audience|distribution/i.test(label)) return AUDIENCE_QUESTION;
-  if (/copy for klaviyo/i.test(label)) return "What text should the popup show?";
+  if (/copy for klaviyo/i.test(label)) return "What text (copy) should the popup show?";
   if (/photo for klaviyo|photo link|photo\/video|asset link|banner photo|organized assets|link to assets|inspiration link/i.test(label)) {
     return FILE_QUESTION;
   }
@@ -31,7 +31,7 @@ export function plainFollowUp(label: string, draft: BriefDraft): string {
   if (/event name/i.test(label)) return "What's the event called?";
   if (/event date|event time/i.test(label)) return "When is the event? Include the start and end time.";
   if (/event location/i.test(label)) return "Where does the event happen?";
-  if (/subject line/i.test(label)) return "What should the subject line say?";
+  if (/subject line/i.test(label)) return "What should the subject line (copy) say?";
   if (/rate code/i.test(label)) return "What's the rate code? Send it as it should appear.";
   if (/promo code/i.test(label)) return "What's the promo code? Send it as a guest would type it.";
   if (/offer title/i.test(label)) return "What's the offer called?";
@@ -41,7 +41,7 @@ export function plainFollowUp(label: string, draft: BriefDraft): string {
   if (/when the old offer/i.test(label)) return "When should the old offer come down?";
   if (/replaces it in ads/i.test(label)) return "What should replace it in ads or the usual campaigns?";
   if (/transactional/i.test(label)) return "Do any booking emails use this rate or promo code?";
-  if (/offer copy/i.test(label)) return "Can you share the offer wording, the rules, and a photo?";
+  if (/offer copy/i.test(label)) return "Can you share the offer text (copy), the rules, and a photo?";
   const cleaned = label.replace(/\s*\([^)]*\)/g, "").trim();
   const sentence = cleaned.endsWith("?") ? cleaned : `${cleaned}?`;
   return sentence.length <= 160 ? sentence : `${sentence.slice(0, 157)}?`;
@@ -138,7 +138,7 @@ export function plainItem(item: MissingItem, draft: BriefDraft): string {
   if (item.id === "requesterEmail") return "What's your email?";
   if (item.id === "requestType") return "What do you need help with? A page, an email, a social post, or something else?";
   if (item.id === "taskType") return taskTypeQuestion(draft);
-  if (item.id === "copyReady" || item.id === "copy" || item.id === "copyPlan") return "Is the wording ready? Paste it, or say who is writing it and when.";
+  if (item.id === "copyReady" || item.id === "copy" || item.id === "copyPlan") return "Is the text (copy) ready? Paste it, or say who is writing it and when.";
   if (item.id === "whereItGoesLive") return "Where should this show up? A page link, an email, or a social account is enough.";
   if (item.id === "eventWhen") return "When is the event? Include the start and end time.";
   if (item.label === "URL" || item.id.endsWith(":URL")) return "What's the link to the page?";
