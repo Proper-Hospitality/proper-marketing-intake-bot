@@ -248,6 +248,7 @@ describe("new requests in the simplified flow", () => {
     const state = simplified("C:smb-email");
     const first = applyAnswers(state, {
       requesterName: "Elena Ruiz",
+      requesterEmail: "elena@example.com",
       requestType: "Creative",
       taskType: "Email",
       novelty: "new",
@@ -273,7 +274,15 @@ describe("new requests in the simplified flow", () => {
       expect(third.prompt).toBe("Is there a budget for this? If not, just say no.");
     }
 
-    const audience = applyAnswers(state, { budget: "No extra budget." }, MONDAY_MORNING);
+    const split = applyAnswers(state, { budget: "No extra budget." }, MONDAY_MORNING);
+    expect(split.kind).toBe("task_question");
+    if (split.kind === "task_question") {
+      expect(split.id).toBe("emailSplit");
+      expect(split.prompt).toBe("Should we design the email, send it, or both?");
+    }
+    state.draft.emailSplit = "design";
+
+    const audience = applyAnswers(state, {}, MONDAY_MORNING);
     expect(audience.kind).toBe("task_question");
     if (audience.kind === "task_question") {
       expect(audience.id).toBe("followup:Audience / Distribution Plan");
@@ -291,8 +300,22 @@ describe("new requests in the simplified flow", () => {
       expect(copy.prompt).not.toMatch(/\bassets\b/i);
     }
 
-    const done = applyAnswers(state, {
+    const photos = applyAnswers(state, {
       followUps: { "Recommended Copy / Details": "Join us at Shelborne this weekend." },
+    }, MONDAY_MORNING);
+    expect(photos.kind).toBe("task_question");
+    if (photos.kind === "task_question") {
+      expect(photos.prompt).toMatch(/images or photos|button or link|text \(copy\)|Who should get/i);
+    }
+
+    const done = applyAnswers(state, {
+      followUps: {
+        "Recommended Copy / Details": "Join us at Shelborne this weekend.",
+        "CTA Link": "https://properhotel.com/shelborne",
+      },
+      assets: ["none"],
+      requestedCompletionDate: "2026-12-15",
+      approver: "DeeDee Brown",
     }, MONDAY_MORNING);
     expect(done.kind).toBe("hard_done");
     if (done.kind === "hard_done") {

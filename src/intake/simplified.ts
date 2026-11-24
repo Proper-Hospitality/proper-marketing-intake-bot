@@ -1,5 +1,5 @@
-import { assumeEasyFacts } from "./easy-chat.js";
-import { isFilled } from "./missing.js";
+import { formatEasyAsk } from "./easy-chat.js";
+import { isFilled, listMissing } from "./missing.js";
 import {
   formatCreatorStudioReply,
   loadCreatorStudio,
@@ -11,7 +11,6 @@ import {
   PROPERTY_QUESTION,
   REPORTING_LANE_QUESTION,
   formatSuggestedBrief,
-  keyTaskQuestions,
   newRequestApproval,
 } from "./hard-path.js";
 import type { BriefDraft, RequestType } from "./types.js";
@@ -133,17 +132,16 @@ export function routeSimplified(state: SimplifiedState, today = new Date(), env:
 
   if (workflow.difficulty === "easy") {
     applyEasyDefaults(draft, workflow);
-    assumeEasyFacts(draft);
     return undefined;
   }
 
-  return advanceHard(state, workflow, env);
+  return advanceHard(state, workflow, today);
 }
 
 function advanceHard(
   state: SimplifiedState,
   _workflow: WorkflowAssignment,
-  _env: NodeJS.ProcessEnv,
+  today: Date,
 ): SimplifiedResult {
   const draft = state.draft;
   if (!draft.properties || draft.properties.length === 0) {
@@ -161,12 +159,24 @@ function advanceHard(
         : { kind: "hard_question", id: question.id, prompt: question.prompt };
     }
   }
-  for (const question of keyTaskQuestions(draft)) {
-    const label = question.id.slice("followup:".length);
-    if (isFilled(draft.followUps?.[label])) continue;
+  if (draft.requestType === "Creative" && draft.taskType === "Email" && !draft.emailSplit) {
     state.phase = "collecting";
     draft.managerNotified = true;
-    return { kind: "task_question", id: question.id, prompt: question.prompt };
+    return {
+      kind: "task_question",
+      id: "emailSplit",
+      prompt: "Should we design the email, send it, or both?",
+    };
+  }
+  const pending = listMissing(draft, today).items;
+  if (pending.length > 0) {
+    const turn = formatEasyAsk({ draft, items: pending, opening: false });
+    const id = turn.askedIds.join("+");
+    if (id) {
+      state.phase = "collecting";
+      draft.managerNotified = true;
+      return { kind: "task_question", id, prompt: turn.text };
+    }
   }
   state.phase = "brief_approved";
   return {

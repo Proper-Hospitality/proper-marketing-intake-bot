@@ -169,7 +169,14 @@ export function listMissing(draft: BriefDraft, today = new Date()): MissingRepor
 
   if (requestHasFiles(draft)) {
     items.push(...attachmentMissing(draft));
-  } else if (!assetsSatisfied(draft, followUps) && !(draft.intakeFlow === "simplified" && textOnlyChange(draft))) {
+    if (draft.intakeFlow === "simplified" && !assetsSatisfied(draft, followUps)) {
+      items.push({
+        id: "assets",
+        label: "Images or photos",
+        hint: "Attach them, share a link, or say none.",
+      });
+    }
+  } else if (!assetsSatisfied(draft, followUps)) {
     items.push({
       id: "assets",
       label: "Assets",
@@ -226,7 +233,7 @@ function webAndOfferQuestions(draft: BriefDraft): MissingItem[] {
         hint: "Name the person and the date.",
       });
     }
-    if (draft.designNeeded === undefined && !copyOnlyChange(draft) && !(draft.intakeFlow === "simplified" && textOnlyChange(draft))) {
+    if (draft.designNeeded === undefined && (draft.intakeFlow === "simplified" || !copyOnlyChange(draft))) {
       items.push({
         id: "designNeeded",
         label: "Is design needed?",
@@ -236,7 +243,6 @@ function webAndOfferQuestions(draft: BriefDraft): MissingItem[] {
     if (
       (draft.taskType === "New Page" || draft.taskType === "Page Edit")
       && !isFilled(draft.followUps?.["What it replaces and where it sits"])
-      && !(draft.intakeFlow === "simplified" && draft.taskType === "Page Edit" && textOnlyChange(draft))
     ) {
       items.push({
         id: "followup:What it replaces and where it sits",
@@ -265,22 +271,6 @@ function simplifiedWeb(draft: BriefDraft): boolean {
   return draft.intakeFlow === "simplified"
     && draft.requestType === "Web"
     && Boolean(draft.taskType && WEB_BRIEF_TYPES.has(draft.taskType));
-}
-
-/** A text or pricing change. Simplified flow skips design and file questions for these. */
-export function textOnlyChange(draft: BriefDraft): boolean {
-  const blob = [
-    draft.requestName,
-    draft.notes,
-    draft.taskType,
-    draft.finalCopy,
-    ...Object.values(draft.followUps ?? {}),
-  ].filter(Boolean).join(" ");
-  if (/\b(design|designer|layout|banner|figma|photo|image|graphic|illustration|hero)\b/i.test(blob) && !/\bno design\b/i.test(blob)) {
-    return false;
-  }
-  return /\b(pric(?:e|es|ing)|wording|typo|hours|phone)\b/i.test(blob)
-    || (/\b(update|change|edit)\b/i.test(blob) && /\b(text|words|wording|price|pricing)\b/i.test(blob));
 }
 
 function webCopySatisfied(draft: BriefDraft): boolean {
