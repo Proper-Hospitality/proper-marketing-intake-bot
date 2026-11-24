@@ -34,6 +34,7 @@ import { mentionsEnabled } from "../slack/mentions.js";
 import { rushRequestBlocks } from "../slack/blocks.js";
 import { formatEasyAsk, formatEasyConfirm, recordEasyReply } from "../intake/easy-chat.js";
 import { hardQuestionById, NOTES_REMINDER } from "../intake/hard-path.js";
+import { classifyNewAsset, parseEmailSplit } from "../intake/new-asset.js";
 import { inferNovelty, parseNoveltyAnswer, parseReportingLane } from "../intake/workflows.js";
 import { canonicalizeProperty, inferProperties } from "../intake/catalog.js";
 import { loadRushApproval, startRushApproval } from "../intake/rush-approval.js";
@@ -142,6 +143,25 @@ export async function runIntakeTurn(input: {
     state.intakePace = "chat";
     const outcome = applyAnswers(state, {}, today);
     return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
+  }
+  if (
+    state.intakeFlow === "simplified"
+    && !state.draft.requestType
+    && !state.draft.taskType
+    && !state.lastAskedId
+  ) {
+    const start = classifyNewAsset(input.userText);
+    if (start) {
+      const outcome = applyAnswers(state, {
+        requestType: start.requestType,
+        taskType: start.taskType,
+        novelty: start.novelty,
+        properties: start.properties,
+        requestName: start.requestName,
+        notes: start.notes,
+      }, today);
+      return remember(state, input.userText, renderReply(state, input.slackUser, "", outcome, today));
+    }
   }
   if (saysNewPage(input.userText) && state.draft.requestType === "Web" && state.draft.taskType !== "New Page") {
     const parsed = parseBatchAnswers(input.userText, state.draft, today);
@@ -965,9 +985,47 @@ function scriptedIntake(state: ConversationState, userText: string, today: Date)
     state.draft.reportingLane = lane;
     return applyAnswers(state, {}, today);
   }
+  if (state.intakeFlow === "simplified" && state.lastAskedId === "emailSplit" && state.phase === "collecting") {
+    const choice = parseEmailSplit(userText);
+    if (!choice) {
+      return { kind: "task_question", id: "emailSplit", prompt: "Should we design the email, send it, or both?" };
+    }
+    state.draft.emailSplit = choice;
+    if (choice === "send") {
+      state.draft.requestType = "CRM & Paid";
+      state.draft.taskType = "Newsletter Send";
+      delete state.draft.novelty;
+    }
+    const outcome = applyAnswers(state, {}, today);
+    if (choice === "both" && outcome.kind === "task_question") {
+      return { ...outcome, prompt: `We'll start with the design, then the send. ${outcome.prompt}` };
+    }
+    return outcome;
+  }
   if (state.intakeFlow === "simplified" && state.lastAskedId?.includes("+") && state.phase === "collecting") {
     const ids = state.lastAskedId.split("+");
     if (recordEasyReply(state.draft, ids, userText)) return applyAnswers(state, {}, today);
+  }
+  if (state.intakeFlow === "simplified" && state.lastAskedId === "assets" && state.phase === "collecting") {
+    const answer = userText.trim();
+    if (answer.length >= 1) {
+      state.draft.assets = [answer.replace(/[.!]+$/, "")];
+      return applyAnswers(state, {}, today);
+    }
+  }
+  if (state.intakeFlow === "simplified" && state.lastAskedId === "designNeeded" && state.phase === "collecting") {
+    const answer = userText.trim();
+    if (/^(no|nope|nah)\b/i.test(answer)) state.draft.designNeeded = false;
+    else if (/^(yes|yep|yeah)\b/i.test(answer)) state.draft.designNeeded = true;
+    else return undefined;
+    return applyAnswers(state, {}, today);
+  }
+  if (state.intakeFlow === "simplified" && state.lastAskedId === "whereItGoesLive" && state.phase === "collecting") {
+    const answer = userText.trim();
+    if (answer.length >= 2) {
+      state.draft.whereItGoesLive = answer;
+      return applyAnswers(state, {}, today);
+    }
   }
   if (
     state.intakeFlow === "simplified"

@@ -1,19 +1,19 @@
 import { leadTimeFor } from "./lead-time.js";
-import { isFilled, textOnlyChange, type MissingItem } from "./missing.js";
+import type { MissingItem } from "./missing.js";
 import type { BriefDraft } from "./types.js";
 import { captureUrls } from "./urls.js";
 import { formatSpokenDate } from "./relative-date.js";
 
 const MESSAGE_LIMIT = 300;
 
-const FILE_QUESTION = "What images or files should we use? You can attach them here or share a link.";
+const FILE_QUESTION = "What images or photos should we use? Attach them here, share a link, or say none.";
 const TEXT_QUESTION = "What should the text (copy) say?";
 const CLICK_QUESTION = "What button or link should people click (CTA)?";
 const AUDIENCE_QUESTION = "Who should get this, and where will they see it?";
 
 /** User-facing wording for one follow-up. Plain language, no intake jargon. */
 export function plainFollowUp(label: string, draft: BriefDraft): string {
-  if (label === "URL") return "What's the link to the page?";
+  if (label === "URL") return pageLinkQuestion(draft);
   if (/page change/i.test(label)) return changeQuestion(draft);
   if (/page headline/i.test(label)) return "What's the headline?";
   if (/page copy/i.test(label)) return "What text (copy) should go on the page?";
@@ -35,7 +35,7 @@ export function plainFollowUp(label: string, draft: BriefDraft): string {
   if (/rate code/i.test(label)) return "What's the rate code? Send it as it should appear.";
   if (/promo code/i.test(label)) return "What's the promo code? Send it as a guest would type it.";
   if (/offer title/i.test(label)) return "What's the offer called?";
-  if (label === "Details" || label === "Instructions") return "What should we change?";
+  if (label === "Details" || label === "Instructions") return "What text (copy) should we use?";
   if (/platform/i.test(label)) return "Which website or ad account is this for?";
   if (/what it replaces/i.test(label)) return "What should come down, and where should this sit on the page?";
   if (/when the old offer/i.test(label)) return "When should the old offer come down?";
@@ -110,26 +110,15 @@ export function recordEasyReply(draft: BriefDraft, askedIds: string[], userText:
   return recorded;
 }
 
-/** A pricing or text change does not need a new design or a file. */
-export function assumeEasyFacts(draft: BriefDraft): void {
-  if (draft.intakeFlow !== "simplified" || !textOnlyChange(draft)) return;
-  if (draft.designNeeded === undefined) draft.designNeeded = false;
-  const replaces = "What it replaces and where it sits";
-  if (draft.taskType === "Page Edit" && !isFilled(draft.followUps?.[replaces])) {
-    const subject = confirmSubject(draft);
-    draft.followUps = {
-      ...(draft.followUps ?? {}),
-      [replaces]: subject
-        ? `Updates the current ${subject} on this page.`
-        : "Updates the current text on this page.",
-    };
-  }
-}
-
 export function plainItem(item: MissingItem, draft: BriefDraft): string {
   if (item.id === "requestedCompletionDate" || item.id === "timing") return liveDateQuestion(draft);
   if (item.id === "consequenceOfDelay") return "What happens if it's late?";
-  if (item.id === "designNeeded") return "Does this need a new design, or can we use the page as it is?";
+  if (item.id === "designNeeded") return "Do you need design help? If not, say no.";
+  if (item.id === "attachmentProvide") {
+    return /pdf|menu/i.test(item.label)
+      ? "Can you attach the menu as a PDF? One menu per file. Say none if you don't have it."
+      : "Can you attach the file, or share a link? Say none if you don't have it.";
+  }
   if (item.id === "assets" || item.id === "menuPdf" || item.id.startsWith("attachment")) return FILE_QUESTION;
   if (item.id === "approver") return "Who needs to approve this?";
   if (item.id === "properties") return "Which hotel is this for? A code like SMB is fine.";
@@ -141,7 +130,7 @@ export function plainItem(item: MissingItem, draft: BriefDraft): string {
   if (item.id === "copyReady" || item.id === "copy" || item.id === "copyPlan") return "Is the text (copy) ready? Paste it, or say who is writing it and when.";
   if (item.id === "whereItGoesLive") return "Where should this show up? A page link, an email, or a social account is enough.";
   if (item.id === "eventWhen") return "When is the event? Include the start and end time.";
-  if (item.label === "URL" || item.id.endsWith(":URL")) return "What's the link to the page?";
+  if (item.label === "URL" || item.id.endsWith(":URL")) return pageLinkQuestion(draft);
   return plainFollowUp(item.label, draft);
 }
 
@@ -151,17 +140,43 @@ function pickQuestions(items: MissingItem[]): MissingItem[] {
   );
   if (blocking) return [blocking];
   const url = items.find((item) => item.label === "URL" || item.id.endsWith(":URL"));
-  const change = items.find((item) => isChangeItem(item));
-  if (url && change) return [url, change];
-  if (change) return [change];
+  const pageChange = items.find((item) => isPageChange(item));
+  if (url && pageChange) return [url, pageChange];
+  const primary = items.find((item) => isPrimaryFollowUp(item));
+  if (primary) return [primary];
+  if (pageChange) return [pageChange];
   if (url) return [url];
+  const photos = items.find((item) => isPhotoItem(item));
+  if (photos) return [photos];
+  const design = items.find((item) => item.id === "designNeeded");
+  if (design) return [design];
+  const other = items.find((item) => !isDateItem(item));
+  if (other) return [other];
   const date = items.find((item) => item.id === "requestedCompletionDate" || item.id === "timing");
   if (date) return [date];
   return items[0] ? [items[0]] : [];
 }
 
-function isChangeItem(item: MissingItem): boolean {
-  return /page change|page copy|page headline|recommended copy|event description|exact menu|copy for klaviyo|^details$|detailed/i.test(item.label);
+function isPageChange(item: MissingItem): boolean {
+  return /page change|page copy|page headline/i.test(item.label);
+}
+
+function isPrimaryFollowUp(item: MissingItem): boolean {
+  if (!item.id.startsWith("followup:")) return false;
+  if (item.label === "URL" || isPageChange(item) || isPhotoItem(item)) return false;
+  if (/what it replaces/i.test(item.label)) return false;
+  return true;
+}
+
+function isPhotoItem(item: MissingItem): boolean {
+  return item.id === "assets"
+    || item.id === "menuPdf"
+    || item.id.startsWith("attachment")
+    || /photo|image|asset link|banner photo|organized assets/i.test(item.label);
+}
+
+function isDateItem(item: MissingItem): boolean {
+  return item.id === "requestedCompletionDate" || item.id === "timing" || item.id === "consequenceOfDelay";
 }
 
 function joinAsk(parts: string[]): string {
@@ -225,9 +240,13 @@ function trimPlace(raw: string): string {
     .toLowerCase();
 }
 
+function pageLinkQuestion(draft: BriefDraft): string {
+  return draft.taskType === "Page Edit" ? "What's the link to the current page?" : "What's the link to the page?";
+}
+
 function changeQuestion(draft: BriefDraft): string {
-  if (/\bpric/i.test(`${draft.notes ?? ""} ${draft.requestName ?? ""}`)) return "What should the new pricing say?";
-  return "What should change?";
+  if (/\bpric/i.test(`${draft.notes ?? ""} ${draft.requestName ?? ""}`)) return "What should the new pricing text (copy) say?";
+  return "What should the text (copy) say?";
 }
 
 function liveDateQuestion(draft: BriefDraft): string {
@@ -240,6 +259,9 @@ function liveDateQuestion(draft: BriefDraft): string {
   };
   const task = draft.taskType ?? "";
   if (usual[task]) return `When does it need to be live? ${usual[task]}`;
+  if (leadTimeFor(draft).phrase === "This request uses a 7-day lead time") {
+    return "When does it need to be live? This usually takes about 7 days.";
+  }
   const phrase = leadTimeFor(draft).phrase
     .replace(/ need about /, " usually take about ")
     .replace(/ needs about /, " usually takes about ");
