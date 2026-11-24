@@ -52,6 +52,7 @@ describe("one question at a time", () => {
       properties: ["SMP"],
       requestType: "Creative",
       taskType: "Email",
+      novelty: "edit",
     };
     state.phase = "collecting";
     state.lastAskedId = "followup:Audience / Distribution Plan";

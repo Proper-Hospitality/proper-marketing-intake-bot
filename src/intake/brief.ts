@@ -50,6 +50,8 @@ export function buildDescription(input: {
     pending.join("\n") || "(none)",
     "",
     ...formPair("Approver", draft.approver),
+    ...formPair("Owner", draft.workflowOwner),
+    ...formPair("Workflow", draft.workflowBucket ? `${draft.workflowDepartment ?? ""} / ${draft.workflowBucket}` : undefined),
     ...formPair("Sign-off", signOff),
     ...(draft.alsoNotify?.length ? [`Also notify: ${draft.alsoNotify.join(", ")}`, ""] : []),
     "———————————————",
@@ -148,6 +150,8 @@ export function formatSummary(input: {
     `Requested: ${draft.requestedCompletionDate ? formatDisplayDate(draft.requestedCompletionDate) : ""}`,
     `If it's late: ${draft.consequenceOfDelay ? exactAnswer(draft.consequenceOfDelay) : ""}`,
     `Approver: ${draft.approver ?? signOffFor(draft)}`,
+    ...(draft.workflowOwner ? [`Owner: ${draft.workflowOwner}`] : []),
+    ...(draft.workflowBucket ? [`Workflow: ${draft.workflowDepartment ?? ""} / ${draft.workflowBucket}`] : []),
     ...goesLiveLine(draft),
   ];
   const signOff = routingSignOff(draft.properties ?? []);

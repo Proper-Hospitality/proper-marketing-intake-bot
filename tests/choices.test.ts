@@ -12,7 +12,6 @@ const FORM_TASK_TYPES: Record<RequestType, string[]> = {
   Creative: [
     "Email",
     "SMS",
-    "Pop Up",
     "Web Page",
     "Social",
     "Sales Collateral",
@@ -36,8 +35,6 @@ const FORM_TASK_TYPES: Record<RequestType, string[]> = {
     "Tracking",
     "Integrations",
     "Reporting",
-    "Brandfolder Upload",
-    "Affiliate Import",
     "GMB Updates",
     "AI Optimization",
   ],

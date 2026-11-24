@@ -78,7 +78,7 @@ describe("batched intake", () => {
     });
     expect(state.draft.taskType).toBe("New Page");
     expect(saysNewPage("It's a new page")).toBe(true);
-    expect(reply.text).toContain("new");
+    expect(reply.text).toContain("business problem");
     expect(reply.text).not.toContain("current Lake Tahoe membership page");
     const still = listMissing(state.draft, TODAY).items.map((item) => item.label);
     expect(still).toContain("URL");

@@ -43,10 +43,9 @@ describe("confirmation gate", () => {
       fetchImpl: fetchImpl as unknown as typeof fetch,
       today: new Date("2026-11-02T12:00:00Z"),
     });
-    expect(reply.text).toContain("SMP-Happenings");
-    expect(reply.text).toContain("https://www.canva.com/brand/brand-templates/EAHJyAsHwPs");
+    expect(reply.text).toContain("What's the business problem this solves?");
     expect(reply.confirm).toBeUndefined();
-    expect(state.phase).toBe("template_offered");
+    expect(state.phase).toBe("collecting");
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -58,6 +57,7 @@ describe("confirmation gate", () => {
       input: {
         requestType: "Creative",
         taskType: "Email",
+        novelty: "edit",
         properties: ["SMP"],
         requestName: "Holiday newsletter",
         requestedCompletionDate: "2026-12-01",
@@ -171,7 +171,7 @@ describe("confirmation gate", () => {
       today: new Date("2026-11-02T12:00:00Z"),
     });
     expect(state.draft.templateUnusedReason).toMatch(/doesn't fit/);
-    expect(reply.text).toContain("We need:");
+    expect(reply.text).toContain("What's the business problem this solves?");
     expect(reply.confirm).toBeUndefined();
   });
 

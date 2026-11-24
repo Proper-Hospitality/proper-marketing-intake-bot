@@ -55,32 +55,10 @@ const crmSend: FollowUp[] = [
 
 const none: FollowUp[] = [];
 
-const WELLNESS = [
-  "Fitness Center",
-  "Recovery",
-  "Pool",
-  "Beach",
-  "Verbena Spa",
-  "Surya Spa",
-  "Estrella",
-  "Retreat",
-  "Run Club",
-];
-
-const PROGRAMMING = [
-  "Proper Club",
-  "Proper Presents",
-  "DJs",
-  "Live Music",
-  "Shelborne Beach Club",
-  "Proper Beach Club",
-];
-
 const TREE: Record<RequestType, Record<string, FollowUp[]>> = {
   Creative: {
     Email: creativeDesign,
     SMS: creativeDesign,
-    "Pop Up": creativeDesign,
     "Web Page": creativeDesign,
     Social: creativeDesign,
     "Sales Collateral": creativeDesign,
@@ -204,18 +182,6 @@ const TREE: Record<RequestType, Record<string, FollowUp[]>> = {
       { label: "Platform", required: true, kind: "text" },
       { label: "Details", required: true, kind: "longtext", satisfies: ["copy"] },
     ],
-    "Brandfolder Upload": [
-      { label: "Link to Organized Assets", required: true, kind: "text", satisfies: ["assets"] },
-      { label: "Shoot Date", required: true, kind: "text" },
-      { label: "Photographer", required: true, kind: "text" },
-      { label: "Usage Rights", required: true, kind: "text" },
-      { label: "F&B Outlet Name", required: false, kind: "text" },
-      { label: "Rooms or Suites", required: false, kind: "text" },
-      { label: "Meetings & Event Space Names", required: false, kind: "text" },
-      { label: "Wellness", required: false, kind: "select", options: WELLNESS },
-      { label: "Programming", required: false, kind: "select", options: PROGRAMMING },
-    ],
-    "Affiliate Import": [{ label: "Instructions", required: true, kind: "longtext", satisfies: ["copy"] }],
     "GMB Updates": none,
     "AI Optimization": none,
   },
@@ -233,7 +199,10 @@ const TREE: Record<RequestType, Record<string, FollowUp[]>> = {
       { label: "Subject Line", required: false, kind: "text" },
     ],
     "SMS Send": crmSend,
-    "Pop Up": crmSend,
+    "Pop Up": [
+      { label: "Copy for Klaviyo", required: true, kind: "longtext", satisfies: ["copy"] },
+      { label: "Photo for Klaviyo", required: true, kind: "text", satisfies: ["assets"] },
+    ],
     "Automated Flows (Abandon Cart, Exit Intent)": crmSend,
     "New User Journey (Subscriber Flows)": crmSend,
     Reporting: [detailed()],
@@ -352,8 +321,10 @@ export const REQUEST_TYPE_GUIDANCE = [
 
 export const DISAMBIGUATION = [
   "Designing an email is Creative → Email. Sending a newsletter is CRM & Paid → Newsletter Send.",
-  "Designing a pop up is Creative → Pop Up. Building or launching it is CRM & Paid → Pop Up.",
+  "A pop up is CRM & Paid → Pop Up. It only needs a photo and copy for Klaviyo. It is not a Creative task.",
   "Designing a web page is Creative → Web Page. Building a new live page is Web → New Page. Editing an existing page is Web → Page Edit.",
+  "When a type can be new or an edit (creative assets, and CRM Pop Up or Automated Flows), ask which. That answer picks the bucket and the approver.",
+  "Integrations is a Web category. Brandfolder Upload and Affiliate Import are not offered.",
   "Putting an offer on a web page is Web (New Page or Page Edit) because that is what gets built. Marketing → Offers is for setting up or planning the offer itself.",
   "A new offer is Marketing → Offers, not Creative.",
   "One deliverable per task. An IG flyer and a social recap are two tasks.",

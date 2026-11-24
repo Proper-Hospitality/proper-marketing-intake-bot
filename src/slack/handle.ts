@@ -1,3 +1,6 @@
+import { applyAnswers } from "../intake/flow.js";
+import { reactionSlotIndex } from "../intake/schedule.js";
+import { approveHardBrief } from "../intake/simplified.js";
 import { FORM_URL } from "../intake/catalog.js";
 import { markEmailSlices } from "../intake/attachments.js";
 import { rushApproverFor, rushBlockedText } from "../intake/rush.js";
@@ -136,7 +139,7 @@ async function handleFreshMessage(deps: {
   });
   await deps.store.saveConversation(state);
   if (reply.silent) return;
-  await deps.slack.postMessage({
+  const posted = await deps.slack.postMessage({
     channel: message.channel,
     threadTs: threadAnchor,
     text: reply.text,
@@ -146,6 +149,11 @@ async function handleFreshMessage(deps: {
         : confirmBlocks(reply.text, reply.confirm.version)
       : reply.blocks ?? messageBlocks(reply.text),
   });
+  if (state.phase === "awaiting_kickoff" && posted.ts) {
+    state.kickoffMessageTs = posted.ts;
+    await deps.store.setValue(`kickoff:${message.channel}:${posted.ts}`, state.key, 14 * 24 * 60 * 60);
+    await deps.store.saveConversation(state);
+  }
 }
 
 export async function handleConfirmAction(deps: {
@@ -182,6 +190,19 @@ export async function handleConfirmAction(deps: {
         blocks: messageBlocks("I lost the brief for this thread. Send the request once more and I'll start again."),
       });
       return;
+    }
+    if (state.phase === "awaiting_brief_approval" && state.confirmVersion === action.version) {
+      const decision = approveHardBrief(state);
+      await deps.store.saveConversation(state);
+      if (!decision.fileAsana) {
+        await deps.slack.updateMessage({
+          channel: action.channel,
+          ts: action.messageTs,
+          text: decision.text,
+          blocks: messageBlocks(decision.text),
+        });
+        return;
+      }
     }
     if (!deps.asanaToken) {
       await deps.slack.postMessage({
@@ -385,6 +406,59 @@ export async function handleCancelTaskCompletion(deps: { store: Store; slack: Sl
   await deps.slack.updateMessage({
     channel: action.channel,
     ts: action.messageTs,
+    text,
+    blocks: messageBlocks(text),
+  });
+}
+
+export async function handleKickoffChoice(deps: {
+  store: Store;
+  slack: SlackApi;
+}, action: {
+  channel: string;
+  threadTs?: string;
+  slotId: string;
+}): Promise<void> {
+  const key = conversationKeyFromAction(action.channel, action.threadTs);
+  const state = await deps.store.getConversation(key);
+  if (!state || state.phase !== "awaiting_kickoff") return;
+  const slot = state.kickoffSlots?.find((item) => item.id === action.slotId) ?? state.kickoffSlots?.[Number(action.slotId)];
+  if (!slot) return;
+  state.draft.kickoffSlot = slot.label;
+  const outcome = applyAnswers(state, {}, new Date());
+  await deps.store.saveConversation(state);
+  const text = outcome.kind === "hard_await_notes" ? outcome.text : `I'll aim for ${slot.label}.`;
+  await deps.slack.postMessage({
+    channel: action.channel,
+    threadTs: action.threadTs ?? state.threadTs,
+    text,
+    blocks: messageBlocks(text),
+  });
+}
+
+export async function handleKickoffReaction(deps: {
+  store: Store;
+  slack: SlackApi;
+}, action: {
+  channel: string;
+  messageTs: string;
+  reaction: string;
+}): Promise<void> {
+  const index = reactionSlotIndex(action.reaction);
+  if (index == null) return;
+  const key = await deps.store.getValue(`kickoff:${action.channel}:${action.messageTs}`);
+  if (!key) return;
+  const state = await deps.store.getConversation(key);
+  if (!state || state.phase !== "awaiting_kickoff") return;
+  const slot = state.kickoffSlots?.[index];
+  if (!slot) return;
+  state.draft.kickoffSlot = slot.label;
+  const outcome = applyAnswers(state, {}, new Date());
+  await deps.store.saveConversation(state);
+  const text = outcome.kind === "hard_await_notes" ? outcome.text : `I'll aim for ${slot.label}.`;
+  await deps.slack.postMessage({
+    channel: action.channel,
+    threadTs: state.threadTs,
     text,
     blocks: messageBlocks(text),
   });

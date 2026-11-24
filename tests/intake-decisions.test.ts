@@ -84,6 +84,7 @@ describe("Elena's Nov 10 intake decisions", () => {
       properties: ["SMP"],
       requestType: "Creative",
       taskType: "Sales Collateral",
+      novelty: "edit",
     }, today);
     expect(asked.kind).toBe("ask_deliverable");
     state.draft.deliverableIntent = "existing";
@@ -98,6 +99,7 @@ describe("Elena's Nov 10 intake decisions", () => {
       properties: ["SMP"],
       requestType: "Creative",
       taskType: "Sales Collateral",
+      novelty: "edit",
     }, today);
     expect(change.kind).toBe("offer_template");
   });
@@ -219,6 +221,7 @@ function completeDraft() {
     properties: ["SMP"],
     requestType: "Creative" as const,
     taskType: "Email",
+    novelty: "edit" as const,
     requestedCompletionDate: "2026-12-01",
     consequenceOfDelay: "The sale is missed.",
     approver: "DeeDee Brown",

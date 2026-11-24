@@ -110,6 +110,12 @@ function byLabel(label: string, draft: BriefDraft): string | undefined {
   if (/audience/i.test(label)) {
     return `Who is ${what} for, and where does it go? For example, ${audienceExample(draft)}.`;
   }
+  if (/copy for klaviyo/i.test(label)) {
+    return `What's the Klaviyo copy for ${what}? Paste the text the popup should show.`;
+  }
+  if (/photo for klaviyo/i.test(label)) {
+    return `Where is the photo for the Klaviyo popup? A link the CRM team can open is enough.`;
+  }
   if (/recommended copy/i.test(label)) {
     return `What should ${what} say? A draft or the key points is enough, so the team isn't inventing the message.`;
   }

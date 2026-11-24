@@ -10,7 +10,7 @@ import { readSlackAttachment } from "../intake/read-attachment.js";
 import { downloadRemoteFile, downloadSlackFile, readSlackEmailFile } from "../slack/files.js";
 import { beginEmailIntake, handleEmailSplitAction } from "../intake/email/turn.js";
 import { withDelivery, type DeliveryContext } from "../slack/dedupe.js";
-import { handleCancelTaskCompletion, handleConfirmAction, handleConfirmTaskCompletion, handleIncomingMessage, handleReviseAction } from "../slack/handle.js";
+import { handleCancelTaskCompletion, handleConfirmAction, handleConfirmTaskCompletion, handleIncomingMessage, handleKickoffChoice, handleKickoffReaction, handleReviseAction } from "../slack/handle.js";
 import { dispatchUserMessage } from "../slack/dispatch.js";
 import { HANDLER_FAILURE_TEXT } from "../slack/failure.js";
 import { normalizeSlackMessage } from "../slack/incoming.js";
@@ -272,6 +272,32 @@ function registerListeners(bolt: App): void {
     });
   }
 
+  bolt.action("kickoff_slot", async ({ ack, body, client, context }) => {
+    await ack();
+    const action = readThreadAction(body);
+    const slotId = readActionValue(body);
+    if (!action || !slotId) return;
+    await withDelivery({
+      body,
+      store: getStore(),
+      context: deliveryContext(context),
+      work: () => safeHandle(client, action.channel, action.threadTs, () => handleKickoffChoice(runtime(client), {
+        channel: action.channel,
+        threadTs: action.threadTs,
+        slotId,
+      })),
+    });
+  });
+
+  bolt.event("reaction_added", async ({ event, client }) => {
+    if (event.item.type !== "message") return;
+    await handleKickoffReaction(runtime(client), {
+      channel: event.item.channel,
+      messageTs: event.item.ts,
+      reaction: event.reaction,
+    });
+  });
+
   bolt.action("revise_intake", async ({ ack, body, client, context }) => {
     await ack();
     const action = readAction(body);
@@ -351,6 +377,12 @@ function readRushClick(body: unknown): { approvalId: string; userId: string } | 
   const userId = record.user?.id;
   if (!approvalId || !userId) return undefined;
   return { approvalId, userId };
+}
+
+function readActionValue(body: unknown): string | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const value = (body as { actions?: Array<{ value?: string }> }).actions?.[0]?.value;
+  return value?.trim() || undefined;
 }
 
 function readThreadAction(body: unknown): { channel: string; messageTs: string; threadTs?: string } | undefined {

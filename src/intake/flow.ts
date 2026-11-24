@@ -15,6 +15,9 @@ import type { CollateralOffer } from "./collateral/types.js";
 import { matchTemplates, type TemplateMatchResult } from "./templates.js";
 import { planRoute } from "./routing.js";
 import { applyRushBlock, assignCompletionDate, resolveDateInput } from "./relative-date.js";
+import { routeSimplified, type SimplifiedResult } from "./simplified.js";
+import type { KickoffSlot } from "./schedule.js";
+import type { CreatorStudioMatch } from "./creator-studio.js";
 import { exactAnswer } from "./urls.js";
 import type { BriefDraft, RequestType } from "./types.js";
 
@@ -41,6 +44,13 @@ export interface RecordInput {
   notes?: string;
   filingOnBehalf?: boolean;
   pricePending?: boolean;
+  novelty?: "new" | "edit";
+  reportingLane?: "paid" | "crm";
+  businessProblem?: string;
+  successLooksLike?: string;
+  budget?: string;
+  kickoffTeam?: string;
+  meetingNotes?: string;
 }
 
 export type FlowOutcome =
@@ -54,7 +64,8 @@ export type FlowOutcome =
   | { kind: "ask"; missing: MissingReport; preface?: string }
   | { kind: "confirm"; missing: MissingReport; preface?: string }
   | { kind: "accepted_template"; match: TemplateMatchResult }
-  | { kind: "invalid"; errors: string[] };
+  | { kind: "invalid"; errors: string[] }
+  | SimplifiedResult;
 
 export interface FlowState {
   draft: BriefDraft;
@@ -68,6 +79,8 @@ export interface FlowState {
   collateralSourceFor?: string;
   rushExplainedFor?: string;
   confirmVersion: number;
+  kickoffSlots?: KickoffSlot[];
+  creatorStudioMatch?: CreatorStudioMatch | null;
 }
 
 export function applyAnswers(state: FlowState, input: RecordInput, today = new Date()): FlowOutcome {
@@ -116,6 +129,8 @@ function advance(state: FlowState, today: Date): FlowOutcome {
   applyDefaultApprover(draft);
   applyRushBlock(draft, today);
   markEmailSlices(draft);
+  const simplified = routeSimplified(state, today);
+  if (simplified) return simplified;
   const routed = routeDeliverable(state);
   if (routed) return routed;
 
@@ -158,6 +173,13 @@ function mergeDraft(draft: BriefDraft, input: RecordInput, today: Date): string[
   if (input.filingOnBehalf !== undefined) draft.filingOnBehalf = input.filingOnBehalf;
   if (input.pricePending === true) draft.pricePending = true;
   if (input.pricePending === false) draft.pricePending = false;
+  if (input.novelty === "new" || input.novelty === "edit") draft.novelty = input.novelty;
+  if (input.reportingLane === "paid" || input.reportingLane === "crm") draft.reportingLane = input.reportingLane;
+  assignText(draft, "businessProblem", input.businessProblem);
+  assignText(draft, "successLooksLike", input.successLooksLike);
+  assignText(draft, "budget", input.budget);
+  assignText(draft, "kickoffTeam", input.kickoffTeam);
+  assignText(draft, "meetingNotes", input.meetingNotes);
 
   if (input.requestedCompletionDate) {
     const resolved = resolveDateInput(input.requestedCompletionDate, today);
@@ -203,6 +225,12 @@ function mergeDraft(draft: BriefDraft, input: RecordInput, today: Date): string[
       draft.requestType = resolved;
       requestType = resolved;
     }
+  }
+
+  if (requestType === "Creative" && input.taskType && /^pop[-\s]?up$/i.test(input.taskType.trim())) {
+    draft.requestType = "CRM & Paid";
+    requestType = "CRM & Paid";
+    input.taskType = "Pop Up";
   }
 
   if (input.taskType) {

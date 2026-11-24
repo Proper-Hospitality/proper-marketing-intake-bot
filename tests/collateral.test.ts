@@ -503,6 +503,7 @@ describe("existing collateral catalog", () => {
         properties: [property],
         requestType: "Creative",
         taskType,
+        novelty: "edit",
       }, TODAY);
     };
 
@@ -629,6 +630,7 @@ describe("existing collateral catalog", () => {
       properties: ["MYC"],
       requestType: "Creative",
       taskType: "Menu (F&B, Spa)",
+      novelty: "edit",
     }, TODAY);
     expect(first.kind === "ask" && first.preface).toContain("not confirmed yet");
     const second = applyAnswers(state, {}, TODAY);
@@ -721,6 +723,7 @@ describe("existing collateral in the intake", () => {
           properties: ["SMP"],
           requestType: "Creative",
           taskType: "Menu (F&B, Spa)",
+          novelty: "edit",
         },
       }]),
       today: TODAY,
@@ -772,6 +775,7 @@ describe("existing collateral in the intake", () => {
           properties: ["SMP"],
           requestType: "Creative",
           taskType: "Menu (F&B, Spa)",
+          novelty: "edit",
         },
       }]),
       today: TODAY,
@@ -840,6 +844,7 @@ describe("existing collateral in the intake", () => {
           properties: ["SMP"],
           requestType: "Creative",
           taskType: "Sales Collateral",
+          novelty: "edit",
         },
       }]),
       today: TODAY,
@@ -890,6 +895,7 @@ describe("existing collateral in the intake", () => {
           properties: ["SFP"],
           requestType: "Creative",
           taskType: "Menu (F&B, Spa)",
+          novelty: "edit",
         },
       }]),
       today: TODAY,

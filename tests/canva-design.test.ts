@@ -12,8 +12,9 @@ describe("building a Canva design in the thread", () => {
       id: "toolu_1",
       name: "record_answers",
       input: {
-        requestType: "Social",
-        taskType: "Feed Post Request",
+        requestType: "Creative",
+        taskType: "Social",
+        novelty: "edit",
         properties: ["SMP"],
         requestName: "Weekly happenings",
       },
@@ -147,7 +148,7 @@ describe("building a Canva design in the thread", () => {
       llm: scripted([{ type: "text", text: "Okay." }]),
       today: new Date("2026-11-02T12:00:00Z"),
     });
-    expect(declined.text).toContain("We need:");
+    expect(declined.text).toContain("What's the business problem this solves?");
     expect(state.draft.templateUnusedReason).toMatch(/doesn't work/);
   });
 
@@ -161,7 +162,7 @@ describe("building a Canva design in the thread", () => {
         type: "tool_use",
         id: "toolu_2",
         name: "record_answers",
-        input: { requestType: "Social", taskType: "Feed Post Request", properties: ["SMP"], requestName: "Weekly happenings" },
+        input: { requestType: "Creative", taskType: "Social", novelty: "edit", properties: ["SMP"], requestName: "Weekly happenings" },
       }]),
       design: {
         canva: { connected: async () => false, build: async () => { throw new Error("not connected"); } },
@@ -224,8 +225,9 @@ describe("building a Canva design in the thread", () => {
         id: "toolu_press",
         name: "record_answers",
         input: {
-          requestType: "Social",
-          taskType: "Feed Post Request",
+          requestType: "Creative",
+          taskType: "Social",
+          novelty: "edit",
           properties: ["All Proper"],
           requestName: "Press feature",
         },

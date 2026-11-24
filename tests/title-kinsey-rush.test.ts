@@ -64,6 +64,11 @@ describe("request name stays free of file summaries", () => {
     const opened = await store.getConversation(`${CHANNEL}:${PARENT}`);
     expect(opened?.draft.attachments?.map((file) => file.name)).toEqual(["Group 1.png", "Group 2.png", "Group 3.png"]);
     expect(opened?.draft.requestName).toBeUndefined();
+    if (opened) {
+      opened.phase = "collecting";
+      opened.lastAskedId = "requestName";
+      await store.saveConversation(opened);
+    }
 
     const naming: Llm = {
       async complete() {
@@ -246,7 +251,7 @@ describe("Kinsey approves new-property rushes", () => {
       },
       attachments: [{ ref: "slices.png", fileName: "slices.png", kind: "email_slice" }],
     }, today);
-    expect(outcome.kind).toBe("confirm");
+    expect(outcome.kind).toBe("hard_question");
     expect(ready.draft.rushBlock).toBeUndefined();
   });
 });

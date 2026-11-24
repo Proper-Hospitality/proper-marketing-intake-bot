@@ -20,7 +20,18 @@ export const INTAKE_TOOLS = [
         },
         consequenceOfDelay: { type: "string" },
         requestType: { type: "string", description: "Creative, Web, CRM & Paid, Social, or Marketing." },
-        taskType: { type: "string", description: "Exact task type for that request type." },
+        taskType: { type: "string", description: "Exact task type for that request type. Pop Up is CRM & Paid, not Creative. Do not use Brandfolder Upload or Affiliate Import." },
+        novelty: {
+          type: "string",
+          description: "new or edit. Set only when the person already said which. Leave it empty when both are possible and they have not said.",
+        },
+        reportingLane: {
+          type: "string",
+          description: "paid or crm. Only for CRM & Paid Reporting, and only when they already said which.",
+        },
+        businessProblem: { type: "string", description: "Hard requests only. The business problem, in their words." },
+        successLooksLike: { type: "string", description: "Hard requests only. What success looks like, in their words." },
+        budget: { type: "string", description: "Hard requests only. Any budget they named, or that there is none." },
         followUps: {
           type: "object",
           additionalProperties: { type: "string" },

@@ -23,6 +23,7 @@ const recordType: Llm = {
           properties: ["SMB"],
           requestType: "Creative",
           taskType: "Web Page",
+          novelty: "edit",
           requestedCompletionDate: "today",
         },
       }],

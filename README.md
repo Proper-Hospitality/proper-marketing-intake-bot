@@ -90,6 +90,14 @@ On the blueprint screen, Render lists these because `render.yaml` marks the secr
 | `SLACK_STATUS_CHANNELS` | Optional. Comma-separated Slack channel IDs, such as `C0AV038G751` for `#marketing-crew`. Leave it blank and the bot will not propose Asana status updates. |
 | `SLACK_MENTIONS_ENABLED` | Optional. Leave it unset or `false` and the bot greets people by first name (`Hi Jamie!`) instead of an @mention. Set it to `true` when mentions should come back. |
 | `REDIS_URL` | Filled in by the blueprint from the Key Value service. Leave it alone. |
+| `CREATOR_STUDIO_CATALOG_PATH` | Optional. Path to a JSON catalog of Julia's Creator Studio templates. Leave it blank and the bot skips that lookup. |
+| `CREATOR_STUDIO_CATALOG_JSON` | Optional. The same catalog as JSON, if you would rather not use a file. Leave it blank when the path is blank. |
+| `MS_GRAPH_TENANT_ID` | Optional. Microsoft Entra tenant for calendar free/busy. Leave it blank and the bot suggests three times instead. |
+| `MS_GRAPH_CLIENT_ID` | Optional. App registration client id. The app needs Calendars.Read. |
+| `MS_GRAPH_CLIENT_SECRET` | Optional. That app's client secret. |
+| `CALENDAR_ORGANIZER_EMAIL` | Already filled in as `elena.ruiz@properhotel.com`. The kickoff uses this calendar. |
+| `HARD_REQUESTS_CREATE_ASANA` | Already `false`. Hard requests stop at an approved brief and do not create an Asana task until this is `true`. |
+| `INTEGRATIONS_APPROVER` | Optional. Integrations has no approver in the matrix. Elizabeth is the owner. Leave it blank and the brief says TODO. |
 
 The same secret names are listed in `.env.example`. That file has no secrets in it. Do not fill it in and commit it.
 
@@ -117,6 +125,7 @@ https://YOUR-RENDER-URL.onrender.com/slack/events
    - `message.channels`
    - `message.groups`
    - `message.mpim`
+   - `reaction_added` (so people can pick a kickoff time with :one:, :two:, or :three:)
 7. Click **Save Changes**. Slack may ask you to reinstall the app. Do that.
 8. Open **Interactivity & Shortcuts**.
 9. Turn interactivity **On**.
@@ -345,6 +354,20 @@ The bot will not propose twice for the same message, and it will not propose mor
 - **The bot sends a template link instead of building a design.** Canva is not connected, or the Canva account cannot use autofill. Connect it with the steps above, or reply that the team should design it.
 - **The bot stays silent on a thread reply or a photo.** In Event Subscriptions, `message.channels` and `message.groups` have to be listed next to `message.im` and `app_mention`. Save, and reinstall if Slack asks. A photo is a `file_share` message. If the bot receives the message and then fails, it replies in the thread that something went wrong. Silence means Slack did not deliver the event.
 
+## Simplified intake
+
+A request is sorted before the long brief.
+
+1. If the task can be new or an edit (creative assets, and CRM Pop Up or Automated Flows), the bot asks which. That answer picks the bucket and the approver.
+2. If a Creator Studio catalog is configured and a template matches, the bot sends the link and does not create an Asana task. With no catalog, this step is skipped.
+3. Easy work is only edits and seasonal refreshes. The bot asks the required questions from the existing question tree, shows the summary, and creates the Asana task on Confirm. The owner and approver come from the workshop matrix.
+4. Everything else is hard, including Bug Fix, every Social request, and Integrations. The bot asks the business problem, what success looks like, and any budget. It hands the request to Koral Captain (Collective) or DeeDee Brown (Proper and By Proper, including Lake Tahoe). That person names who should join. The bot then offers a 15-minute kickoff on weekdays, 9 AM to 5 PM PT. With Microsoft Graph credentials it uses free/busy. Without them it posts three times in the thread and people pick a button or a :one: :two: :three: reaction.
+5. After the kickoff, someone pastes the notes. The bot drafts a brief (those three answers, plus scope, owner, approver, and timeline) and waits for Confirm. Confirm does not create an Asana task while `HARD_REQUESTS_CREATE_ASANA` is false.
+
+Pop Up is a CRM task. The easy refresh only asks for Klaviyo photo and copy. Brandfolder Upload and Affiliate Import are not offered. Integrations is a Web category owned by Elizabeth. Its approver stays TODO until `INTEGRATIONS_APPROVER` is set.
+
+To turn on kickoff reactions, add `reaction_added` under **Subscribe to bot events**, next to the message events.
+
 ## For a developer helping Elena
 
 ```bash
@@ -367,3 +390,7 @@ Tests cover field order, the Canva matcher, the confirm gate, Slack retry dedupe
 - Disabled Asana property options are not offered: All By Proper, Residences, and the old New Projects option. The bot offers **New Projects/Development** and **MIN** instead, matching the current board.
 - Routing Bucket, Status in Que, and Estimated time are left for the board automations. The bot never writes them.
 - The requester's name and email come from their Slack profile, not from the Asana token. The token is a service account. If Slack does not share the email (the workspace must allow the `users:read.email` scope, and the member's email must be visible), the bot asks for it.
+- Julia's Creator Studio link is not connected yet. The bot skips that lookup until a catalog is configured.
+- New creative assets still need Kinsey's rule for Genevieve versus Julia. Until then the brief names both.
+- Whether a hard request should create an Asana task after the brief is approved is still open. The flag stays off.
+- Integrations has no approver in the matrix. Elizabeth owns it, and the approver stays TODO until Kinsey sets `INTEGRATIONS_APPROVER`.
