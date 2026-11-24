@@ -3,7 +3,7 @@ import { greet } from "../slack/mentions.js";
 import { formatRequestTypeChoices, formatTaskTypeChoices } from "./choices.js";
 import { applyDefaultApprover, formatDisplayDate, formatFullDate, normalizeDate, routingSignOff, secondContact, signOffFor } from "./catalog.js";
 import { PRICE_PENDING_LINE, type MissingItem } from "./missing.js";
-import { followUpsFor, SUPPORT_QUESTION } from "./question-tree.js";
+import { followUpsForFlow, SUPPORT_QUESTION, taskTypesForFlow } from "./question-tree.js";
 import type { TemplateMatchResult } from "./templates.js";
 import { taskName } from "./task-name.js";
 import type { BriefDraft, FollowUp } from "./types.js";
@@ -50,6 +50,8 @@ export function buildDescription(input: {
     pending.join("\n") || "(none)",
     "",
     ...formPair("Approver", draft.approver),
+    ...formPair("Owner", draft.workflowOwner),
+    ...formPair("Workflow", draft.workflowBucket ? `${draft.workflowDepartment ?? ""} / ${draft.workflowBucket}` : undefined),
     ...formPair("Sign-off", signOff),
     ...(draft.alsoNotify?.length ? [`Also notify: ${draft.alsoNotify.join(", ")}`, ""] : []),
     "———————————————",
@@ -82,7 +84,7 @@ export function formatQuestions(input: {
   if (!input.acknowledge && (input.userId || input.who)) {
     lines.push(`${greet({ userId: input.userId, name: input.who })} ${question}`);
   } else lines.push(question);
-  const choices = choiceList(item.id, input.draft.requestType);
+  const choices = choiceList(item.id, input.draft);
   if (choices) lines.push("", choices);
   else if (item.hint && !item.hint.startsWith("One or more of") && item.id !== "properties") lines.push(item.hint);
   if (input.warnings.length > 0) {
@@ -148,6 +150,8 @@ export function formatSummary(input: {
     `Requested: ${draft.requestedCompletionDate ? formatDisplayDate(draft.requestedCompletionDate) : ""}`,
     `If it's late: ${draft.consequenceOfDelay ? exactAnswer(draft.consequenceOfDelay) : ""}`,
     `Approver: ${draft.approver ?? signOffFor(draft)}`,
+    ...(draft.workflowOwner ? [`Owner: ${draft.workflowOwner}`] : []),
+    ...(draft.workflowBucket ? [`Workflow: ${draft.workflowDepartment ?? ""} / ${draft.workflowBucket}`] : []),
     ...goesLiveLine(draft),
   ];
   const signOff = routingSignOff(draft.properties ?? []);
@@ -158,7 +162,7 @@ export function formatSummary(input: {
   }
   lines.push(`Sign-off: ${signOffFor(draft)}`);
   if (draft.requestType && draft.taskType) {
-    for (const field of followUpsFor(draft.requestType, draft.taskType)) {
+    for (const field of followUpsForFlow(draft.requestType, draft.taskType, draft.intakeFlow)) {
       const value = shownFollowUp(draft, field);
       if (!value) continue;
       lines.push(`${field.label}: ${value}`);
@@ -248,15 +252,18 @@ function decodeURIComponentSafe(value: string): string {
   }
 }
 
-function choiceList(itemId: string, requestType: BriefDraft["requestType"]): string | undefined {
+function choiceList(itemId: string, draft: BriefDraft): string | undefined {
   if (itemId === "requestType") return formatRequestTypeChoices();
-  if (itemId === "taskType" && requestType) return formatTaskTypeChoices(requestType);
+  if (itemId === "taskType" && draft.requestType) {
+    if (draft.intakeFlow !== "simplified") return formatTaskTypeChoices(draft.requestType);
+    return taskTypesForFlow(draft.requestType, "simplified").map((name) => `• ${name}`).join("\n");
+  }
   return undefined;
 }
 
 function followUpDestination(draft: BriefDraft): string | undefined {
   if (!draft.requestType || !draft.taskType) return undefined;
-  for (const field of followUpsFor(draft.requestType, draft.taskType)) {
+  for (const field of followUpsForFlow(draft.requestType, draft.taskType, draft.intakeFlow)) {
     if (field.satisfies?.includes("destination") && draft.followUps?.[field.label]) {
       return draft.followUps[field.label];
     }
@@ -268,7 +275,7 @@ function formAnswerLines(draft: BriefDraft): string[] {
   if (!draft.requestType || !draft.taskType) return [];
   const lines: string[] = [];
   const skipped = new Set((draft.skipped ?? []).map((entry) => entry.label));
-  for (const field of followUpsFor(draft.requestType, draft.taskType)) {
+  for (const field of followUpsForFlow(draft.requestType, draft.taskType, draft.intakeFlow)) {
     const value = shownFollowUp(draft, field);
     if (value) lines.push(...formPair(field.label, value));
     else if (!field.required && !skipped.has(field.label)) lines.push(...formPair(field.label, "N/A"));

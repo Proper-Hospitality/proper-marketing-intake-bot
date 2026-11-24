@@ -63,6 +63,23 @@ export interface BriefDraft {
   /** Name of the approver. Kept outside the Brief question/answer lines. */
   rushApprovedBy?: string;
   rushApprovalId?: string;
+  /** New work, or an edit of something that already exists. Decides the bucket where both exist. */
+  novelty?: "new" | "edit";
+  /** Paid media vs CRM, for CRM & Paid Reporting. */
+  reportingLane?: "paid" | "crm";
+  businessProblem?: string;
+  successLooksLike?: string;
+  budget?: string;
+  /** Suggested people named when the request is handed to Koral or DeeDee. */
+  kickoffTeam?: string;
+  meetingNotes?: string;
+  workflowDepartment?: string;
+  workflowBucket?: string;
+  workflowOwner?: string;
+  workflowApprover?: string;
+  hardBriefApproved?: boolean;
+  /** Set only for a simplified thread. Classic drafts leave this unset. */
+  intakeFlow?: "classic" | "simplified";
 }
 
 export const ATTACHMENT_KINDS = ["menu_or_brochure", "photo", "page_content", "context", "email_slice", "post_asset"] as const;

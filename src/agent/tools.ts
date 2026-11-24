@@ -130,3 +130,40 @@ export const INTAKE_TOOLS = [
 ] as const;
 
 export type ToolName = (typeof INTAKE_TOOLS)[number]["name"];
+
+const SIMPLIFIED_ANSWER_FIELDS = {
+  novelty: {
+    type: "string",
+    description: "new or edit. Set only when the person already said which. Leave it empty when both are possible and they have not said.",
+  },
+  reportingLane: {
+    type: "string",
+    description: "paid or crm. Only for CRM & Paid Reporting, and only when they already said which.",
+  },
+  businessProblem: { type: "string", description: "Hard requests only. The business problem, in their words." },
+  successLooksLike: { type: "string", description: "Hard requests only. What success looks like, in their words." },
+  budget: { type: "string", description: "Hard requests only. Any budget they named, or that there is none." },
+  meetingNotes: { type: "string", description: "Notes pasted after the brand lead has connected with the submitter." },
+};
+
+/** Classic channels keep the original tool schema. Simplified channels add the new fields. */
+export function intakeTools(flow: "classic" | "simplified" | undefined) {
+  if (flow !== "simplified") return INTAKE_TOOLS;
+  return INTAKE_TOOLS.map((tool) => {
+    if (tool.name !== "record_answers") return tool;
+    return {
+      ...tool,
+      input_schema: {
+        ...tool.input_schema,
+        properties: {
+          ...tool.input_schema.properties,
+          taskType: {
+            type: "string",
+            description: "Exact task type. Pop Up is CRM & Paid, not Creative. Do not use Brandfolder Upload or Affiliate Import.",
+          },
+          ...SIMPLIFIED_ANSWER_FIELDS,
+        },
+      },
+    };
+  });
+}

@@ -335,6 +335,33 @@ export function followUpsFor(requestType: RequestType, taskType: string): Follow
   return group[taskType];
 }
 
+/** Simplified Pop Up is CRM only: a photo and copy for Klaviyo. Classic keeps the shared tree. */
+export const SIMPLIFIED_POPUP_FIELDS: FollowUp[] = [
+  { label: "Copy for Klaviyo", required: true, kind: "longtext", satisfies: ["copy"] },
+  { label: "Photo for Klaviyo", required: true, kind: "text", satisfies: ["assets"] },
+];
+
+const SIMPLIFIED_DROPPED = new Set(["Brandfolder Upload", "Affiliate Import"]);
+
+export function taskTypesForFlow(requestType: RequestType, flow?: "classic" | "simplified"): string[] {
+  const names = Object.keys(TASK_TYPE_FIELDS[requestType].options);
+  if (flow !== "simplified") return names;
+  return names.filter((name) => {
+    if (SIMPLIFIED_DROPPED.has(name)) return false;
+    if (requestType === "Creative" && name === "Pop Up") return false;
+    return true;
+  });
+}
+
+export function followUpsForFlow(
+  requestType: RequestType,
+  taskType: string,
+  flow?: "classic" | "simplified",
+): FollowUp[] {
+  if (flow === "simplified" && requestType === "CRM & Paid" && taskType === "Pop Up") return SIMPLIFIED_POPUP_FIELDS;
+  return followUpsFor(requestType, taskType);
+}
+
 export function assertQuestionTreeCoversCatalog(): void {
   for (const requestType of Object.keys(TASK_TYPE_FIELDS) as RequestType[]) {
     for (const taskType of Object.keys(TASK_TYPE_FIELDS[requestType].options)) {

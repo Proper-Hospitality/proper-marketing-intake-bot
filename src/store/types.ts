@@ -1,4 +1,5 @@
 import type { CollateralOffer } from "../intake/collateral/types.js";
+import type { CreatorStudioMatch } from "../intake/creator-studio.js";
 import type { EmailIntakeState } from "../intake/email/types.js";
 import type { BriefDraft } from "../intake/types.js";
 import type { TemplateMatchResult } from "../intake/templates.js";
@@ -16,7 +17,11 @@ export type Phase =
   | "submitted"
   | "template_accepted"
   | "awaiting_task_completion"
-  | "tasks_completed";
+  | "tasks_completed"
+  | "creator_studio"
+  | "awaiting_notes"
+  | "awaiting_brief_approval"
+  | "brief_approved";
 
 export interface DesignCandidate {
   id: string;
@@ -109,6 +114,12 @@ export interface ConversationState {
   emailIntake?: EmailIntakeState;
   /** Batch lists every missing field. Chat asks one question, starting with the due date. */
   intakePace?: "batch" | "chat";
+  creatorStudioMatch?: CreatorStudioMatch | null;
+  /**
+   * Which intake flow started this thread. Set once and kept.
+   * Absent only on a brand-new state before the first message is routed.
+   */
+  intakeFlow?: "classic" | "simplified";
   updatedAt: string;
 }
 

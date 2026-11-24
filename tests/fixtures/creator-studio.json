@@ -1,0 +1,18 @@
+[
+  {
+    "id": "holiday-email-smp",
+    "name": "SMP Holiday Email",
+    "url": "https://creatorstudio.example/templates/holiday-email-smp",
+    "requestType": "Creative",
+    "taskTypes": ["Email"],
+    "keywords": ["holiday"],
+    "properties": ["SMP"]
+  },
+  {
+    "id": "generic-page-edit",
+    "name": "Page edit starter",
+    "url": "https://creatorstudio.example/templates/page-edit",
+    "requestType": "Web",
+    "taskTypes": ["Page Edit"]
+  }
+]

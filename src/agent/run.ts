@@ -32,6 +32,8 @@ import {
 import { DELIVERABLE_QUESTION, parseDeliverableChoice } from "../intake/routing.js";
 import { mentionsEnabled } from "../slack/mentions.js";
 import { rushRequestBlocks } from "../slack/blocks.js";
+import { hardQuestionById, NOTES_REMINDER } from "../intake/hard-path.js";
+import { parseNoveltyAnswer, parseReportingLane } from "../intake/workflows.js";
 import { loadRushApproval, startRushApproval } from "../intake/rush-approval.js";
 import {
   rushAllowsApproval,
@@ -66,7 +68,7 @@ import {
 } from "../tasks/complete.js";
 import { assistantBlocksForReplay, isHistoryRejection, sanitizeStoredHistory } from "./history.js";
 import { buildSystemPrompt } from "./prompt.js";
-import { INTAKE_TOOLS } from "./tools.js";
+import { intakeTools } from "./tools.js";
 import { LEADING_ACK, formatNeedsList, naturalAck } from "../intake/ask-text.js";
 import { batchHasAnswers, isTeammateChatter, isVagueAnswer, parseBatchAnswers, saysNewPage, wantsToChat } from "../intake/batch.js";
 import { emailAddressee, formatEmailPropertyConfirm } from "../intake/email/present.js";
@@ -226,6 +228,12 @@ export async function runIntakeTurn(input: {
     if (year) {
       state.draft.collateralYear = year;
       preset = applyAnswers(state, {}, today);
+    }
+  }
+  if (state.intakeFlow === "simplified") {
+    const scripted = scriptedIntake(state, input.userText, today);
+    if (scripted) {
+      return remember(state, input.userText, renderReply(state, input.slackUser, "", scripted, today));
     }
   }
   if (input.design && (state.phase === "awaiting_design_materials" || state.phase === "design_ready")) {
@@ -404,7 +412,7 @@ export async function runIntakeTurn(input: {
       response = await input.llm.complete({
         system: buildSystemPrompt(state, input.slackUser, today),
         messages,
-        tools: INTAKE_TOOLS,
+        tools: intakeTools(state.intakeFlow),
       });
     } catch (error) {
       if (!healedHistory && isHistoryRejection(error)) {
@@ -678,6 +686,35 @@ function renderReply(
     state.lastAskedLabel = "Existing file or a change";
     return { text: DELIVERABLE_QUESTION };
   }
+  if (outcome?.kind === "ask_novelty" || outcome?.kind === "ask_reporting_lane" || outcome?.kind === "hard_question") {
+    const askedId = outcome.kind === "ask_novelty"
+      ? "novelty"
+      : outcome.kind === "ask_reporting_lane"
+        ? "reportingLane"
+        : outcome.id;
+    const previous = state.lastAskedId;
+    if (previous && previous !== askedId) {
+      state.answerTrail = [...(state.answerTrail ?? []), previous].slice(-30);
+    }
+    state.lastAskedId = askedId;
+    state.lastAskedLabel = outcome.prompt;
+    return { text: outcome.prompt };
+  }
+  if (outcome?.kind === "creator_studio") {
+    state.lastAskedId = undefined;
+    return { text: outcome.text };
+  }
+  if (outcome?.kind === "hard_handoff" || outcome?.kind === "hard_await_notes" || outcome?.kind === "hard_done") {
+    state.lastAskedId = undefined;
+    return { text: outcome.text };
+  }
+  if (outcome?.kind === "hard_brief") {
+    state.lastAskedId = undefined;
+    return {
+      text: outcome.text,
+      confirm: { version: state.confirmVersion },
+    };
+  }
   if (outcome?.kind === "rush_required") {
     const notice = rushExplanation(outcome.reason, outcome.date, rushApproverFor(state.draft.properties).name);
     const missing = listMissing(state.draft, today);
@@ -869,6 +906,39 @@ function remember(state: ConversationState, userText: string, reply: AgentReply,
   return reply;
 }
 
+function scriptedIntake(state: ConversationState, userText: string, today: Date): FlowOutcome | undefined {
+  if (state.phase === "creator_studio" || state.phase === "brief_approved" || state.phase === "awaiting_brief_approval") {
+    return applyAnswers(state, {}, today);
+  }
+  if (state.phase === "awaiting_notes") {
+    if (userText.trim().length < 12) {
+      return { kind: "hard_await_notes", text: NOTES_REMINDER };
+    }
+    state.draft.meetingNotes = userText.trim();
+    return applyAnswers(state, {}, today);
+  }
+  if (state.lastAskedId === "novelty" && state.phase === "collecting") {
+    const choice = parseNoveltyAnswer(userText);
+    if (!choice) return { kind: "ask_novelty", prompt: "Is this new, or an edit of something that already exists? Reply new or edit." };
+    state.draft.novelty = choice;
+    return applyAnswers(state, {}, today);
+  }
+  if (state.lastAskedId === "reportingLane" && state.phase === "collecting") {
+    const lane = parseReportingLane(userText);
+    if (!lane) return { kind: "ask_reporting_lane", prompt: "Is this paid media reporting, or CRM reporting?" };
+    state.draft.reportingLane = lane;
+    return applyAnswers(state, {}, today);
+  }
+  const question = hardQuestionById(state.lastAskedId);
+  if (question && state.phase === "collecting") {
+    const answer = userText.trim();
+    if (answer.length < 2) return { kind: "hard_question", id: question.id, prompt: question.prompt };
+    state.draft[question.field] = answer;
+    return applyAnswers(state, {}, today);
+  }
+  return undefined;
+}
+
 function looksLikeUseExisting(text: string): boolean {
   const trimmed = text.trim();
   return /^(yes|yep|yeah|sure|ok|okay)[.!]?\s*$/i.test(trimmed)
@@ -915,6 +985,13 @@ function toRecord(payload: Record<string, unknown>): RecordInput {
     notes: asString(payload.notes),
     filingOnBehalf: typeof payload.filingOnBehalf === "boolean" ? payload.filingOnBehalf : undefined,
     pricePending: typeof payload.pricePending === "boolean" ? payload.pricePending : undefined,
+    novelty: payload.novelty === "new" || payload.novelty === "edit" ? payload.novelty : undefined,
+    reportingLane: payload.reportingLane === "paid" || payload.reportingLane === "crm" ? payload.reportingLane : undefined,
+    businessProblem: asString(payload.businessProblem),
+    successLooksLike: asString(payload.successLooksLike),
+    budget: asString(payload.budget),
+    kickoffTeam: asString(payload.kickoffTeam),
+    meetingNotes: asString(payload.meetingNotes),
   };
 }
 

@@ -1,3 +1,5 @@
+import { assignIntakeFlow } from "../intake/flow-switch.js";
+import { approveHardBrief } from "../intake/simplified.js";
 import { FORM_URL } from "../intake/catalog.js";
 import { markEmailSlices } from "../intake/attachments.js";
 import { rushApproverFor, rushBlockedText } from "../intake/rush.js";
@@ -70,6 +72,7 @@ async function handleFreshMessage(deps: {
   const key = conversationKey(message.channel, message.threadTs, message.ts, message.isDm);
   const state = (await deps.store.getConversation(key)) ?? emptyConversation(key);
   state.channel = message.channel;
+  assignIntakeFlow(state);
   if (state.emailIntake?.requesterSlackId) state.slackUserId = state.emailIntake.requesterSlackId;
   else if (!state.emailIntake) state.slackUserId = message.userId;
   state.threadTs = message.threadTs ?? (message.isDm ? undefined : message.ts);
@@ -182,6 +185,19 @@ export async function handleConfirmAction(deps: {
         blocks: messageBlocks("I lost the brief for this thread. Send the request once more and I'll start again."),
       });
       return;
+    }
+    if (state.phase === "awaiting_brief_approval" && state.confirmVersion === action.version) {
+      const decision = approveHardBrief(state);
+      await deps.store.saveConversation(state);
+      if (!decision.fileAsana) {
+        await deps.slack.updateMessage({
+          channel: action.channel,
+          ts: action.messageTs,
+          text: decision.text,
+          blocks: messageBlocks(decision.text),
+        });
+        return;
+      }
     }
     if (!deps.asanaToken) {
       await deps.slack.postMessage({

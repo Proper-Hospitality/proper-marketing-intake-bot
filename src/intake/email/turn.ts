@@ -1,6 +1,7 @@
 import { searchExistingTasks } from "../asana.js";
 import { markEmailSlices } from "../attachments.js";
 import { rememberAttachment } from "../capture.js";
+import { flowForChannel } from "../flow-switch.js";
 import { applyAnswers } from "../flow.js";
 import { confirmBlocks, messageBlocks } from "../../slack/blocks.js";
 import { messageOnceKey } from "../../slack/incoming.js";
@@ -28,6 +29,7 @@ export async function beginEmailIntake(deps: EmailTurnDeps, email: InboundEmail)
     const key = conversationKey(email.channel, email.messageTs, email.messageTs, false);
     const state = emptyConversation(key);
     state.channel = email.channel;
+    state.intakeFlow = flowForChannel(email.channel);
     state.threadTs = email.messageTs;
     state.emailIntake = intakeFromEmail(email);
     const requester = await lookupRequester(deps.slack, email.originalSender.email);

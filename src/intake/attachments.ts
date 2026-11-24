@@ -1,5 +1,5 @@
 import { isNormal24HourSend } from "./lead-time.js";
-import { followUpsFor } from "./question-tree.js";
+import { followUpsForFlow } from "./question-tree.js";
 import { captureUrls } from "./urls.js";
 import {
   ATTACHMENT_KINDS,
@@ -456,9 +456,9 @@ function explicitFileRefs(draft: BriefDraft): string[] {
     if (looksLikeFile(asset)) refs.push(asset.trim());
   }
   if (draft.requestType && draft.taskType) {
-    let fields: ReturnType<typeof followUpsFor> = [];
+    let fields: ReturnType<typeof followUpsForFlow> = [];
     try {
-      fields = followUpsFor(draft.requestType, draft.taskType);
+      fields = followUpsForFlow(draft.requestType, draft.taskType, draft.intakeFlow);
     } catch {
       fields = [];
     }
